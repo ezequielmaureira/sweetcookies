@@ -1,7 +1,7 @@
 import { ButtonLink } from "@/components/ui/Button";
 import { CookieImage } from "@/components/ui/CookieImage";
 import { Parallax } from "@/components/ui/Parallax";
-import { sectionIds } from "@/data/site";
+import { routes, sectionIds } from "@/data/site";
 import styles from "./BuildBoxSection.module.css";
 
 type BuildBoxSectionProps = {
@@ -9,12 +9,9 @@ type BuildBoxSectionProps = {
   title?: string;
   text?: string;
   ctaLabel?: string;
-  /** Destino del CTA. Cuando exista el constructor, apuntar a su ruta. */
+  /** Destino del CTA (por defecto, el constructor de caja). */
   ctaHref?: string;
-  /**
-   * Espacio reservado para el futuro constructor interactivo de caja.
-   * Si se pasa, reemplaza al CTA.
-   */
+  /** Contenido alternativo al CTA (si se pasa, lo reemplaza). */
   children?: React.ReactNode;
 };
 
@@ -23,7 +20,7 @@ export function BuildBoxSection({
   title = "Armá tu caja",
   text = "Elegí tus cookies favoritas y creá tu combinación.",
   ctaLabel = "Empezar",
-  ctaHref = `#${sectionIds.flavors}`,
+  ctaHref = routes.buildBox,
   children,
 }: BuildBoxSectionProps) {
   return (

@@ -1,0 +1,136 @@
+.add,
+.stepper {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  border: 1px solid rgba(58, 36, 25, 0.28);
+  background: transparent;
+  color: var(--color-chocolate);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    background-color var(--dur-med) var(--ease-out),
+    color var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out),
+    transform var(--dur-fast) ease;
+}
+
+.add:hover {
+  border-color: var(--color-chocolate);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+.add:active,
+.control:active {
+  transform: scale(0.95);
+}
+
+.add:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px;
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+  animation: stepperIn 320ms var(--ease-out);
+}
+
+.control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    background-color var(--dur-fast) ease,
+    transform var(--dur-fast) ease;
+}
+
+.control:hover {
+  background: rgba(250, 246, 239, 0.12);
+}
+
+.control:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.control:focus-visible {
+  outline-color: var(--color-cream);
+  outline-offset: -3px;
+  border-radius: 999px;
+}
+
+.control svg {
+  width: 16px;
+  height: 16px;
+}
+
+.value {
+  min-width: 2ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  animation: valueTick 280ms var(--ease-out);
+}
+
+@keyframes stepperIn {
+  from {
+    transform: scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes valueTick {
+  from {
+    opacity: 0.2;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .add,
+  .control {
+    transition: none;
+  }
+
+  .stepper,
+  .value {
+    animation: none;
+  }
+
+  .add:active,
+  .control:active {
+    transform: none;
+  }
+}

@@ -1,0 +1,229 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.field,
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.label {
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.required {
+  color: var(--color-terracotta);
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.input {
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 16px;
+  border: 1px solid rgba(58, 36, 25, 0.22);
+  border-radius: var(--radius-sm);
+  background: #fffdf9;
+  color: var(--color-ink);
+  /* 16px evita el zoom automático de iOS al enfocar. */
+  font: inherit;
+  font-size: 1rem;
+  transition:
+    border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease;
+}
+
+.input:hover {
+  border-color: rgba(58, 36, 25, 0.4);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--color-chocolate);
+  box-shadow: 0 0 0 3px rgba(176, 78, 54, 0.22);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--color-terracotta);
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* Modalidad: radios con aspecto de control segmentado */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.option {
+  position: relative;
+  display: flex;
+}
+
+.option input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.option span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid rgba(58, 36, 25, 0.22);
+  border-radius: 999px;
+  background: #fffdf9;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-chocolate);
+  transition:
+    background-color var(--dur-med) var(--ease-out),
+    color var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out);
+}
+
+.option input:hover + span {
+  border-color: var(--color-chocolate);
+}
+
+.option input:checked + span {
+  border-color: var(--color-chocolate);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+.option input:focus-visible + span {
+  outline: 2px solid var(--color-terracotta);
+  outline-offset: 3px;
+}
+
+.fieldset[aria-invalid="true"] .option span {
+  border-color: var(--color-terracotta);
+}
+
+.error,
+.formError {
+  font-size: 0.875rem;
+  color: var(--color-terracotta);
+}
+
+.error::before {
+  content: "— ";
+}
+
+.reveal {
+  animation: reveal 380ms var(--ease-out);
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.submit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.whatsapp {
+  width: 100%;
+  min-height: 54px;
+  font-size: 1rem;
+}
+
+.whatsapp > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.opened {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: var(--radius-md);
+  background: var(--color-cream-deep);
+  font-size: 0.9375rem;
+  color: var(--color-ink);
+  animation: reveal 380ms var(--ease-out);
+}
+
+.openedActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-chocolate);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--color-terracotta);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .opened {
+    animation: none;
+  }
+
+  .input,
+  .option span {
+    transition: none;
+  }
+}

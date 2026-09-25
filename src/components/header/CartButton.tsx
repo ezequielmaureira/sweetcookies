@@ -2,13 +2,10 @@
 
 import Link from "next/link";
 import { useCart } from "@/components/cart/CartProvider";
-import { sectionIds } from "@/data/site";
+import { routes } from "@/data/site";
 import styles from "./Header.module.css";
 
-/**
- * Acceso al carrito. Por ahora lleva a "Armá tu caja"; cuando exista la
- * vista de carrito/pedido, cambiar el destino acá.
- */
+/** Acceso al carrito: lleva a "Armá tu caja", donde está el resumen del pedido. */
 export function CartButton() {
   const { totalCount, addSignal } = useCart();
 
@@ -16,7 +13,7 @@ export function CartButton() {
     totalCount === 0 ? "Carrito vacío" : `Carrito: ${totalCount} ${totalCount === 1 ? "cookie" : "cookies"}`;
 
   return (
-    <Link href={`#${sectionIds.buildBox}`} className={styles.cart} aria-label={label}>
+    <Link href={routes.buildBox} className={styles.cart} aria-label={label}>
       {/* La key cambia en cada agregado: el span se vuelve a montar y repite la animación. */}
       <span key={addSignal} className={[styles.cartIconWrap, addSignal > 0 ? styles.cartBump : ""].join(" ")}>
         <svg viewBox="0 0 24 24" aria-hidden="true" className={styles.cartIcon}>

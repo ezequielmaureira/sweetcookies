@@ -1,36 +1,88 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore } from "react";
+import { flavorsById, type Flavor } from "@/data/cookies";
+import { EMPTY_CART, countItems, withQuantity, type CartItems } from "@/lib/cart";
+import { cartStore } from "@/lib/cart-store";
 
-/**
- * Estado mínimo del carrito para la home: cantidades por id de sabor.
- * Pensado para extenderse luego (caja, pedido, WhatsApp, persistencia).
- */
-export type CartItems = Record<string, number>;
+export type { CartItems } from "@/lib/cart";
+
+export type CartLine = { flavor: Flavor; quantity: number };
 
 type CartContextValue = {
   items: CartItems;
+  /** Líneas válidas del carrito, en el orden en que se agregaron. */
+  lines: CartLine[];
   totalCount: number;
+  /** false durante SSR / hidratación: todavía no se leyó localStorage. */
+  isHydrated: boolean;
   /** Se incrementa en cada agregado; útil para disparar feedback visual. */
   addSignal: number;
   addItem: (id: string, quantity?: number) => void;
+  removeItem: (id: string) => void;
+  incrementItem: (id: string) => void;
+  decrementItem: (id: string) => void;
+  setItemQuantity: (id: string, quantity: number) => void;
+  clearCart: () => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+const subscribeNothing = () => () => {};
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [items, setItems] = useState<CartItems>({});
+  const items = useSyncExternalStore(cartStore.subscribe, cartStore.getSnapshot, cartStore.getServerSnapshot);
+  const isHydrated = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
   const [addSignal, setAddSignal] = useState(0);
 
   const addItem = useCallback((id: string, quantity = 1) => {
-    setItems((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + quantity }));
+    if (!flavorsById[id]) return;
+    cartStore.update((prev) => withQuantity(prev, id, (prev[id] ?? 0) + quantity));
     setAddSignal((n) => n + 1);
   }, []);
 
+  const incrementItem = useCallback((id: string) => addItem(id, 1), [addItem]);
+
+  const decrementItem = useCallback((id: string) => {
+    cartStore.update((prev) => withQuantity(prev, id, (prev[id] ?? 0) - 1));
+  }, []);
+
+  const removeItem = useCallback((id: string) => {
+    cartStore.update((prev) => withQuantity(prev, id, 0));
+  }, []);
+
+  const setItemQuantity = useCallback((id: string, quantity: number) => {
+    if (!flavorsById[id]) return;
+    cartStore.update((prev) => withQuantity(prev, id, quantity));
+  }, []);
+
+  const clearCart = useCallback(() => {
+    cartStore.update(() => EMPTY_CART);
+  }, []);
+
   const value = useMemo<CartContextValue>(() => {
-    const totalCount = Object.values(items).reduce((sum, qty) => sum + qty, 0);
-    return { items, totalCount, addSignal, addItem };
-  }, [items, addSignal, addItem]);
+    const lines = Object.entries(items).flatMap(([id, quantity]) => {
+      const flavor = flavorsById[id];
+      return flavor ? [{ flavor, quantity }] : [];
+    });
+    return {
+      items,
+      lines,
+      totalCount: countItems(items),
+      isHydrated,
+      addSignal,
+      addItem,
+      removeItem,
+      incrementItem,
+      decrementItem,
+      setItemQuantity,
+      clearCart,
+    };
+  }, [items, isHydrated, addSignal, addItem, removeItem, incrementItem, decrementItem, setItemQuantity, clearCart]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

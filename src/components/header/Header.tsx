@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
-import { navLinks, sectionIds, site } from "@/data/site";
+import { navLinks, routes, site } from "@/data/site";
 import { CartButton } from "./CartButton";
 import styles from "./Header.module.css";
 
@@ -18,6 +19,7 @@ export function Header({ logoSrc }: HeaderProps) {
   const menuId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -53,7 +55,7 @@ export function Header({ logoSrc }: HeaderProps) {
   return (
     <header className={[styles.header, scrolled || menuOpen ? styles.scrolled : ""].join(" ")}>
       <div className={`container ${styles.inner}`}>
-        <Link href={`#${sectionIds.home}`} className={styles.logo} aria-label={`${site.name}, ir al inicio`} onClick={closeMenu}>
+        <Link href={routes.home} className={styles.logo} aria-label={`${site.name}, ir al inicio`} onClick={closeMenu}>
           {logoSrc ? (
             <span className={styles.logoImage}>
               <Image src={logoSrc} alt="" fill sizes="160px" priority />
@@ -71,7 +73,8 @@ export function Header({ logoSrc }: HeaderProps) {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className={link.href === `#${sectionIds.buildBox}` ? styles.navCta : styles.navLink}
+                  className={link.href === routes.buildBox ? styles.navCta : styles.navLink}
+                  aria-current={link.href === pathname ? "page" : undefined}
                 >
                   {link.label}
                 </Link>
@@ -109,7 +112,12 @@ export function Header({ logoSrc }: HeaderProps) {
           <ul className="container">
             {navLinks.map((link, i) => (
               <li key={link.href} style={{ "--i": i } as React.CSSProperties}>
-                <Link href={link.href} className={styles.mobileLink} onClick={closeMenu}>
+                <Link
+                  href={link.href}
+                  className={styles.mobileLink}
+                  onClick={closeMenu}
+                  aria-current={link.href === pathname ? "page" : undefined}
+                >
                   {link.label}
                 </Link>
               </li>

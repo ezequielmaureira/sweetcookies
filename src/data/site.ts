@@ -14,10 +14,16 @@ export const site = {
 
 export type NavLink = { label: string; href: string };
 
+/** Rutas de la app. */
+export const routes = {
+  home: "/",
+  buildBox: "/arma-tu-caja",
+} as const;
+
 export const navLinks: NavLink[] = [
-  { label: "Inicio", href: "#inicio" },
-  { label: "Sabores", href: "#sabores" },
-  { label: "Armá tu caja", href: "#arma-tu-caja" },
+  { label: "Inicio", href: "/#inicio" },
+  { label: "Sabores", href: "/#sabores" },
+  { label: "Armá tu caja", href: routes.buildBox },
 ];
 
 /** Anclas de las secciones de la home (reutilizadas por header, CTAs y secciones). */

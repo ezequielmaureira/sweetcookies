@@ -1,13 +1,14 @@
 {
   "name": "sweetcookies",
   "version": "1.0.0",
-  "description": "Sweet Cookies — cookies artesanales",
+  "description": "Sweet Cookies \u2014 cookies artesanales",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\""
   },
   "repository": {
     "type": "git",

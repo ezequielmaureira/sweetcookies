@@ -17,6 +17,11 @@ export type Flavor = {
   alt: string;
   price: number | null;
   available: boolean;
+  /**
+   * Color aproximado del sabor. Solo se usa para distinguir las cookies en la
+   * caja visual mientras falten las fotos reales.
+   */
+  tint: string;
 };
 
 export const flavors: Flavor[] = [
@@ -27,6 +32,7 @@ export const flavors: Flavor[] = [
     alt: "Cookie Cookies & Cream de Sweet Cookies",
     price: null,
     available: true,
+    tint: "#cbc3b8",
   },
   {
     id: "red-velvet",
@@ -35,6 +41,7 @@ export const flavors: Flavor[] = [
     alt: "Cookie Red Velvet de Sweet Cookies",
     price: null,
     available: true,
+    tint: "#b0574a",
   },
   {
     id: "pistacho",
@@ -44,6 +51,7 @@ export const flavors: Flavor[] = [
     alt: "Cookie de pistacho con chocolate blanco de Sweet Cookies",
     price: null,
     available: true,
+    tint: "#a4ad76",
   },
   {
     id: "limon-frambuesa",
@@ -52,6 +60,7 @@ export const flavors: Flavor[] = [
     alt: "Cookie de limón y frambuesa de Sweet Cookies",
     price: null,
     available: true,
+    tint: "#d9a64e",
   },
   {
     id: "chocotorta",
@@ -60,6 +69,7 @@ export const flavors: Flavor[] = [
     alt: "Cookie Chocotorta de Sweet Cookies",
     price: null,
     available: true,
+    tint: "#6b4630",
   },
   {
     id: "franui",
@@ -68,6 +78,7 @@ export const flavors: Flavor[] = [
     alt: "Cookie estilo Franui de Sweet Cookies",
     price: null,
     available: true,
+    tint: "#c46e69",
   },
 ];
 

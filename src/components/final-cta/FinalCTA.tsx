@@ -1,6 +1,6 @@
 import { BeagleMascot } from "@/components/beagle/BeagleMascot";
 import { ButtonLink } from "@/components/ui/Button";
-import { sectionIds } from "@/data/site";
+import { routes } from "@/data/site";
 import styles from "./FinalCTA.module.css";
 
 export function FinalCTA() {
@@ -11,7 +11,7 @@ export function FinalCTA() {
         <h2 id="final-cta-title" className={styles.title}>
           ¿Ya elegiste tus <em>favoritas</em>?
         </h2>
-        <ButtonLink href={`#${sectionIds.buildBox}`} arrow>
+        <ButtonLink href={routes.buildBox} arrow>
           Armá tu caja
         </ButtonLink>
       </div>

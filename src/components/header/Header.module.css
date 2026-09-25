@@ -339,3 +339,13 @@
     animation: none;
   }
 }
+
+.navCta[aria-current="page"] {
+  border-color: var(--color-chocolate);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+.mobileLink[aria-current="page"] {
+  color: var(--color-terracotta);
+}

@@ -1,0 +1,250 @@
+.builder {
+  padding-bottom: 24px;
+}
+
+/* ---------- Intro ---------- */
+.intro {
+  padding-block: 24px 40px;
+  animation: enterUp 800ms var(--ease-out) both;
+}
+
+.title {
+  max-width: 14ch;
+  margin-top: 16px;
+  font-size: clamp(2.5rem, 7vw, 4.75rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.title em {
+  font-style: italic;
+  color: var(--color-terracotta);
+}
+
+.lead {
+  max-width: 36ch;
+  margin-top: 16px;
+  font-size: clamp(1.0625rem, 1vw + 0.8rem, 1.1875rem);
+  color: var(--color-muted);
+}
+
+/* ---------- Indicador de pasos ---------- */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 36px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 2px solid var(--color-line);
+  color: var(--color-muted);
+  transition:
+    border-color var(--dur-med) var(--ease-out),
+    color var(--dur-med) var(--ease-out);
+}
+
+.stepNumber {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.stepLabel {
+  font-size: 0.875rem;
+  line-height: 1.3;
+}
+
+.stepDone {
+  border-color: var(--color-beige-deep);
+  color: var(--color-chocolate-soft);
+}
+
+.stepActive {
+  border-color: var(--color-terracotta);
+  color: var(--color-chocolate);
+}
+
+.stepActive .stepNumber {
+  color: var(--color-terracotta);
+}
+
+/* ---------- Títulos de paso ---------- */
+.stepHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stepHeadingNumber {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 1.125rem;
+  color: var(--color-terracotta);
+}
+
+.stepHeadingTitle {
+  font-size: clamp(1.75rem, 3vw + 0.5rem, 2.5rem);
+  scroll-margin-top: calc(var(--header-h) + 24px);
+}
+
+.stepHeadingTitle:focus {
+  outline: none;
+}
+
+.stepHeadingTitle:focus-visible {
+  outline: 2px solid var(--color-terracotta);
+  outline-offset: 6px;
+}
+
+/* ---------- Layout principal ---------- */
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.flavors,
+.boxColumn {
+  min-width: 0;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.sticky {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ---------- Paso 3 ---------- */
+.confirm {
+  margin-top: 80px;
+  padding-block: 64px 72px;
+  background: var(--color-cream-deep);
+  scroll-margin-top: var(--header-h);
+}
+
+.confirmInner {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.confirmIntro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.confirmHint {
+  max-width: 40ch;
+  font-size: 1rem;
+  color: var(--color-muted);
+}
+
+.beagle {
+  align-self: flex-start;
+  margin-top: 28px;
+}
+
+.formColumn {
+  min-width: 0;
+  animation: enterUp 600ms var(--ease-out) both;
+}
+
+.continueLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color var(--dur-med) var(--ease-out);
+}
+
+.continueLink:hover {
+  background: var(--color-ink);
+}
+
+@keyframes enterUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- Tablet: caja y resumen lado a lado ---------- */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .sticky {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 28px 32px;
+  }
+
+  .sticky > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- Desktop ---------- */
+@media (min-width: 1024px) {
+  .intro {
+    padding-block: 40px 64px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr);
+    align-items: start;
+    gap: clamp(40px, 5vw, 80px);
+  }
+
+  .sticky {
+    position: sticky;
+    top: calc(var(--header-h) + 24px);
+  }
+
+  .confirm {
+    margin-top: 112px;
+    padding-block: 96px 112px;
+  }
+
+  .confirmInner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+    align-items: start;
+    gap: clamp(40px, 6vw, 96px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro,
+  .formColumn {
+    animation: none;
+  }
+
+  .step {
+    transition: none;
+  }
+}

@@ -2,7 +2,7 @@ import { BeagleMascot } from "@/components/beagle/BeagleMascot";
 import { ButtonLink } from "@/components/ui/Button";
 import { CookieImage } from "@/components/ui/CookieImage";
 import { Parallax } from "@/components/ui/Parallax";
-import { sectionIds } from "@/data/site";
+import { routes, sectionIds } from "@/data/site";
 import styles from "./Hero.module.css";
 
 type HeroProps = {
@@ -32,7 +32,7 @@ export function Hero({ imageSrc, imageAlt }: HeroProps) {
           </p>
           <div className={`${styles.actions} ${styles.enter}`} style={{ "--d": "480ms" } as React.CSSProperties}>
             <ButtonLink href={`#${sectionIds.flavors}`}>Ver sabores</ButtonLink>
-            <ButtonLink href={`#${sectionIds.buildBox}`} variant="secondary" arrow>
+            <ButtonLink href={routes.buildBox} variant="secondary" arrow>
               Armá tu caja
             </ButtonLink>
           </div>
