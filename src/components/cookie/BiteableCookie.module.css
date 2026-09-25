@@ -1,0 +1,250 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.cookie {
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+  animation: cookieIn 900ms var(--ease-out) 150ms both;
+  transition: transform 500ms var(--ease-out);
+}
+
+.cookie:focus-visible {
+  outline-offset: 8px;
+}
+
+.done {
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .cookie:not(.done):hover {
+    transform: rotate(-2deg) scale(1.012);
+  }
+}
+
+.layer,
+.body {
+  position: absolute;
+  inset: 0;
+  display: block;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+/* Foto cenital: se recorta en círculo; sombra suave de apoyo. */
+.round .layer,
+.round .body {
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.round {
+  filter: drop-shadow(0 22px 26px rgba(58, 36, 25, 0.22)) drop-shadow(0 4px 6px rgba(58, 36, 25, 0.14));
+}
+
+/* Recorte PNG sin fondo: la forma la da la propia foto. */
+.cutout {
+  filter: drop-shadow(0 22px 24px rgba(58, 36, 25, 0.24)) drop-shadow(0 3px 5px rgba(58, 36, 25, 0.16));
+}
+
+.cover {
+  object-fit: cover;
+}
+
+.contain {
+  object-fit: contain;
+}
+
+/* Interior expuesto en el borde de cada mordida (misma foto, más oscura y cálida). */
+.rim {
+  filter: brightness(0.8) saturate(1.15) contrast(1.05);
+}
+
+.chomp {
+  animation: chomp 300ms var(--ease-out);
+}
+
+/* Sin foto real todavía: lugar neutro (no se dibuja una cookie). */
+.missing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--color-beige);
+}
+
+.missingLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
+/* Miguitas */
+.crumbs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crumb {
+  position: absolute;
+  border-radius: 45% 55% 40% 60%;
+  animation: crumb 950ms cubic-bezier(0.3, 0.6, 0.6, 1) both;
+}
+
+.tone0 {
+  background: #c79357;
+}
+
+.tone1 {
+  background: #a8733f;
+}
+
+.tone2 {
+  background: #4a2c1c;
+}
+
+/* Texto */
+.caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 3.25rem;
+  margin-top: 1.25rem;
+}
+
+.message {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-chocolate-soft);
+  text-align: center;
+}
+
+.messageIn {
+  display: inline-block;
+  animation: messageIn 380ms var(--ease-out);
+}
+
+.progress {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress li {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-beige-deep);
+  transition: background-color var(--dur-med) var(--ease-out);
+}
+
+.progress .progressDone {
+  background: var(--color-terracotta);
+}
+
+.complete {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 0.5rem;
+  text-align: center;
+  animation: messageIn 500ms var(--ease-out);
+}
+
+@keyframes cookieIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) rotate(-6deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chomp {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.975) rotate(-1deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes crumb {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(140deg);
+  }
+}
+
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cookie,
+  .chomp,
+  .crumb,
+  .messageIn,
+  .complete {
+    animation: none;
+  }
+
+  .cookie,
+  .progress li {
+    transition: none;
+  }
+
+  .cookie:not(.done):hover {
+    transform: none;
+  }
+}

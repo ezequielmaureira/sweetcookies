@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { requireAdminGate } from "@/lib/admin/gate-server";
 import styles from "@/components/admin/Admin.module.css";
 
-export default function AdminHomePage() {
+export default async function AdminHomePage() {
+  await requireAdminGate("/admin");
+
   return (
     <>
       <header className={styles.pageHeader}>

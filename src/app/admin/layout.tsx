@@ -12,16 +12,26 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// Siempre se evalúa por request (sesión y rol).
+// Siempre se evalúa por request (sesión y autorización).
 export const dynamic = "force-dynamic";
 
+/**
+ * Seguridad real del panel (server-side), para TODAS las rutas /admin/*:
+ * sin sesión → login · sin permiso → acceso restringido · admin → contenido.
+ */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const access = await getAdminAccess();
   if (access.status === "anonymous") redirect(`${ADMIN_SIGN_IN_URL}?redirect_url=${encodeURIComponent(ADMIN_HOME_URL)}`);
 
   return (
     <ClerkProvider appearance={clerkAppearance} localization={clerkLocalization} signInUrl={ADMIN_SIGN_IN_URL} afterSignOutUrl="/">
-      <AdminShell>{access.status === "admin" ? children : <AccessDenied />}</AdminShell>
+      {access.status === "admin" ? (
+        children
+      ) : (
+        <AdminShell>
+          <AccessDenied />
+        </AdminShell>
+      )}
     </ClerkProvider>
   );
 }

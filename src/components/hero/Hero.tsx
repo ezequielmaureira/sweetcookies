@@ -1,18 +1,17 @@
 import { ButtonLink } from "@/components/ui/Button";
 import { Parallax } from "@/components/ui/Parallax";
 import { routes, sectionIds } from "@/data/site";
-import { BiteableCookie } from "./BiteableCookie";
+import { BiteableCookie } from "@/components/cookie/BiteableCookie";
 import styles from "./Hero.module.css";
 
 type HeroProps = {
-  /** Cookie recortada sin fondo (PNG), si existe. */
-  cutoutSrc: string | null;
-  /** Foto real de una cookie (vista cenital), o null para el placeholder. */
-  photoSrc: string | null;
+  /** Foto REAL de la cookie del hero (recorte PNG o foto cenital). */
+  cookieSrc: string | null;
+  isCutout: boolean;
   imageAlt: string;
 };
 
-export function Hero({ cutoutSrc, photoSrc, imageAlt }: HeroProps) {
+export function Hero({ cookieSrc, isCutout, imageAlt }: HeroProps) {
   return (
     <section id={sectionIds.home} className={styles.hero} aria-labelledby="hero-title">
       <div className={`container ${styles.grid}`}>
@@ -42,7 +41,20 @@ export function Hero({ cutoutSrc, photoSrc, imageAlt }: HeroProps) {
         <div className={styles.media}>
           <Parallax speed={0.04} className={styles.stage}>
             <div className={styles.cookie}>
-              <BiteableCookie cutoutSrc={cutoutSrc} photoSrc={photoSrc} alt={imageAlt} />
+              <BiteableCookie
+                src={cookieSrc}
+                isCutout={isCutout}
+                alt={imageAlt}
+                priority
+                completeContent={
+                  <>
+                    <p className={styles.again}>¿Pedimos otra?</p>
+                    <ButtonLink href={routes.buildBox} arrow>
+                      Armá tu caja
+                    </ButtonLink>
+                  </>
+                }
+              />
             </div>
           </Parallax>
         </div>

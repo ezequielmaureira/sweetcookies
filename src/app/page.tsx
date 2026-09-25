@@ -11,9 +11,9 @@ import { resolveFirstImage, resolveImage } from "@/lib/images";
 export default function HomePage() {
   const flavorItems = flavors.map((flavor) => ({ flavor, imageSrc: resolveImage(flavor.image) }));
 
-  // Hero: cookie recortada si existe; si no, foto dedicada o la primera foto de sabor.
+  // Hero: foto REAL de cookie. Recorte sin fondo si existe; si no, foto cenital o la primera de sabor.
   const heroCutout = resolveImage(brandImages.heroCutout);
-  const heroSrc = resolveFirstImage([brandImages.hero, ...flavors.map((f) => f.image)]);
+  const heroSrc = heroCutout ?? resolveFirstImage([brandImages.hero, ...flavors.map((f) => f.image)]);
   const heroFlavor = flavors.find((f) => heroSrc?.includes(`/${f.image}.`));
 
   return (
@@ -21,8 +21,8 @@ export default function HomePage() {
       <Header logoSrc={resolveImage(brandImages.logo)} />
       <main id="contenido">
         <Hero
-          cutoutSrc={heroCutout}
-          photoSrc={heroSrc}
+          cookieSrc={heroSrc}
+          isCutout={Boolean(heroCutout)}
           imageAlt={heroFlavor?.alt ?? "Cookie artesanal de Sweet Cookies"}
         />
         <FlavorsSection items={flavorItems} />

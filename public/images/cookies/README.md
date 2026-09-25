@@ -5,7 +5,7 @@ con estos nombres base (la extensión se detecta sola):
 
 | Archivo                | Dónde se usa                                   |
 | ---------------------- | ---------------------------------------------- |
-| `hero-cookie-cutout`   | Cookie del hero **recortada sin fondo** (`.png`), la que se "muerde" al tocarla (recomendado) |
+| `hero-cookie-cutout`   | **Foto real** de una cookie **recortada sin fondo** (`.png`, vista cenital, ~1200 px). Es la que se "muerde" en el Hero y en el acceso al panel (recomendado) |
 | `hero-cookie`          | Foto cenital de una cookie para el hero (opcional\*) |
 | `cookies-cream`        | Sabor Cookies & Cream                          |
 | `red-velvet`           | Sabor Red Velvet                               |
@@ -16,8 +16,9 @@ con estos nombres base (la extensión se detecta sola):
 | `box-cookies`          | Sección "Armá tu caja"                         |
 | `logo-sweet-cookies`   | Logo del header (ideal: `.png` con fondo transparente) |
 
-\* Orden del hero: `hero-cookie-cutout` → `hero-cookie` (recortada en círculo) →
-primera foto de sabor disponible → cookie neutra. El logo se usa solo en header,
+\* Orden de la cookie interactiva: `hero-cookie-cutout` → `hero-cookie` (recortada
+en círculo) → primera foto de sabor disponible. Sin ninguna foto se muestra un
+lugar neutro "Foto de la cookie" (nunca una cookie dibujada). El logo se usa solo en header,
 footer y login: no define el estilo del resto del sitio.
 
 Si falta alguna foto, la página muestra un placeholder neutro. Después de
