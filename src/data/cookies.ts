@@ -88,7 +88,9 @@ export const flavorsById: Record<string, Flavor> = Object.fromEntries(
 
 /** Imágenes de marca (mismo directorio que las cookies). */
 export const brandImages = {
-  /** Foto principal del hero. Si no existe, se usa la primera foto de sabor disponible. */
+  /** Cookie del hero, recortada sin fondo (PNG). Ideal para la interacción de mordisco. */
+  heroCutout: "hero-cookie-cutout",
+  /** Foto cenital de una cookie para el hero. Si no existe, se usa la primera foto de sabor. */
   hero: "hero-cookie",
   box: "box-cookies",
   logo: "logo-sweet-cookies",

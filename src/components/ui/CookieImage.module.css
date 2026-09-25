@@ -22,9 +22,8 @@
 }
 
 .placeholderLabel {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
   color: rgba(58, 36, 25, 0.55);
   text-align: center;
   padding-inline: 12px;

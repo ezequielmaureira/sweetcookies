@@ -1,14 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Fraunces } from "next/font/google";
+import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { site } from "@/data/site";
 import "./globals.css";
 
-const fraunces = Fraunces({
+// Títulos: grotesca contemporánea con carácter. Textos: sans limpia.
+const display = Bricolage_Grotesque({
   subsets: ["latin"],
-  variable: "--font-fraunces",
-  axes: ["opsz", "SOFT"],
-  style: ["normal", "italic"],
+  variable: "--font-bricolage",
+  axes: ["opsz"],
   display: "swap",
 });
 
@@ -29,7 +29,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="es-AR" className={`${fraunces.variable} ${dmSans.variable}`} suppressHydrationWarning>
+    <html lang="es-AR" className={`${display.variable} ${dmSans.variable}`} suppressHydrationWarning>
       <head>
         {/* Habilita los estilos de reveal solo cuando hay JS (sin JS el contenido queda visible). */}
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />

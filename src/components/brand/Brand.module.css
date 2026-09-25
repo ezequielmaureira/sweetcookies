@@ -1,0 +1,42 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.logo {
+  position: relative;
+  width: 132px;
+  height: 40px;
+}
+
+.logo img {
+  object-fit: contain;
+  object-position: left center;
+}
+
+.sm.logo {
+  width: 112px;
+  height: 34px;
+}
+
+.wordmark {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--color-chocolate);
+  white-space: nowrap;
+}
+
+.sm.wordmark {
+  font-size: 1rem;
+}
+
+@media (min-width: 900px) {
+  .md.logo {
+    width: 150px;
+    height: 44px;
+  }
+}

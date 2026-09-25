@@ -36,9 +36,7 @@ export function BoxPreview({ lines, totalCount, images, capacity = null }: BoxPr
   return (
     <div className={styles.box} role="img" aria-label={description}>
       <div className={styles.lid} aria-hidden="true">
-        <span className={styles.brand}>
-          Sweet <em>Cookies</em>
-        </span>
+        <span className={styles.brand}>Tu caja</span>
         <span className={styles.count}>{formatCookieCount(totalCount)}</span>
       </div>
 

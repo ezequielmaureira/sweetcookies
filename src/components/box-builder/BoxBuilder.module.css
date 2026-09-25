@@ -16,11 +16,6 @@
   letter-spacing: -0.035em;
 }
 
-.title em {
-  font-style: italic;
-  color: var(--color-terracotta);
-}
-
 .lead {
   max-width: 36ch;
   margin-top: 16px;
@@ -86,9 +81,9 @@
 }
 
 .stepHeadingNumber {
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 1.125rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
   color: var(--color-terracotta);
 }
 
@@ -150,11 +145,6 @@
   max-width: 40ch;
   font-size: 1rem;
   color: var(--color-muted);
-}
-
-.beagle {
-  align-self: flex-start;
-  margin-top: 28px;
 }
 
 .formColumn {

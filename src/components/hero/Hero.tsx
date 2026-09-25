@@ -1,17 +1,18 @@
-import { BeagleMascot } from "@/components/beagle/BeagleMascot";
 import { ButtonLink } from "@/components/ui/Button";
-import { CookieImage } from "@/components/ui/CookieImage";
 import { Parallax } from "@/components/ui/Parallax";
 import { routes, sectionIds } from "@/data/site";
+import { BiteableCookie } from "./BiteableCookie";
 import styles from "./Hero.module.css";
 
 type HeroProps = {
-  /** Foto real principal, o null para el placeholder. */
-  imageSrc: string | null;
+  /** Cookie recortada sin fondo (PNG), si existe. */
+  cutoutSrc: string | null;
+  /** Foto real de una cookie (vista cenital), o null para el placeholder. */
+  photoSrc: string | null;
   imageAlt: string;
 };
 
-export function Hero({ imageSrc, imageAlt }: HeroProps) {
+export function Hero({ cutoutSrc, photoSrc, imageAlt }: HeroProps) {
   return (
     <section id={sectionIds.home} className={styles.hero} aria-labelledby="hero-title">
       <div className={`container ${styles.grid}`}>
@@ -24,7 +25,7 @@ export function Hero({ imageSrc, imageAlt }: HeroProps) {
               Cookies hechas
             </span>{" "}
             <span className={styles.enter} style={{ "--d": "260ms" } as React.CSSProperties}>
-              para darte <em>un gusto.</em>
+              para darte un gusto.
             </span>
           </h1>
           <p className={`${styles.lead} ${styles.enter}`} style={{ "--d": "380ms" } as React.CSSProperties}>
@@ -39,18 +40,11 @@ export function Hero({ imageSrc, imageAlt }: HeroProps) {
         </div>
 
         <div className={styles.media}>
-          <Parallax speed={0.05} className={styles.parallax}>
-            <figure className={styles.photo}>
-              <CookieImage
-                src={imageSrc}
-                alt={imageAlt}
-                priority
-                sizes="(min-width: 1024px) 560px, (min-width: 640px) 70vw, 88vw"
-                placeholderLabel="Foto de la cookie"
-              />
-            </figure>
+          <Parallax speed={0.04} className={styles.stage}>
+            <div className={styles.cookie}>
+              <BiteableCookie cutoutSrc={cutoutSrc} photoSrc={photoSrc} alt={imageAlt} />
+            </div>
           </Parallax>
-          <BeagleMascot className={styles.beagle} />
         </div>
       </div>
     </section>

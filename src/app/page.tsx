@@ -11,7 +11,8 @@ import { resolveFirstImage, resolveImage } from "@/lib/images";
 export default function HomePage() {
   const flavorItems = flavors.map((flavor) => ({ flavor, imageSrc: resolveImage(flavor.image) }));
 
-  // Hero: foto dedicada si existe; si no, la primera foto de sabor disponible.
+  // Hero: cookie recortada si existe; si no, foto dedicada o la primera foto de sabor.
+  const heroCutout = resolveImage(brandImages.heroCutout);
   const heroSrc = resolveFirstImage([brandImages.hero, ...flavors.map((f) => f.image)]);
   const heroFlavor = flavors.find((f) => heroSrc?.includes(`/${f.image}.`));
 
@@ -19,7 +20,11 @@ export default function HomePage() {
     <>
       <Header logoSrc={resolveImage(brandImages.logo)} />
       <main id="contenido">
-        <Hero imageSrc={heroSrc} imageAlt={heroFlavor?.alt ?? "Cookie artesanal de Sweet Cookies"} />
+        <Hero
+          cutoutSrc={heroCutout}
+          photoSrc={heroSrc}
+          imageAlt={heroFlavor?.alt ?? "Cookie artesanal de Sweet Cookies"}
+        />
         <FlavorsSection items={flavorItems} />
         <BuildBoxSection imageSrc={resolveImage(brandImages.box)} />
         <FinalCTA />

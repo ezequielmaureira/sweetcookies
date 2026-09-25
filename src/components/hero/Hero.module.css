@@ -19,18 +19,13 @@
 
 .title {
   margin-top: 18px;
-  font-size: clamp(2.6rem, 9.5vw, 5.75rem);
+  font-size: clamp(2.6rem, 10vw, 5.5rem);
   line-height: 0.98;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.045em;
 }
 
 .title span {
   display: block;
-}
-
-.title em {
-  font-style: italic;
-  color: var(--color-terracotta);
 }
 
 .lead {
@@ -47,41 +42,27 @@
   margin-top: 32px;
 }
 
-/* ---------- Foto ---------- */
+/* ---------- Cookie ---------- */
 .media {
   order: 1;
   position: relative;
-  align-self: center;
-  width: min(100%, 420px);
-  margin-top: 8px;
 }
 
-.parallax {
+/* Superficie limpia donde apoya la cookie (sin marcos ni formas decorativas). */
+.stage {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 0.92;
+  max-height: 58svh;
+  border-radius: var(--radius-lg);
+  background: var(--color-cream-deep);
 }
 
-.photo {
-  position: relative;
-  margin: 0;
-  aspect-ratio: 1 / 1;
-  max-height: 52svh;
-  margin-inline: auto;
-  overflow: hidden;
-  border-radius: 999px 999px var(--radius-lg) var(--radius-lg);
-  background: var(--color-beige);
-  animation: photoReveal 1.2s var(--ease-out) 120ms both;
-}
-
-.photo img {
-  animation: photoZoom 1.6s var(--ease-out) 120ms both;
-}
-
-.beagle {
-  position: absolute;
-  left: -4px;
-  bottom: 0;
-  z-index: 2;
-  --beagle-size: 104px;
+.cookie {
+  width: min(70%, 46svh);
+  margin-bottom: 1.5rem;
 }
 
 /* ---------- Entrada ---------- */
@@ -100,38 +81,13 @@
   }
 }
 
-@keyframes photoReveal {
-  from {
-    clip-path: inset(100% 0 0 0 round 999px 999px var(--radius-lg) var(--radius-lg));
-  }
-  to {
-    clip-path: inset(0 0 0 0 round 999px 999px var(--radius-lg) var(--radius-lg));
-  }
-}
-
-@keyframes photoZoom {
-  from {
-    transform: scale(1.08);
-  }
-  to {
-    transform: none;
-  }
-}
-
-/* ---------- Tablet ---------- */
 @media (min-width: 640px) {
-  .media {
-    width: min(100%, 480px);
+  .stage {
+    aspect-ratio: 16 / 11;
   }
 
-  .photo {
-    aspect-ratio: 4 / 4.3;
-    max-height: none;
-  }
-
-  .beagle {
-    --beagle-size: 124px;
-    left: -40px;
+  .cookie {
+    width: min(56%, 46svh);
   }
 }
 
@@ -143,7 +99,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
     align-items: center;
     gap: clamp(40px, 5vw, 88px);
   }
@@ -154,32 +110,26 @@
   }
 
   .title {
-    font-size: clamp(3.25rem, 5.4vw, 5.75rem);
+    font-size: clamp(3.25rem, 5.4vw, 5.5rem);
   }
 
   .media {
     order: 0;
-    width: auto;
-    margin-top: 0;
-    /* Desborda levemente el contenedor hacia la derecha */
     margin-right: calc(var(--gutter) * -0.7);
   }
 
-  .photo {
-    aspect-ratio: 4 / 4.6;
+  .stage {
+    aspect-ratio: 1 / 1.02;
+    max-height: none;
   }
 
-  .beagle {
-    --beagle-size: 144px;
-    left: -72px;
-    bottom: 0;
+  .cookie {
+    width: 72%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .enter,
-  .photo,
-  .photo img {
+  .enter {
     animation: none;
   }
 }

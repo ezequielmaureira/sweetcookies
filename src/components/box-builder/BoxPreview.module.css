@@ -1,11 +1,9 @@
-/* Caja vista desde arriba: tapa con la marca + bandeja con una cookie por unidad. */
+/* Caja vista desde arriba: bandeja limpia con una cookie por unidad. */
 .box {
-  --box-edge: #d9c7ad;
   position: relative;
   padding: 10px;
   border-radius: var(--radius-lg);
-  background: var(--box-edge);
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0) 60%);
+  background: var(--color-beige);
 }
 
 .lid {
@@ -17,17 +15,11 @@
 }
 
 .brand {
-  font-family: var(--font-serif);
-  font-size: 1.125rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: -0.02em;
   color: var(--color-chocolate);
   white-space: nowrap;
-}
-
-.brand em {
-  font-style: italic;
-  color: var(--color-terracotta);
 }
 
 .count {
@@ -84,7 +76,7 @@
 }
 
 .monogram {
-  font-family: var(--font-serif);
+  font-weight: 600;
   font-size: clamp(0.8125rem, 2.6vw, 1rem);
   letter-spacing: 0.02em;
   color: rgba(255, 255, 255, 0.92);
@@ -110,9 +102,7 @@
   align-items: center;
   justify-content: center;
   padding: 0 20px;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 1rem;
+  font-size: 0.9375rem;
   text-align: center;
   color: var(--color-muted);
   background: rgba(250, 246, 239, 0.7);

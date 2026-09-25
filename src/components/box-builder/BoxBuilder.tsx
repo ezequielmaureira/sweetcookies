@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BeagleMascot } from "@/components/beagle/BeagleMascot";
 import { useCart } from "@/components/cart/CartProvider";
 import { flavorsById } from "@/data/cookies";
 import { formatCookieCount } from "@/lib/cart";
@@ -97,7 +96,7 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
       <header className={`container ${styles.intro}`}>
         <p className="kicker">Armá tu caja</p>
         <h1 className={styles.title}>
-          Creá tu combinación <em>perfecta.</em>
+          Creá tu combinación perfecta.
         </h1>
         <p className={styles.lead}>Elegí tus cookies favoritas y armá tu pedido.</p>
 
@@ -162,9 +161,6 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
             {checkoutOpen ? (
               <>
                 <OrderSummary lines={lines} totalCount={totalCount} compact />
-                <div className={styles.beagle}>
-                  <BeagleMascot variant="gazing" initialBubble="Eso pinta muy bien." />
-                </div>
               </>
             ) : (
               <p className={styles.confirmHint}>

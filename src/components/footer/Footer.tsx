@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { Brand } from "@/components/brand/Brand";
+import { brandImages } from "@/data/cookies";
 import { site } from "@/data/site";
 import { ADMIN_HOME_URL } from "@/lib/admin/config";
+import { resolveImage } from "@/lib/images";
 import { getPublicSettings, instagramUrl } from "@/lib/site-settings";
 import styles from "./Footer.module.css";
 
@@ -11,7 +14,7 @@ export async function Footer() {
     <footer className={styles.footer}>
       <div className={`container ${styles.inner}`}>
         <p className={styles.brand}>
-          Sweet <em>Cookies</em>
+          <Brand logoSrc={resolveImage(brandImages.logo)} size="sm" />
           <span className="visually-hidden"> — {site.tagline}</span>
         </p>
 

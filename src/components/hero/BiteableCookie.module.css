@@ -1,0 +1,193 @@
+.wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.cookie {
+  position: absolute;
+  inset: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    transform 500ms var(--ease-out),
+    opacity 400ms var(--ease-out);
+  animation: cookieIn 900ms var(--ease-out) 200ms both;
+}
+
+.cookie:focus-visible {
+  outline-offset: 6px;
+  border-radius: 50%;
+}
+
+@media (hover: hover) {
+  .cookie:not(.finished):hover {
+    transform: rotate(-3deg) scale(1.015);
+  }
+}
+
+.body {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 50%;
+  overflow: hidden;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+/* Recorte PNG: la forma la da la imagen, sin círculo ni sombra de tarjeta. */
+.cutout .body {
+  border-radius: 0;
+  overflow: visible;
+}
+
+.round .body {
+  box-shadow: 0 30px 60px -30px rgba(58, 36, 25, 0.45);
+}
+
+.imgCover {
+  object-fit: cover;
+}
+
+.imgContain {
+  object-fit: contain;
+}
+
+/* Sin foto: cookie neutra (sin ilustración ni personaje). */
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.35), transparent 55%),
+    radial-gradient(circle at 60% 65%, rgba(122, 76, 40, 0.25), transparent 50%),
+    #c9955c;
+}
+
+.chips {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 30% 38%, #3a2419 0 3.2%, transparent 3.5%),
+    radial-gradient(circle at 58% 28%, #3a2419 0 2.6%, transparent 2.9%),
+    radial-gradient(circle at 70% 55%, #3a2419 0 3.6%, transparent 3.9%),
+    radial-gradient(circle at 42% 66%, #3a2419 0 2.8%, transparent 3.1%),
+    radial-gradient(circle at 25% 58%, #3a2419 0 2%, transparent 2.3%),
+    radial-gradient(circle at 55% 80%, #3a2419 0 2.2%, transparent 2.5%);
+  opacity: 0.85;
+}
+
+.chomp {
+  animation: chomp 320ms var(--ease-out);
+}
+
+.finished {
+  transform: scale(0.6) rotate(12deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Miguitas */
+.crumbs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crumb {
+  position: absolute;
+  border-radius: 40%;
+  background: #b98247;
+  animation: crumb 900ms cubic-bezier(0.3, 0.6, 0.6, 1) both;
+}
+
+.crumb:nth-child(3n) {
+  background: #8a5a2e;
+}
+
+/* Indicación */
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: -2.25rem;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.hintVisible,
+.hintHidden {
+  transition: opacity 400ms var(--ease-out);
+}
+
+.hintHidden {
+  opacity: 0;
+}
+
+@keyframes cookieIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chomp {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(0.965) rotate(-1.5deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes crumb {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(160deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cookie {
+    animation: none;
+    transition: opacity 200ms linear;
+  }
+
+  .cookie:not(.finished):hover {
+    transform: none;
+  }
+
+  .chomp,
+  .crumb {
+    animation: none;
+  }
+
+  .finished {
+    transform: none;
+  }
+}

@@ -12,15 +12,8 @@
 }
 
 .brand {
-  font-family: var(--font-serif);
-  font-size: 1.5rem;
-  letter-spacing: -0.02em;
-  color: var(--color-chocolate);
-}
-
-.brand em {
-  font-style: italic;
-  color: var(--color-terracotta);
+  display: flex;
+  align-items: center;
 }
 
 .instagram {

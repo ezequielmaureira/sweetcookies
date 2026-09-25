@@ -5,7 +5,8 @@ con estos nombres base (la extensión se detecta sola):
 
 | Archivo                | Dónde se usa                                   |
 | ---------------------- | ---------------------------------------------- |
-| `hero-cookie`          | Foto grande del hero (opcional\*)              |
+| `hero-cookie-cutout`   | Cookie del hero **recortada sin fondo** (`.png`), la que se "muerde" al tocarla (recomendado) |
+| `hero-cookie`          | Foto cenital de una cookie para el hero (opcional\*) |
 | `cookies-cream`        | Sabor Cookies & Cream                          |
 | `red-velvet`           | Sabor Red Velvet                               |
 | `pistacho`             | Sabor Pistacho                                 |
@@ -15,7 +16,9 @@ con estos nombres base (la extensión se detecta sola):
 | `box-cookies`          | Sección "Armá tu caja"                         |
 | `logo-sweet-cookies`   | Logo del header (ideal: `.png` con fondo transparente) |
 
-\* Si `hero-cookie` no existe, el hero usa la primera foto de sabor disponible.
+\* Orden del hero: `hero-cookie-cutout` → `hero-cookie` (recortada en círculo) →
+primera foto de sabor disponible → cookie neutra. El logo se usa solo en header,
+footer y login: no define el estilo del resto del sitio.
 
 Si falta alguna foto, la página muestra un placeholder neutro. Después de
 agregar fotos, reiniciá `npm run dev` o volvé a correr `npm run build`.

@@ -17,22 +17,12 @@
 
 .brand {
   display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  font-family: var(--font-serif);
-  font-size: 1.375rem;
-  letter-spacing: -0.02em;
-  color: var(--color-chocolate);
-  white-space: nowrap;
-}
-
-.brand em {
-  font-style: italic;
-  color: var(--color-terracotta);
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
 }
 
 .badge {
-  margin-left: 6px;
   padding: 3px 9px;
   border: 1px solid var(--color-line);
   border-radius: 999px;
@@ -130,7 +120,8 @@ a.card:hover {
 }
 
 .cardTitle {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 1.625rem;
   letter-spacing: -0.02em;
   color: var(--color-chocolate);

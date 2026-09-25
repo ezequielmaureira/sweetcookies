@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { Brand } from "@/components/brand/Brand";
+import { brandImages } from "@/data/cookies";
+import { resolveImage } from "@/lib/images";
 import styles from "./Admin.module.css";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -7,8 +10,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className={styles.shell}>
       <header className={styles.topbar}>
         <div className={`container ${styles.topbarInner}`}>
-          <Link href="/admin" className={styles.brand}>
-            Sweet <em>Cookies</em> <span className={styles.badge}>Admin</span>
+          <Link href="/admin" className={styles.brand} aria-label="Sweet Cookies, panel de administración">
+            <Brand logoSrc={resolveImage(brandImages.logo)} size="sm" decorative />
+            <span className={styles.badge}>Admin</span>
           </Link>
           <div className={styles.topbarActions}>
             <Link href="/" className={styles.viewSite}>

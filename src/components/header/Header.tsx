@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { navLinks, routes, site } from "@/data/site";
+import { Brand } from "@/components/brand/Brand";
 import { CartButton } from "./CartButton";
 import styles from "./Header.module.css";
 
@@ -56,15 +56,7 @@ export function Header({ logoSrc }: HeaderProps) {
     <header className={[styles.header, scrolled || menuOpen ? styles.scrolled : ""].join(" ")}>
       <div className={`container ${styles.inner}`}>
         <Link href={routes.home} className={styles.logo} aria-label={`${site.name}, ir al inicio`} onClick={closeMenu}>
-          {logoSrc ? (
-            <span className={styles.logoImage}>
-              <Image src={logoSrc} alt="" fill sizes="160px" priority />
-            </span>
-          ) : (
-            <span className={styles.wordmark} aria-hidden="true">
-              Sweet <em>Cookies</em>
-            </span>
-          )}
+          <Brand logoSrc={logoSrc} decorative />
         </Link>
 
         <nav className={styles.nav} aria-label="Principal">
