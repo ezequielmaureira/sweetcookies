@@ -9,7 +9,7 @@ import styles from "./SiteEntryGate.module.css";
 const FADE_MS = 650;
 const FADE_REDUCED_MS = 150;
 
-const ENTRY_MESSAGES = ["Mmm...", "Una más.", "Bueno... ahora sí."] as const;
+const ENTRY_MESSAGES = ["Mmm...", "Una más.", "Ya casi.", "Bueno... ahora sí."] as const;
 
 // Estado "ya entró" leído de sessionStorage. En el servidor (y al hidratar) es
 // false; el script de <head> ya ocultó la entrada por CSS si correspondía.
@@ -29,7 +29,7 @@ type SiteEntryGateProps = {
 
 /**
  * Puerta de entrada pública de Sweet Cookies: pantalla completa con la cookie
- * real; 3 mordidas y se revela la página pedida (sin recargar ni redirigir).
+ * real; 4 mordidas y se revela la página pedida (sin recargar ni redirigir).
  * Es solo UX: no protege nada ni sabe de sesiones de usuario.
  */
 export function SiteEntryGate({ logoSrc, cookie, children }: SiteEntryGateProps) {

@@ -50,8 +50,6 @@
   mask-size: 100% 100%;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
 }
 
 /* Foto cenital: se recorta en círculo; sombra suave de apoyo. */
@@ -78,9 +76,13 @@
   object-fit: contain;
 }
 
-/* Interior expuesto en el borde de cada mordida (misma foto, más oscura y cálida). */
+/*
+ * Miga expuesta en el borde de cada mordida: la misma foto llevada a un rojo
+ * mate de interior de red velvet. Se comprime el rango antes de colorear para
+ * que el chocolate blanco cortado no quede como un destello claro.
+ */
 .rim {
-  filter: brightness(0.8) saturate(1.15) contrast(1.05);
+  filter: grayscale(1) contrast(0.55) brightness(0.52) sepia(1) hue-rotate(-50deg) saturate(2.8);
 }
 
 .chomp {
@@ -116,21 +118,20 @@
 
 .crumb {
   position: absolute;
-  border-radius: 45% 55% 40% 60%;
-  animation: crumb 950ms cubic-bezier(0.3, 0.6, 0.6, 1) both;
+  animation: crumb 900ms cubic-bezier(0.45, 0, 0.8, 0.55) both;
 }
 
-/* Tonos de la cookie real (Red Velvet con chocolate blanco). */
+/* Tonos tomados de la cookie real (Red Velvet con chocolate blanco). */
 .tone0 {
-  background: #8f3a36;
+  background: #7e2c2e;
 }
 
 .tone1 {
-  background: #6a2527;
+  background: #5e1f22;
 }
 
 .tone2 {
-  background: #efe6cf;
+  background: #efe4c8;
 }
 
 /* Texto */
@@ -138,6 +139,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 12px;
   min-height: 2.5rem;
   margin-top: clamp(16px, 3svh, 28px);
 }
@@ -150,6 +152,27 @@
   letter-spacing: -0.02em;
   color: var(--color-chocolate-soft);
   text-align: center;
+}
+
+/* "¿Otra?": acción discreta para volver a la cookie entera. */
+.again {
+  padding: 6px 14px;
+  border: 1px solid var(--color-beige-deep);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-chocolate-soft);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  animation: messageIn 380ms var(--ease-out);
+  transition:
+    background-color var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out);
+}
+
+.again:hover {
+  border-color: var(--color-chocolate-soft);
+  background: var(--color-cream-deep);
 }
 
 .messageIn {
@@ -180,14 +203,21 @@
   }
 }
 
+/* Se desprende y cae (aceleración de gravedad), se apaga al final. */
 @keyframes crumb {
   0% {
-    opacity: 1;
+    opacity: 0;
     transform: translate(-50%, -50%);
+  }
+  12% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(140deg);
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--spin));
   }
 }
 
@@ -206,7 +236,8 @@
   .cookie,
   .chomp,
   .crumb,
-  .messageIn {
+  .messageIn,
+  .again {
     animation: none;
   }
 

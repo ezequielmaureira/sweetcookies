@@ -2,17 +2,40 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { BITE_COUNT, DEFAULT_MESSAGES, biteMask, bitePoint } from "./bites";
+import { BITE_COUNT, DEFAULT_MESSAGES, biteMask, crumbOrigins, type BiteMessages } from "./bites";
 import styles from "./BiteableCookie.module.css";
 
 const THROTTLE_MS = 350;
 /** Pocas miguitas por mordida: sutil, nada explosivo. */
-const CRUMB_COUNT = 5;
+const CRUMB_COUNT = 4;
+/** Cuánto se achica el agujero en la capa de miga expuesta (en % de la cookie). */
+const RIM_INSET = 1.7;
 /** Pausa tras la última mordida para leer el mensaje antes de continuar. */
 const COMPLETE_DELAY_MS = 550;
 const COMPLETE_DELAY_REDUCED_MS = 250;
 
-type Crumb = { id: number; x: number; y: number; dx: number; dy: number; size: number; delay: number; tone: number };
+type Crumb = {
+  id: number;
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  spin: number;
+  size: number;
+  delay: number;
+  tone: number;
+  shape: string;
+};
+
+/** Contorno irregular de una miguita (nada de círculos perfectos). */
+function crumbShape() {
+  const corners = 5 + Math.floor(Math.random() * 3);
+  return `polygon(${Array.from({ length: corners }, (_, i) => {
+    const a = (i / corners) * Math.PI * 2 + Math.random() * 0.5;
+    const r = 34 + Math.random() * 16;
+    return `${(50 + Math.cos(a) * r).toFixed(0)}% ${(50 + Math.sin(a) * r).toFixed(0)}%`;
+  }).join(",")})`;
+}
 
 type BiteableCookieProps = {
   /** Foto REAL de la cookie. */
@@ -22,32 +45,37 @@ type BiteableCookieProps = {
   alt: string;
   /** Texto antes del primer mordisco. */
   hint?: string;
-  messages?: readonly [string, string, string];
+  messages?: BiteMessages;
   onComplete?: () => void;
+  /** Si se pasa, al terminar aparece este botón discreto que vuelve a la cookie entera. */
+  resetLabel?: string;
   sizes?: string;
   priority?: boolean;
 };
 
 /**
  * Cookie real que se muerde con click, tap, Enter o Space (botón nativo).
- * 3 mordidas → mensaje final → onComplete. Clicks rápidos se ignoran
- * durante THROTTLE_MS para no saltear estados.
+ * 4 mordidas → mensaje final → onComplete (y opcionalmente "¿Otra?").
+ * Clicks rápidos se ignoran durante THROTTLE_MS para no saltear estados.
  */
 export function BiteableCookie({
   src,
   isCutout = false,
   alt,
-  hint = "Probala para entrar.",
+  hint = "Tocá la cookie",
   messages = DEFAULT_MESSAGES,
   onComplete,
+  resetLabel,
   sizes = "(min-width: 1024px) 460px, 80vw",
   priority = false,
 }: BiteableCookieProps) {
   const [bites, setBites] = useState(0);
+  const [complete, setComplete] = useState(false);
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);
   const last = useRef(0);
   const crumbId = useRef(0);
   const timers = useRef<number[]>([]);
+  const cookieRef = useRef<HTMLButtonElement>(null);
   const onCompleteRef = useRef(onComplete);
 
   useEffect(() => {
@@ -69,30 +97,43 @@ export function BiteableCookie({
     setBites(next);
 
     if (!reduced) {
-      const { x, y } = bitePoint(next - 1);
-      const fresh: Crumb[] = Array.from({ length: CRUMB_COUNT }, (_, i) => ({
+      // Caen desde el borde recién mordido, casi sin impulso: gravedad, no explosión.
+      const fresh: Crumb[] = crumbOrigins(next - 1, CRUMB_COUNT).map(({ x, y }, i) => ({
         id: ++crumbId.current,
         x,
         y,
-        dx: (x - 50) * (0.6 + Math.random() * 0.8) + (Math.random() - 0.5) * 28,
-        dy: 24 + Math.random() * 44,
-        size: 2.5 + Math.random() * 3.5,
-        delay: i * 16,
-        tone: i % 3,
+        dx: (x - 50) * 0.25 + (Math.random() - 0.5) * 14,
+        dy: 26 + Math.random() * 30,
+        spin: (Math.random() - 0.5) * 220,
+        size: 2.5 + Math.random() * 3,
+        delay: i * 45 + Math.random() * 40,
+        tone: Math.random() < 0.2 ? 2 : i % 2,
+        shape: crumbShape(),
       }));
       setCrumbs((prev) => [...prev, ...fresh]);
-      timers.current.push(window.setTimeout(() => setCrumbs((prev) => prev.filter((c) => !fresh.includes(c))), 1100));
+      timers.current.push(window.setTimeout(() => setCrumbs((prev) => prev.filter((c) => !fresh.includes(c))), 1200));
     }
 
     if (next === BITE_COUNT) {
       timers.current.push(
-        window.setTimeout(() => onCompleteRef.current?.(), reduced ? COMPLETE_DELAY_REDUCED_MS : COMPLETE_DELAY_MS),
+        window.setTimeout(() => {
+          setComplete(true);
+          onCompleteRef.current?.();
+        }, reduced ? COMPLETE_DELAY_REDUCED_MS : COMPLETE_DELAY_MS),
       );
     }
   };
 
+  const reset = () => {
+    setBites(0);
+    setComplete(false);
+    setCrumbs([]);
+    last.current = 0;
+    cookieRef.current?.focus();
+  };
+
   const mask = biteMask(bites);
-  const rimMask = biteMask(bites, 1.4);
+  const rimMask = biteMask(bites, RIM_INSET);
   const maskStyle = (value: string | undefined) =>
     value ? ({ maskImage: value, WebkitMaskImage: value } as React.CSSProperties) : undefined;
   const message = bites === 0 ? hint : messages[bites - 1];
@@ -112,13 +153,14 @@ export function BiteableCookie({
     <div className={styles.root}>
       <div className={styles.stage}>
         <button
+          ref={cookieRef}
           type="button"
           className={[styles.cookie, isCutout ? styles.cutout : styles.round, done ? styles.done : ""].join(" ")}
           onClick={bite}
           aria-disabled={done}
           aria-label={done ? `${alt}. Cookie terminada.` : `${alt}. Dar un mordisco (${bites} de ${BITE_COUNT}).`}
         >
-          {/* Capa inferior más oscura: el "interior" expuesto en el borde de cada mordida. */}
+          {/* Miga expuesta: la misma foto en tono de interior, asoma en el borde de cada mordida. */}
           {bites > 0 && photo(styles.rim, maskStyle(rimMask))}
           {/* key: reinicia la animación de mordida en cada paso. */}
           <span key={bites} className={`${styles.body} ${bites > 0 ? styles.chomp : ""}`} style={maskStyle(mask)}>
@@ -137,9 +179,11 @@ export function BiteableCookie({
                   left: `${c.x}%`,
                   top: `${c.y}%`,
                   width: c.size,
-                  height: c.size * 0.8,
+                  height: c.size,
+                  clipPath: c.shape,
                   "--dx": `${c.dx}px`,
                   "--dy": `${c.dy}px`,
+                  "--spin": `${c.spin}deg`,
                   animationDelay: `${c.delay}ms`,
                 } as React.CSSProperties
               }
@@ -154,8 +198,12 @@ export function BiteableCookie({
             {message}
           </span>
         </p>
+        {resetLabel && complete && (
+          <button type="button" className={styles.again} onClick={reset}>
+            {resetLabel}
+          </button>
+        )}
       </div>
-
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { BiteableCookie } from "@/components/cookie/BiteableCookie";
 import { ButtonLink } from "@/components/ui/Button";
 import { Parallax } from "@/components/ui/Parallax";
 import { routes, sectionIds } from "@/data/site";
@@ -40,19 +40,16 @@ export function Hero({ cookieSrc, isCutout, imageAlt }: HeroProps) {
 
         <div className={styles.media}>
           <Parallax speed={0.04} className={styles.stage}>
-            {/* La interacción de mordidas ya ocurrió en la entrada: acá la cookie es solo producto. */}
-            <div className={`${styles.cookie} ${isCutout ? styles.cutout : styles.round}`}>
-              {cookieSrc && (
-                <Image
-                  src={cookieSrc}
-                  alt={imageAlt}
-                  fill
-                  priority
-                  draggable={false}
-                  sizes="(min-width: 1024px) 540px, 86vw"
-                  className={styles.cookieImage}
-                />
-              )}
+            {/* Ya dentro del sitio se puede seguir comiendo: 4 mordidas y "¿Otra?" la vuelve a llenar. */}
+            <div className={styles.cookie}>
+              <BiteableCookie
+                src={cookieSrc}
+                isCutout={isCutout}
+                alt={imageAlt}
+                resetLabel="¿Otra?"
+                priority
+                sizes="(min-width: 1024px) 540px, 86vw"
+              />
             </div>
           </Parallax>
         </div>

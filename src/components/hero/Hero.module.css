@@ -58,47 +58,12 @@
 }
 
 .cookie {
-  position: relative;
   width: min(86%, 48svh, 400px);
-  aspect-ratio: 1 / 1;
-  animation: cookieIn 900ms var(--ease-out) 150ms both;
-}
-
-.cookieImage {
-  object-fit: contain;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Recorte PNG sin fondo: la forma la da la propia foto. */
-.cutout {
-  filter: drop-shadow(0 22px 24px rgba(58, 36, 25, 0.24)) drop-shadow(0 3px 5px rgba(58, 36, 25, 0.16));
-}
-
-/* Foto con fondo: se recorta en círculo. */
-.round {
-  overflow: hidden;
-  border-radius: 50%;
-}
-
-.round .cookieImage {
-  object-fit: cover;
 }
 
 /* ---------- Entrada ---------- */
 .enter {
   animation: enterUp 900ms var(--ease-out) var(--d, 0ms) both;
-}
-
-@keyframes cookieIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96) rotate(-4deg);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 @keyframes enterUp {
@@ -155,8 +120,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .enter,
-  .cookie {
+  .enter {
     animation: none;
   }
 }
