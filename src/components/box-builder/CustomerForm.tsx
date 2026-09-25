@@ -3,7 +3,6 @@
 import { useId, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { Button } from "@/components/ui/Button";
-import { site } from "@/data/site";
 import {
   EMPTY_CUSTOMER,
   FIELD_LIMITS,
@@ -14,10 +13,10 @@ import {
   type DeliveryMethod,
   type FieldErrors,
 } from "@/lib/order";
-import { buildOrderMessage, buildWhatsAppUrl, getConfiguredWhatsAppNumber } from "@/lib/whatsapp";
+import { usePublicSettings } from "@/lib/use-public-settings";
+import { buildOrderMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
 import styles from "./CustomerForm.module.css";
 
-const WHATSAPP_NUMBER = getConfiguredWhatsAppNumber();
 const IS_DEV = process.env.NODE_ENV !== "production";
 
 type CustomerFormProps = {
@@ -30,6 +29,12 @@ type CustomerFormProps = {
 /** Paso 3: datos mínimos del cliente + envío del pedido por WhatsApp. */
 export function CustomerForm({ onOpened, onReset }: CustomerFormProps) {
   const { lines, totalCount } = useCart();
+  // Número y estado de pedidos: vienen de la API (Neon), no del build.
+  const publicSettings = usePublicSettings();
+  const settingsLoading = publicSettings.status === "loading";
+  const ordersPaused = publicSettings.settings?.whatsappOrdersEnabled === false;
+  const whatsappNumber = publicSettings.settings && !ordersPaused ? publicSettings.settings.whatsappNumber : null;
+  const instagramHandle = publicSettings.settings?.instagramHandle ?? null;
   const [customer, setCustomer] = useState<CustomerDetails>(EMPTY_CUSTOMER);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitted, setSubmitted] = useState(false);
@@ -51,10 +56,11 @@ export function CustomerForm({ onOpened, onReset }: CustomerFormProps) {
     event.preventDefault();
     setSubmitted(true);
 
-    const result = validateOrder({ customer, totalCount, hasWhatsAppNumber: Boolean(WHATSAPP_NUMBER) });
+    if (settingsLoading) return;
+    const result = validateOrder({ customer, totalCount, hasWhatsAppNumber: Boolean(whatsappNumber) });
     setErrors(result.fieldErrors);
 
-    if (!result.isValid || !WHATSAPP_NUMBER) {
+    if (!result.isValid || !whatsappNumber) {
       const firstInvalid = (["name", "method", "address"] as CustomerField[]).find((f) => result.fieldErrors[f]);
       if (firstInvalid) {
         formRef.current?.querySelector<HTMLElement>(`[data-field="${firstInvalid}"]`)?.focus();
@@ -62,7 +68,7 @@ export function CustomerForm({ onOpened, onReset }: CustomerFormProps) {
       return;
     }
 
-    const url = buildWhatsAppUrl(WHATSAPP_NUMBER, buildOrderMessage(orderLines, customer));
+    const url = buildWhatsAppUrl(whatsappNumber, buildOrderMessage(orderLines, customer));
     // wa.me abre la app en mobile (si está instalada) o WhatsApp Web en desktop.
     window.open(url, "_blank", "noopener,noreferrer");
     setOpenedUrl(url);
@@ -189,15 +195,26 @@ export function CustomerForm({ onOpened, onReset }: CustomerFormProps) {
             Tu caja está vacía. Agregá al menos una cookie.
           </p>
         )}
-        {!WHATSAPP_NUMBER && (
+        {ordersPaused && (
+          <p className={styles.formError} role="status">
+            Los pedidos por WhatsApp están pausados temporalmente.
+            {instagramHandle && ` Podés escribirnos por Instagram: ${instagramHandle}.`}
+          </p>
+        )}
+        {!settingsLoading && !ordersPaused && !whatsappNumber && (
           <p className={styles.formError} role="status">
             {IS_DEV
-              ? "Falta configurar el número de WhatsApp (NEXT_PUBLIC_WHATSAPP_NUMBER en .env.local)."
-              : `Por ahora no podemos recibir pedidos por WhatsApp. Escribinos por Instagram: ${site.instagram.handle}.`}
+              ? "Falta configurar el número de WhatsApp (en /admin/configuracion)."
+              : `Por ahora no podemos recibir pedidos por WhatsApp.${instagramHandle ? ` Escribinos por Instagram: ${instagramHandle}.` : ""}`}
           </p>
         )}
 
-        <Button type="submit" className={styles.whatsapp} disabled={!WHATSAPP_NUMBER}>
+        <Button
+          type="submit"
+          className={styles.whatsapp}
+          disabled={settingsLoading || !whatsappNumber}
+          aria-busy={settingsLoading}
+        >
           <WhatsAppIcon />
           Enviar pedido por WhatsApp
         </Button>

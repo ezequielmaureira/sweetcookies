@@ -5,6 +5,7 @@ import { BeagleMascot } from "@/components/beagle/BeagleMascot";
 import { useCart } from "@/components/cart/CartProvider";
 import { flavorsById } from "@/data/cookies";
 import { formatCookieCount } from "@/lib/cart";
+import { prefetchPublicSettings } from "@/lib/use-public-settings";
 import { BoxPreview } from "./BoxPreview";
 import { CustomerForm } from "./CustomerForm";
 import { FlavorSelector } from "./FlavorSelector";
@@ -30,6 +31,11 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
   const confirmHeadingRef = useRef<HTMLHeadingElement>(null);
   const flavorsHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusConfirm = useRef(false);
+
+  // Pide la configuración de pedidos apenas se abre la página (el backend puede estar dormido).
+  useEffect(() => {
+    void prefetchPublicSettings();
+  }, []);
 
   // Al abrir el paso 3, llevar la vista y el foco a su título.
   useEffect(() => {

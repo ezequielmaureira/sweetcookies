@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"src/**/*.test.ts\""
+    "test": "node --test \"src/**/*.test.ts\"",
+    "api:dev": "npm --prefix api run dev",
+    "api:test": "npm --prefix api test",
+    "api:typecheck": "npm --prefix api run typecheck",
+    "api:build": "npm --prefix api run build"
   },
   "repository": {
     "type": "git",
@@ -22,6 +26,8 @@
   },
   "homepage": "https://github.com/ezequielmaureira/sweetcookies#readme",
   "dependencies": {
+    "@clerk/localizations": "^4.20.0",
+    "@clerk/nextjs": "^7.9.7",
     "next": "^16.3.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
