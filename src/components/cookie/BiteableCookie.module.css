@@ -23,8 +23,8 @@
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   user-select: none;
-  animation: cookieIn 900ms var(--ease-out) 150ms both;
-  transition: transform 500ms var(--ease-out);
+  /* Solo aparece al cargar; al morder la cookie queda quieta (cambia únicamente la máscara). */
+  animation: cookieIn 700ms var(--ease-out) 150ms both;
 }
 
 .cookie:focus-visible {
@@ -33,12 +33,6 @@
 
 .done {
   cursor: default;
-}
-
-@media (hover: hover) {
-  .cookie:not(.done):hover {
-    transform: rotate(-2deg) scale(1.012);
-  }
 }
 
 .layer,
@@ -83,10 +77,6 @@
  */
 .rim {
   filter: grayscale(1) contrast(0.55) brightness(0.52) sepia(1) hue-rotate(-50deg) saturate(2.8);
-}
-
-.chomp {
-  animation: chomp 300ms var(--ease-out);
 }
 
 /* Sin foto real todavía: lugar neutro (no se dibuja una cookie). */
@@ -183,23 +173,9 @@
 @keyframes cookieIn {
   from {
     opacity: 0;
-    transform: scale(0.94) rotate(-6deg);
   }
   to {
     opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes chomp {
-  0% {
-    transform: scale(1);
-  }
-  35% {
-    transform: scale(0.975) rotate(-1deg);
-  }
-  100% {
-    transform: scale(1);
   }
 }
 
@@ -234,18 +210,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cookie,
-  .chomp,
   .crumb,
   .messageIn,
   .again {
     animation: none;
-  }
-
-  .cookie {
-    transition: none;
-  }
-
-  .cookie:not(.done):hover {
-    transform: none;
   }
 }

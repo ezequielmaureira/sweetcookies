@@ -162,8 +162,8 @@ export function BiteableCookie({
         >
           {/* Miga expuesta: la misma foto en tono de interior, asoma en el borde de cada mordida. */}
           {bites > 0 && photo(styles.rim, maskStyle(rimMask))}
-          {/* key: reinicia la animación de mordida en cada paso. */}
-          <span key={bites} className={`${styles.body} ${bites > 0 ? styles.chomp : ""}`} style={maskStyle(mask)}>
+          {/* Misma capa siempre (sin re-montar): al morder solo cambia la máscara, la cookie no se mueve. */}
+          <span className={styles.body} style={maskStyle(mask)}>
             {photo(styles.top)}
           </span>
           {!src && <span className={styles.missingLabel}>Foto de la cookie</span>}
