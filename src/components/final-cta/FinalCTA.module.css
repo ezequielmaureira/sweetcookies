@@ -1,0 +1,36 @@
+.section {
+  padding-block: 88px 96px;
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  text-align: center;
+}
+
+.beagle {
+  --beagle-size: 112px;
+  margin-bottom: -8px;
+}
+
+.title {
+  max-width: 14ch;
+  font-size: clamp(2.25rem, 5.5vw + 0.5rem, 4.25rem);
+}
+
+.title em {
+  font-style: italic;
+  color: var(--color-terracotta);
+}
+
+@media (min-width: 1024px) {
+  .section {
+    padding-block: 136px 144px;
+  }
+
+  .beagle {
+    --beagle-size: 128px;
+  }
+}

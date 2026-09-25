@@ -1,0 +1,341 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: var(--header-h);
+  background: rgba(250, 246, 239, 0);
+  border-bottom: 1px solid transparent;
+  transition:
+    background-color var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out),
+    backdrop-filter var(--dur-med) var(--ease-out);
+}
+
+.scrolled {
+  background: rgba(250, 246, 239, 0.82);
+  border-bottom-color: var(--color-line);
+  -webkit-backdrop-filter: saturate(140%) blur(14px);
+  backdrop-filter: saturate(140%) blur(14px);
+}
+
+.inner {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+/* Logo */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+
+.logoImage {
+  position: relative;
+  display: block;
+  width: 132px;
+  height: 40px;
+}
+
+.logoImage img {
+  object-fit: contain;
+  object-position: left center;
+}
+
+.wordmark {
+  font-family: var(--font-serif);
+  font-size: 1.375rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--color-chocolate);
+  white-space: nowrap;
+}
+
+.wordmark em {
+  font-style: italic;
+  color: var(--color-terracotta);
+}
+
+/* Navegación desktop */
+.nav {
+  display: none;
+}
+
+.nav ul {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navLink,
+.navCta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 0.9375rem;
+  color: var(--color-ink);
+  transition:
+    color var(--dur-fast) ease,
+    background-color var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out);
+}
+
+.navLink {
+  position: relative;
+}
+
+.navLink::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 8px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-med) var(--ease-out);
+}
+
+.navLink:hover::after {
+  transform: scaleX(1);
+}
+
+.navCta {
+  margin-left: 8px;
+  padding: 0 18px;
+  border: 1px solid rgba(58, 36, 25, 0.3);
+  color: var(--color-chocolate);
+}
+
+.navCta:hover {
+  border-color: var(--color-chocolate);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+/* Acciones */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: var(--color-chocolate);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.cart:hover {
+  background: rgba(58, 36, 25, 0.06);
+}
+
+.cartIconWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.cartIcon {
+  width: 22px;
+  height: 22px;
+}
+
+.cartCount {
+  position: absolute;
+  top: -6px;
+  right: -9px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-terracotta);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.cartBump {
+  animation: cartBump 520ms var(--ease-out);
+}
+
+@keyframes cartBump {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.18) rotate(-6deg);
+  }
+  65% {
+    transform: scale(0.96) rotate(3deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Botón hamburguesa */
+.menuToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.menuBars {
+  position: relative;
+  width: 22px;
+  height: 10px;
+}
+
+.menuBars span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  border-radius: 2px;
+  background: var(--color-chocolate);
+  transition:
+    transform var(--dur-med) var(--ease-out),
+    top var(--dur-med) var(--ease-out);
+}
+
+.menuBars span:first-child {
+  top: 0;
+}
+
+.menuBars span:last-child {
+  top: calc(100% - 1.5px);
+}
+
+.menuToggle[aria-expanded="true"] .menuBars span:first-child {
+  top: calc(50% - 0.75px);
+  transform: rotate(45deg);
+}
+
+.menuToggle[aria-expanded="true"] .menuBars span:last-child {
+  top: calc(50% - 0.75px);
+  transform: rotate(-45deg);
+}
+
+/* Panel mobile */
+.mobilePanel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  background: rgba(250, 246, 239, 0.97);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--color-line);
+  clip-path: inset(0 0 100% 0);
+  visibility: hidden;
+  transition:
+    clip-path 480ms var(--ease-out),
+    visibility 0s linear 480ms;
+}
+
+.mobilePanelOpen {
+  clip-path: inset(0 0 0 0);
+  visibility: visible;
+  transition:
+    clip-path 480ms var(--ease-out),
+    visibility 0s;
+}
+
+.mobilePanel ul {
+  margin: 0;
+  padding-block: 12px 28px;
+  list-style: none;
+}
+
+.mobilePanel li {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 300ms var(--ease-out),
+    transform 300ms var(--ease-out);
+}
+
+.mobilePanelOpen li {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(80ms + var(--i) * 50ms);
+}
+
+.mobileLink {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  border-bottom: 1px solid var(--color-line);
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+  color: var(--color-chocolate);
+}
+
+.mobilePanel li:last-child .mobileLink {
+  border-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  .nav {
+    display: block;
+    margin-left: auto;
+  }
+
+  .menuToggle,
+  .mobilePanel {
+    display: none;
+  }
+
+  .wordmark {
+    font-size: 1.5rem;
+  }
+
+  .logoImage {
+    width: 156px;
+    height: 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header,
+  .mobilePanel,
+  .mobilePanelOpen,
+  .mobilePanel li,
+  .menuBars span,
+  .navLink::after {
+    transition: none;
+  }
+
+  .cartBump {
+    animation: none;
+  }
+}

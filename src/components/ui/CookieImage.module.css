@@ -1,0 +1,31 @@
+.image {
+  object-fit: cover;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.55), transparent 60%),
+    var(--color-beige);
+  color: rgba(58, 36, 25, 0.38);
+}
+
+.placeholderIcon {
+  width: clamp(36px, 18%, 64px);
+  height: auto;
+}
+
+.placeholderLabel {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.9375rem;
+  color: rgba(58, 36, 25, 0.55);
+  text-align: center;
+  padding-inline: 12px;
+}

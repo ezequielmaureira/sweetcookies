@@ -1,0 +1,43 @@
+.footer {
+  border-top: 1px solid var(--color-line);
+  padding-block: 40px calc(40px + env(safe-area-inset-bottom, 0px));
+}
+
+.inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+}
+
+.brand {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  color: var(--color-chocolate);
+}
+
+.brand em {
+  font-style: italic;
+  color: var(--color-terracotta);
+}
+
+.instagram {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 0.9375rem;
+  color: var(--color-ink);
+  transition: color var(--dur-fast) ease;
+}
+
+.instagram:hover {
+  color: var(--color-terracotta);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+}
