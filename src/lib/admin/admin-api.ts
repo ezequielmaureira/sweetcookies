@@ -16,17 +16,18 @@ export class AdminApiError extends Error {
   }
 }
 
-export async function adminRequest<T>(path: string, token: string | null, init: RequestInit = {}): Promise<T> {
+export async function adminRequest<T>(path: string, token: string | null, init: RequestInit & { contentType?: string } = {}): Promise<T> {
+  const { contentType = "application/json", ...requestInit } = init;
   const url = apiUrl(path);
   if (!url) throw new AdminApiError(0);
   if (!token) throw new AdminApiError(401);
   let res: Response;
   try {
     res = await fetchWithTimeout(url, {
-      ...init,
+      ...requestInit,
       cache: "no-store",
-      headers: { ...init.headers, Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      timeoutMs: 20000,
+      headers: { ...requestInit.headers, Authorization: `Bearer ${token}`, "Content-Type": contentType },
+      timeoutMs: 30000,
     });
   } catch {
     throw new AdminApiError(0);
@@ -53,7 +54,16 @@ export function adminErrorMessage(error: unknown, fallback = "No pudimos complet
 export type ProductStatus = "ACTIVE" | "PAUSED";
 export type DisplayStatus = ProductStatus | "OUT_OF_STOCK";
 
-export type AdminProduct = {
+/** Vista en caja: imagen específica opcional + encuadre (ver src/lib/box-view.ts). */
+export type BoxViewInput = {
+  boxImageUrl: string | null;
+  boxImageScale: number;
+  boxImageX: number;
+  boxImageY: number;
+  boxImageRotation: number;
+};
+
+export type AdminProduct = BoxViewInput & {
   id: string;
   name: string;
   description: string | null;
@@ -71,7 +81,7 @@ export type AdminProduct = {
   updatedAt: string;
 };
 
-export type ProductInput = {
+export type ProductInput = BoxViewInput & {
   name: string;
   description: string;
   price: string;
@@ -97,6 +107,16 @@ export const duplicateProduct = (token: string | null, id: string) =>
 
 export const deleteProduct = (token: string | null, id: string) =>
   adminRequest<void>(`/api/admin/products/${encodeURIComponent(id)}`, token, { method: "DELETE" });
+
+/* ---------- Imágenes ---------- */
+
+/** Sube una imagen (ya reducida en el navegador). Devuelve la ruta a guardar en imageUrl / boxImageUrl. */
+export const uploadImage = (token: string | null, file: Blob) =>
+  adminRequest<{ url: string; width: number | null; height: number | null }>("/api/admin/images", token, {
+    method: "POST",
+    body: file,
+    contentType: file.type,
+  });
 
 /* ---------- Pedidos ---------- */
 

@@ -629,3 +629,182 @@
     transition: none;
   }
 }
+
+/* ---------- Foto principal: ruta + subir ---------- */
+.imageInputRow {
+  display: flex;
+  gap: 8px;
+}
+
+.imageInputRow .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.uploadButton {
+  flex-shrink: 0;
+  min-height: 46px;
+  padding: 0 16px;
+  border: 1px solid var(--color-chocolate);
+  border-radius: var(--radius-sm);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.uploadButton:hover:not(:disabled) {
+  background: var(--color-ink);
+}
+
+.uploadButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.linkButton {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-chocolate);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.linkButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- Vista en caja ---------- */
+.boxView {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: #fffdf9;
+}
+
+.boxViewTitle {
+  font-family: var(--font-display);
+  font-size: 1.1875rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-chocolate);
+}
+
+.specific {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.uploadRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.boxViewBody {
+  display: grid;
+  gap: 18px;
+}
+
+@media (min-width: 560px) {
+  .boxViewBody {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.boxViewPreview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Fondo de bandeja (como la caja real) detrás de la cookie. */
+.dragArea {
+  width: min(200px, 64vw);
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-cream);
+  box-shadow: inset 0 1px 0 rgba(58, 36, 25, 0.06);
+  touch-action: none;
+  user-select: none;
+}
+
+.dragEnabled {
+  cursor: grab;
+}
+
+.dragEnabled:active {
+  cursor: grabbing;
+}
+
+.previewCaption {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.miniBox {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: min(200px, 64vw);
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--color-beige);
+}
+
+.miniSlot {
+  display: block;
+}
+
+.sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sliderLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.sliderValue {
+  font-weight: 400;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.slider input[type="range"] {
+  width: 100%;
+  min-height: 32px;
+  accent-color: var(--color-chocolate);
+}

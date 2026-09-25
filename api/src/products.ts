@@ -7,8 +7,28 @@ export type ProductStatus = "ACTIVE" | "PAUSED";
 /** Estado que ve el admin. OUT_OF_STOCK es calculado (ACTIVE con stock 0), no se guarda. */
 export type DisplayStatus = ProductStatus | "OUT_OF_STOCK";
 
+/**
+ * Vista en caja. Prioridad: boxImageUrl (imagen específica, opcional) →
+ * si no hay, imageUrl encuadrada. El encuadre (zoom, punto central y
+ * rotación) se aplica a la imagen que se use.
+ */
+export type BoxView = {
+  boxImageUrl: string | null;
+  /** 1 a 4. */
+  boxImageScale: number;
+  /** Punto de la foto que queda al centro de la cookie, 0–100 %. */
+  boxImageX: number;
+  boxImageY: number;
+  /** Grados, −180 a 180. */
+  boxImageRotation: number;
+};
+
+export const BOX_LIMITS = { minScale: 1, maxScale: 4, minRotation: -180, maxRotation: 180 } as const;
+
+export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 };
+
 /** Producto tal como lo maneja el servidor (dinero en centavos). */
-export type ProductRecord = {
+export type ProductRecord = BoxView & {
   id: string;
   name: string;
   description: string | null;
@@ -25,7 +45,7 @@ export type ProductRecord = {
 };
 
 /** Lo único que ve el comprador: nunca costo ni ganancia. */
-export type PublicProduct = {
+export type PublicProduct = BoxView & {
   id: string;
   name: string;
   description: string | null;
@@ -72,6 +92,11 @@ export function toPublicProduct(p: ProductRecord): PublicProduct {
     imageUrl: p.imageUrl,
     category: p.category,
     featured: p.featured,
+    boxImageUrl: p.boxImageUrl,
+    boxImageScale: p.boxImageScale,
+    boxImageX: p.boxImageX,
+    boxImageY: p.boxImageY,
+    boxImageRotation: p.boxImageRotation,
   };
 }
 
@@ -97,7 +122,7 @@ export function compareCatalogOrder(a: ProductRecord, b: ProductRecord): number 
 
 /* ---------- Validación de entrada (admin) ---------- */
 
-export type ProductData = {
+export type ProductData = BoxView & {
   name: string;
   description: string | null;
   priceCents: number;
@@ -197,6 +222,27 @@ export function validateProductInput(body: unknown, partial: boolean): ProductVa
     else errors.featured = "Valor inválido.";
   } else if (!partial) data.featured = false;
 
+  // Vista en caja: imagen específica opcional + encuadre con rangos controlados.
+  if (has("boxImageUrl")) {
+    if (input.boxImageUrl === null || input.boxImageUrl === "") data.boxImageUrl = null;
+    else if (typeof input.boxImageUrl === "string" && normalizeImageUrl(input.boxImageUrl)) data.boxImageUrl = normalizeImageUrl(input.boxImageUrl);
+    else errors.boxImageUrl = "Usá una imagen subida, una ruta del sitio o una URL https.";
+  } else if (!partial) data.boxImageUrl = null;
+
+  const numberIn = (key: "boxImageScale" | "boxImageX" | "boxImageY" | "boxImageRotation", min: number, max: number, integer: boolean, message: string) => {
+    if (!has(key)) {
+      if (!partial) data[key] = DEFAULT_BOX_VIEW[key];
+      return;
+    }
+    const value = input[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) errors[key] = message;
+    else data[key] = integer ? value : Math.round(value * 100) / 100;
+  };
+  numberIn("boxImageScale", BOX_LIMITS.minScale, BOX_LIMITS.maxScale, false, "El zoom va de 1 a 4.");
+  numberIn("boxImageX", 0, 100, false, "La posición horizontal va de 0 a 100.");
+  numberIn("boxImageY", 0, 100, false, "La posición vertical va de 0 a 100.");
+  numberIn("boxImageRotation", BOX_LIMITS.minRotation, BOX_LIMITS.maxRotation, true, "La rotación va de −180° a 180°.");
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   if (partial && Object.keys(data).length === 0) return { ok: false, errors: { body: "No hay cambios." } };
   return { ok: true, data };
@@ -215,5 +261,10 @@ export function duplicateData(p: ProductRecord): ProductData {
     category: p.category,
     status: "PAUSED",
     featured: false,
+    boxImageUrl: p.boxImageUrl,
+    boxImageScale: p.boxImageScale,
+    boxImageX: p.boxImageX,
+    boxImageY: p.boxImageY,
+    boxImageRotation: p.boxImageRotation,
   };
 }

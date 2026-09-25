@@ -27,6 +27,11 @@ type ProductRow = {
   status: "ACTIVE" | "PAUSED";
   featured: boolean;
   sortOrder: number;
+  boxImageUrl: string | null;
+  boxImageScale: number;
+  boxImageX: number;
+  boxImageY: number;
+  boxImageRotation: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -44,6 +49,11 @@ export function toProductRecord(row: ProductRow): ProductRecord {
     status: row.status,
     featured: row.featured,
     sortOrder: row.sortOrder,
+    boxImageUrl: row.boxImageUrl,
+    boxImageScale: row.boxImageScale,
+    boxImageX: row.boxImageX,
+    boxImageY: row.boxImageY,
+    boxImageRotation: row.boxImageRotation,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -11,7 +11,9 @@ import {
   toReceipt,
   validateOrderRequest,
 } from "./orders.ts";
+import { detectImageType, imageSize, validateImage } from "./images.ts";
 import {
+  DEFAULT_BOX_VIEW,
   compareCatalogOrder,
   displayStatus,
   duplicateData,
@@ -36,6 +38,7 @@ export function product(overrides: Partial<ProductRecord> = {}): ProductRecord {
     status: "ACTIVE",
     featured: false,
     sortOrder: 1,
+    ...DEFAULT_BOX_VIEW,
     createdAt: new Date("2026-09-01T12:00:00Z"),
     updatedAt: new Date("2026-09-01T12:00:00Z"),
     ...overrides,
@@ -124,6 +127,74 @@ describe("productos", () => {
     assert.equal(copy.status, "PAUSED");
     assert.equal(copy.featured, false);
     assert.equal(copy.priceCents, 500000);
+  });
+});
+
+describe("vista en caja", () => {
+  it("al crear, el encuadre arranca centrado y sin imagen de caja", () => {
+    const r = validateProductInput({ name: "Chips", price: "5000", cost: "2500", stock: 3 }, false);
+    assert.ok(r.ok);
+    if (r.ok) {
+      assert.equal(r.data.boxImageUrl, null);
+      assert.equal(r.data.boxImageScale, 1);
+      assert.equal(r.data.boxImageX, 50);
+      assert.equal(r.data.boxImageY, 50);
+      assert.equal(r.data.boxImageRotation, 0);
+    }
+  });
+  it("acepta encuadre dentro de rango e imagen de caja subida", () => {
+    const r = validateProductInput(
+      { boxImageUrl: "/api/public/images/cm123abc456def", boxImageScale: 1.456, boxImageX: 30, boxImageY: 72.5, boxImageRotation: -15 },
+      true,
+    );
+    assert.deepEqual(r, {
+      ok: true,
+      data: { boxImageUrl: "/api/public/images/cm123abc456def", boxImageScale: 1.46, boxImageX: 30, boxImageY: 72.5, boxImageRotation: -15 },
+    });
+    assert.deepEqual(validateProductInput({ boxImageUrl: "" }, true), { ok: true, data: { boxImageUrl: null } });
+  });
+  it("rechaza valores fuera de rango", () => {
+    const r = validateProductInput(
+      { boxImageScale: 0.5, boxImageX: 101, boxImageY: -1, boxImageRotation: 12.5, boxImageUrl: "javascript:alert(1)" },
+      true,
+    );
+    assert.ok(!r.ok);
+    if (!r.ok) assert.deepEqual(Object.keys(r.errors).sort(), ["boxImageRotation", "boxImageScale", "boxImageUrl", "boxImageX", "boxImageY"]);
+    assert.ok(!validateProductInput({ boxImageScale: 5 }, true).ok);
+    assert.ok(!validateProductInput({ boxImageX: "50" }, true).ok);
+  });
+  it("la vista pública incluye el encuadre (no es dato sensible)", () => {
+    const pub = toPublicProduct(product({ boxImageUrl: "/api/public/images/abcdefghijkl", boxImageScale: 1.5 }));
+    assert.equal(pub.boxImageUrl, "/api/public/images/abcdefghijkl");
+    assert.equal(pub.boxImageScale, 1.5);
+  });
+  it("duplicar conserva la vista en caja", () => {
+    const copy = duplicateData(product({ boxImageScale: 2, boxImageX: 20 }));
+    assert.equal(copy.boxImageScale, 2);
+    assert.equal(copy.boxImageX, 20);
+  });
+});
+
+/** PNG de 1×1 válido. */
+export const PNG_1x1 = Uint8Array.from(
+  atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="),
+  (ch) => ch.charCodeAt(0),
+);
+
+describe("imágenes subidas", () => {
+  it("detecta el tipo por contenido y lee dimensiones", () => {
+    assert.equal(detectImageType(PNG_1x1), "image/png");
+    assert.deepEqual(imageSize(PNG_1x1, "image/png"), { width: 1, height: 1 });
+    assert.equal(detectImageType(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0])), "image/jpeg");
+    assert.equal(detectImageType(new TextEncoder().encode("RIFF\0\0\0\0WEBPVP8 ")), "image/webp");
+  });
+  it("rechaza vacíos, tipos no permitidos, tipos que no coinciden y archivos grandes", () => {
+    assert.deepEqual(validateImage(new Uint8Array(), "image/png"), { ok: false, error: "empty" });
+    assert.deepEqual(validateImage(new TextEncoder().encode("<svg onload=alert(1)>"), "image/svg+xml"), { ok: false, error: "unsupported_type" });
+    assert.deepEqual(validateImage(PNG_1x1, "image/jpeg"), { ok: false, error: "type_mismatch" });
+    assert.deepEqual(validateImage(new Uint8Array(1_600_000), "image/png"), { ok: false, error: "too_large" });
+    const ok = validateImage(PNG_1x1, "image/png");
+    assert.ok(ok.ok && ok.type === "image/png" && ok.width === 1);
   });
 });
 

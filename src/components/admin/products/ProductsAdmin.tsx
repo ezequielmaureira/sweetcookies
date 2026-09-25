@@ -11,11 +11,13 @@ import {
   duplicateProduct,
   listProducts,
   updateProduct,
+  uploadImage,
   type AdminProduct,
   type ProductInput,
 } from "@/lib/admin/admin-api";
 import { ProductCard } from "./ProductCard";
-import { ProductEditor, type EditorErrors } from "./ProductEditor";
+import { ImagePrepareError, prepareImage } from "@/lib/admin/image-resize";
+import { ProductEditor, type EditorErrors, type UploadKind } from "./ProductEditor";
 import styles from "./Products.module.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -93,6 +95,19 @@ export function ProductsAdmin() {
     } catch (error) {
       if (error instanceof AdminApiError && error.status === 422) return { ...error.fields, form: "Revisá los campos marcados." };
       return { form: adminErrorMessage(error, "No pudimos guardar el producto.") };
+    }
+  };
+
+  /** Reduce la foto en el navegador (principal ≤ 1600 px, caja ≤ 900 px) y la sube. */
+  const handleUpload = async (file: File, kind: UploadKind): Promise<{ url: string } | { error: string }> => {
+    try {
+      const blob = await prepareImage(file, kind === "main" ? 1600 : 900);
+      const { url } = await uploadImage(await getToken(), blob);
+      return { url };
+    } catch (error) {
+      if (error instanceof ImagePrepareError) return { error: error.message };
+      if (error instanceof AdminApiError && (error.status === 413 || error.status === 422)) return { error: "No pudimos usar esa imagen. Probá con un JPG, PNG o WebP." };
+      return { error: adminErrorMessage(error, "No pudimos subir la imagen.") };
     }
   };
 
@@ -186,7 +201,7 @@ export function ProductsAdmin() {
         </ul>
       )}
 
-      <ProductEditor target={editing} onClose={() => setEditing(null)} onSave={handleSave} />
+      <ProductEditor target={editing} onClose={() => setEditing(null)} onSave={handleSave} onUpload={handleUpload} />
 
       <dialog ref={confirmRef} className={styles.confirm} aria-labelledby="confirm-delete-title" onClose={() => setToDelete(null)}>
         {toDelete && (

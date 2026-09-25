@@ -6,14 +6,30 @@
  * ganancias. El dinero viaja como string decimal ("5000.00") y se opera en
  * centavos enteros para no arrastrar errores de coma flotante.
  */
-export type Product = {
+import { API_URL } from "./api.ts";
+
+/**
+ * Vista en caja (ver src/lib/box-view.ts). Prioridad: boxImageUrl si existe;
+ * si no, imageUrl encuadrada con zoom / punto central / rotación.
+ */
+export type BoxView = {
+  boxImageUrl: string | null;
+  boxImageScale: number;
+  boxImageX: number;
+  boxImageY: number;
+  boxImageRotation: number;
+};
+
+export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 };
+
+export type Product = BoxView & {
   id: string;
   name: string;
   description: string | null;
   /** Precio de venta, string decimal con 2 decimales. */
   price: string;
   stock: number;
-  /** Ruta del sitio (/images/...) o URL https. */
+  /** Foto principal (catálogo, cards): ruta del sitio, imagen subida (/api/public/images/…) o URL https. */
   imageUrl: string | null;
   category: string | null;
   featured: boolean;
@@ -49,8 +65,24 @@ export function productAlt(product: Pick<Product, "name">): string {
   return `Cookie ${product.name} de Sweet Cookies`;
 }
 
-/** Imagen externa (https): se muestra sin el optimizador de Next (no hay dominios configurados). */
-export const isRemoteImage = (src: string) => /^https:\/\//.test(src);
+/** Imagen con URL absoluta (API o externa): se muestra sin el optimizador de Next. */
+export const isRemoteImage = (src: string) => /^https?:\/\//.test(src);
+
+/** Imágenes subidas desde el panel: viven en la API, no en el sitio. */
+const UPLOADED = /^\/api\/public\/images\/[a-z0-9]{10,40}$/;
+
+/** Ruta guardada → src usable en <img>. Las subidas se sirven desde la API. */
+export function resolveImageSrc(src: string | null | undefined): string | null {
+  if (!src) return null;
+  if (UPLOADED.test(src)) return API_URL ? `${API_URL}${src}` : null;
+  return src;
+}
+
+/** Acepta rutas del sitio, imágenes subidas o https (nunca javascript:, data:, etc.). */
+const safeImage = (value: unknown) => (typeof value === "string" && (value.startsWith("/") || /^https:\/\//.test(value)) && !value.startsWith("//") ? value : null);
+
+const clamp = (value: unknown, min: number, max: number, fallback: number) =>
+  typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 
 const ID = /^[\w-]{1,40}$/;
 
@@ -62,7 +94,6 @@ export function parseCatalog(data: unknown): Product[] | null {
     const p = raw as Record<string, unknown>;
     if (typeof p?.id !== "string" || !ID.test(p.id) || typeof p.name !== "string" || typeof p.price !== "string") return [];
     if (toCents(p.price) <= 0 || typeof p.stock !== "number" || !Number.isInteger(p.stock) || p.stock <= 0) return [];
-    const imageUrl = typeof p.imageUrl === "string" && (p.imageUrl.startsWith("/") || isRemoteImage(p.imageUrl)) ? p.imageUrl : null;
     return [
       {
         id: p.id,
@@ -70,9 +101,14 @@ export function parseCatalog(data: unknown): Product[] | null {
         description: typeof p.description === "string" ? p.description : null,
         price: p.price,
         stock: p.stock,
-        imageUrl,
+        imageUrl: safeImage(p.imageUrl),
         category: typeof p.category === "string" ? p.category : null,
         featured: p.featured === true,
+        boxImageUrl: safeImage(p.boxImageUrl),
+        boxImageScale: clamp(p.boxImageScale, 1, 4, 1),
+        boxImageX: clamp(p.boxImageX, 0, 100, 50),
+        boxImageY: clamp(p.boxImageY, 0, 100, 50),
+        boxImageRotation: clamp(p.boxImageRotation, -180, 180, 0),
       },
     ];
   });

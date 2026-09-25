@@ -3,7 +3,8 @@ import { describe, it } from "node:test";
 import { createApp } from "./app.ts";
 import type { AuthService } from "./auth.ts";
 import type { ProductRepository } from "./catalog-repository.ts";
-import { product } from "./catalog.test.ts";
+import { PNG_1x1, product } from "./catalog.test.ts";
+import type { ImageRepository } from "./image-repository.ts";
 import type { OrderRepository } from "./order-repository.ts";
 import { OrderError, priceOrder, toReceipt } from "./orders.ts";
 import { compareCatalogOrder, isPurchasable, type ProductRecord } from "./products.ts";
@@ -62,7 +63,16 @@ function memoryRepos(getSettings: () => AdminSettings) {
     list: async () => ({ summary: { orders: created.length, revenue: "0.00", profit: "0.00", items: 0 }, orders: [], page: 1, pageSize: 20, totalPages: 1 }),
     get: async () => null,
   };
-  return { products, orders, items: () => items, created };
+  const stored = new Map<string, { contentType: string; data: Uint8Array }>();
+  const images: ImageRepository = {
+    save: async ({ type, data }) => {
+      const id = `img${String(stored.size + 1).padStart(10, "0")}`;
+      stored.set(id, { contentType: type, data });
+      return id;
+    },
+    get: async (id) => stored.get(id) ?? null,
+  };
+  return { products, orders, images, items: () => items, created };
 }
 
 function setup({ orderLimit = 100 } = {}) {
@@ -93,6 +103,7 @@ function setup({ orderLimit = 100 } = {}) {
     repo,
     products: memory.products,
     orders: memory.orders,
+    images: memory.images,
     auth,
     allowedOrigins: [ORIGIN],
     orderLimiter: createRateLimiter({ limit: orderLimit, windowMs: 60_000 }),
@@ -185,6 +196,7 @@ describe("API", () => {
     const failing = createApp({
       products: memory.products,
       orders: memory.orders,
+      images: memory.images,
       repo: { get: async () => { throw new Error("postgres://user:secret@host/db"); }, update: async () => { throw new Error(); }, ping: async () => {} },
       auth: { authenticate: async () => null, isAdmin: async () => false },
       allowedOrigins: [ORIGIN],
@@ -202,7 +214,21 @@ describe("API", () => {
     assert.equal(res.status, 200);
     const body = await json(res);
     assert.deepEqual(body.products.map((p: { id: string }) => p.id), ["chips"]);
-    assert.deepEqual(Object.keys(body.products[0]).sort(), ["category", "description", "featured", "id", "imageUrl", "name", "price", "stock"]);
+    assert.deepEqual(Object.keys(body.products[0]).sort(), [
+      "boxImageRotation",
+      "boxImageScale",
+      "boxImageUrl",
+      "boxImageX",
+      "boxImageY",
+      "category",
+      "description",
+      "featured",
+      "id",
+      "imageUrl",
+      "name",
+      "price",
+      "stock",
+    ]);
     assert.ok(!JSON.stringify(body).includes("cost"));
   });
 
@@ -288,5 +314,41 @@ describe("API", () => {
     const preflight = await setup().app.request("/api/orders", { method: "OPTIONS", headers: { Origin: "https://evil.example", "Access-Control-Request-Method": "POST" } });
     assert.notEqual(preflight.headers.get("access-control-allow-origin"), "*");
     assert.notEqual(preflight.headers.get("access-control-allow-origin"), "https://evil.example");
+  });
+  it("subida de imágenes: solo admin, valida contenido y se sirve con caché inmutable", async () => {
+    const { app } = setup();
+    const upload = (token: string | null, body: Uint8Array, type: string) =>
+      app.request("/api/admin/images", {
+        method: "POST",
+        headers: { "Content-Type": type, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body,
+      });
+    assert.equal((await upload(null, PNG_1x1, "image/png")).status, 401);
+    assert.equal((await upload("user-token", PNG_1x1, "image/png")).status, 403);
+    assert.equal((await upload("admin-token", new TextEncoder().encode("<svg/>"), "image/svg+xml")).status, 422);
+    const ok = await upload("admin-token", PNG_1x1, "image/png");
+    assert.equal(ok.status, 201);
+    const { url } = await json(ok);
+    assert.match(url, /^\/api\/public\/images\/img\d{10}$/);
+    const res = await app.request(url);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get("content-type"), "image/png");
+    assert.match(res.headers.get("cache-control") ?? "", /immutable/);
+    assert.deepEqual(new Uint8Array(await res.arrayBuffer()), PNG_1x1);
+    assert.equal((await app.request("/api/public/images/noexiste00000")).status, 404);
+    assert.equal((await app.request("/api/public/images/..%2F..%2Fetc")).status, 404);
+  });
+
+  it("vista en caja: se guarda y se valida al editar", async () => {
+    const { app } = setup();
+    const admin = { Authorization: "Bearer admin-token", "Content-Type": "application/json" };
+    const patch = (body: unknown) => app.request("/api/admin/products/chips", { method: "PATCH", headers: admin, body: JSON.stringify(body) });
+    const ok = await json(await patch({ boxImageScale: 1.8, boxImageX: 40, boxImageY: 60, boxImageRotation: 10, boxImageUrl: "/api/public/images/img0000000001" }));
+    assert.equal(ok.boxImageScale, 1.8);
+    assert.equal(ok.boxImageUrl, "/api/public/images/img0000000001");
+    assert.equal((await patch({ boxImageScale: 9 })).status, 422);
+    const pub = (await json(await app.request("/api/public/products"))).products[0];
+    assert.equal(pub.boxImageX, 40);
+    assert.equal(pub.imageUrl, "/images/cookies/hero-cookie-cutout.png");
   });
 });

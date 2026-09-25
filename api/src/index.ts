@@ -3,6 +3,7 @@ import { createApp } from "./app.ts";
 import { createClerkAuth } from "./auth.ts";
 import { loadEnv } from "./env.ts";
 import { createProductRepository } from "./catalog-repository.ts";
+import { createImageRepository } from "./image-repository.ts";
 import { createOrderRepository } from "./order-repository.ts";
 import { createPrismaClient, createSettingsRepository } from "./repository.ts";
 
@@ -11,6 +12,7 @@ const prisma = createPrismaClient(env.databaseUrl);
 const repo = createSettingsRepository(prisma);
 const products = createProductRepository(prisma);
 const orders = createOrderRepository(prisma);
+const images = createImageRepository(prisma);
 const auth = createClerkAuth({
   secretKey: env.clerkSecretKey,
   publishableKey: env.clerkPublishableKey,
@@ -18,7 +20,7 @@ const auth = createClerkAuth({
   adminEmails: env.adminEmails,
 });
 
-const app = createApp({ repo, products, orders, auth, allowedOrigins: env.allowedOrigins });
+const app = createApp({ repo, products, orders, images, auth, allowedOrigins: env.allowedOrigins });
 
 const server = serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, (info) => {
   // No se loguean los emails: solo cuántos admins hay configurados.

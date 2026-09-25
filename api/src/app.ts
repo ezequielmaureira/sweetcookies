@@ -4,6 +4,8 @@ import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
 import type { AuthService } from "./auth.ts";
 import type { ProductRepository } from "./catalog-repository.ts";
+import type { ImageRepository } from "./image-repository.ts";
+import { MAX_IMAGE_BYTES, imagePath, validateImage } from "./images.ts";
 import type { OrderRepository } from "./order-repository.ts";
 import { OrderError, parseOrderListQuery, validateOrderRequest } from "./orders.ts";
 import { toAdminProduct, toPublicProduct, validateProductInput } from "./products.ts";
@@ -15,6 +17,7 @@ type Deps = {
   repo: SettingsRepository;
   products: ProductRepository;
   orders: OrderRepository;
+  images: ImageRepository;
   auth: AuthService;
   allowedOrigins: string[];
   /** Límite de pedidos por IP (por defecto 8 cada 10 minutos). */
@@ -44,6 +47,7 @@ export function createApp({
   repo,
   products,
   orders,
+  images,
   auth,
   allowedOrigins,
   orderLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60 * 1000 }),
@@ -93,6 +97,19 @@ export function createApp({
     const list = await products.listPublic();
     c.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=30");
     return c.json({ products: list.map(toPublicProduct) });
+  });
+
+  // Imágenes subidas desde el panel. El id no cambia nunca (una imagen nueva = id nuevo): caché inmutable.
+  app.get("/api/public/images/:id", async (c) => {
+    const id = c.req.param("id");
+    if (!/^[a-z0-9]{10,40}$/.test(id)) return c.json({ error: "not_found" }, 404);
+    const image = await images.get(id);
+    if (!image) return c.json({ error: "not_found" }, 404);
+    return c.body(Uint8Array.from(image.data), 200, {
+      "Content-Type": image.contentType,
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Content-Security-Policy": "default-src 'none'",
+    });
   });
 
   // ---------- Pedidos (comprador) ----------
@@ -200,6 +217,23 @@ export function createApp({
     log(`[admin] product ${(c.req.param("id") ?? "")} deleted by ${c.get("userId")}`);
     return c.body(null, 204);
   });
+
+  // Subida de imágenes (foto principal o de caja). Body = archivo binario.
+  app.post(
+    "/api/admin/images",
+    bodyLimit({ maxSize: MAX_IMAGE_BYTES, onError: tooLarge }),
+    async (c: AppContext) => {
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      const result = validateImage(bytes, c.req.header("content-type"));
+      if (!result.ok) {
+        const status = result.error === "too_large" ? 413 : 422;
+        return c.json({ error: result.error }, status);
+      }
+      const id = await images.save({ type: result.type, data: bytes, width: result.width, height: result.height, createdBy: c.get("userId") });
+      log(`[admin] image ${id} uploaded by ${c.get("userId")} (${bytes.length} B)`);
+      return c.json({ url: imagePath(id), width: result.width, height: result.height }, 201);
+    },
+  );
 
   // Pedidos: filtros, orden y resumen se resuelven en la base.
   app.get("/api/admin/orders", async (c) => c.json(await orders.list(parseOrderListQuery(new URL(c.req.url).searchParams))));

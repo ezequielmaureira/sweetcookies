@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { isRemoteImage } from "@/lib/catalog";
+import { isRemoteImage, resolveImageSrc } from "@/lib/catalog";
 import styles from "./CookieImage.module.css";
 
 type CookieImageProps = {
@@ -21,8 +21,10 @@ type CookieImageProps = {
  * Si falta el archivo o falla la carga, muestra un placeholder neutro.
  * El contenedor padre define el tamaño / aspect-ratio.
  */
-export function CookieImage({ src, alt, sizes, priority, placeholderLabel, className }: CookieImageProps) {
+export function CookieImage({ src: stored, alt, sizes, priority, placeholderLabel, className }: CookieImageProps) {
   const [failed, setFailed] = useState(false);
+  // Las fotos subidas desde el panel se sirven desde la API.
+  const src = resolveImageSrc(stored);
 
   if (!src || failed) {
     return (

@@ -3,12 +3,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CookieImage } from "@/components/ui/CookieImage";
-import type { AdminProduct, ProductInput, ProductStatus } from "@/lib/admin/admin-api";
+import type { AdminProduct, BoxViewInput, ProductInput, ProductStatus } from "@/lib/admin/admin-api";
 import { moneyToInput, normalizeMoneyInput } from "@/lib/admin/money-input";
 import { formatCents, toCents } from "@/lib/catalog";
+import { BoxViewEditor } from "./BoxViewEditor";
 import styles from "./Products.module.css";
 
-type FormValues = {
+type FormValues = BoxViewInput & {
   name: string;
   category: string;
   description: string;
@@ -22,7 +23,12 @@ type FormValues = {
 
 export type EditorErrors = Partial<Record<keyof FormValues | "form", string>>;
 
-const EMPTY: FormValues = { name: "", category: "Cookies", description: "", price: "", cost: "", stock: "0", imageUrl: "", status: "ACTIVE", featured: false };
+const DEFAULT_BOX: BoxViewInput = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 };
+
+const EMPTY: FormValues = { name: "", category: "Cookies", description: "", price: "", cost: "", stock: "0", imageUrl: "", status: "ACTIVE", featured: false, ...DEFAULT_BOX };
+
+/** Qué imagen se está subiendo: la principal o la específica para caja. */
+export type UploadKind = "main" | "box";
 
 function fromProduct(p: AdminProduct): FormValues {
   return {
@@ -35,6 +41,11 @@ function fromProduct(p: AdminProduct): FormValues {
     imageUrl: p.imageUrl ?? "",
     status: p.status,
     featured: p.featured,
+    boxImageUrl: p.boxImageUrl,
+    boxImageScale: p.boxImageScale,
+    boxImageX: p.boxImageX,
+    boxImageY: p.boxImageY,
+    boxImageRotation: p.boxImageRotation,
   };
 }
 
@@ -62,6 +73,11 @@ function toInput(values: FormValues): { input: ProductInput } | { errors: Editor
       imageUrl: image,
       status: values.status,
       featured: values.featured,
+      boxImageUrl: values.boxImageUrl,
+      boxImageScale: values.boxImageScale,
+      boxImageX: values.boxImageX,
+      boxImageY: values.boxImageY,
+      boxImageRotation: values.boxImageRotation,
     },
   };
 }
@@ -71,15 +87,19 @@ type ProductEditorProps = {
   target: AdminProduct | "new" | null;
   onClose: () => void;
   onSave: (input: ProductInput) => Promise<EditorErrors | null>;
+  /** Reduce y sube la foto; devuelve la ruta a guardar o un mensaje de error. */
+  onUpload: (file: File, kind: UploadKind) => Promise<{ url: string } | { error: string }>;
 };
 
-export function ProductEditor({ target, onClose, onSave }: ProductEditorProps) {
+export function ProductEditor({ target, onClose, onSave, onUpload }: ProductEditorProps) {
   const uid = useId();
   const id = (field: string) => `${uid}-${field}`;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [values, setValues] = useState<FormValues>(EMPTY);
   const [errors, setErrors] = useState<EditorErrors>({});
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<UploadKind | null>(null);
+  const mainFileRef = useRef<HTMLInputElement>(null);
   const open = target !== null;
   const isNew = target === "new";
 
@@ -105,6 +125,32 @@ export function ProductEditor({ target, onClose, onSave }: ProductEditorProps) {
     setErrors((prev) => ({ ...prev, [field]: undefined, form: undefined }));
   };
 
+  const updateBox = (patch: Partial<BoxViewInput>) => {
+    setValues((prev) => ({ ...prev, ...patch }));
+    setErrors((prev) => ({ ...prev, boxImageUrl: undefined, boxImageScale: undefined, boxImageX: undefined, boxImageY: undefined, boxImageRotation: undefined, form: undefined }));
+  };
+
+  const upload = async (file: File, kind: UploadKind): Promise<string | null> => {
+    setUploading(kind);
+    const field = kind === "main" ? "imageUrl" : "boxImageUrl";
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+    const result = await onUpload(file, kind);
+    setUploading(null);
+    if ("error" in result) {
+      setErrors((prev) => ({ ...prev, [field]: result.error }));
+      return null;
+    }
+    return result.url;
+  };
+
+  const handleMainFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const url = await upload(file, "main");
+    if (url) update("imageUrl", url);
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
@@ -116,6 +162,11 @@ export function ProductEditor({ target, onClose, onSave }: ProductEditorProps) {
       return;
     }
     setSaving(true);
+    if (uploading) {
+      setSaving(false);
+      setErrors((prev) => ({ ...prev, form: "Esperá a que termine de subir la imagen." }));
+      return;
+    }
     const serverErrors = await onSave(result.input);
     setSaving(false);
     if (serverErrors) setErrors(serverErrors);
@@ -208,10 +259,32 @@ export function ProductEditor({ target, onClose, onSave }: ProductEditorProps) {
 
               {field(
                 "imageUrl",
-                "Imagen",
-                <input {...inputProps("imageUrl")} type="text" inputMode="url" placeholder="/images/cookies/mi-cookie.jpg o https://…" maxLength={500} value={values.imageUrl} onChange={(e) => update("imageUrl", e.target.value)} />,
-                "Ruta de una foto del sitio o URL https.",
+                "Foto principal",
+                <div className={styles.imageInputRow}>
+                  <input {...inputProps("imageUrl")} type="text" inputMode="url" placeholder="Subí una foto o pegá una ruta /images/… o URL https" maxLength={500} value={values.imageUrl} onChange={(e) => update("imageUrl", e.target.value)} />
+                  <input ref={mainFileRef} type="file" accept="image/jpeg,image/png,image/webp" className="visually-hidden" tabIndex={-1} onChange={handleMainFile} aria-hidden="true" />
+                  <button type="button" className={styles.uploadButton} onClick={() => mainFileRef.current?.click()} disabled={uploading !== null}>
+                    {uploading === "main" ? "Subiendo…" : "Subir foto"}
+                  </button>
+                </div>,
+                "Se usa en el catálogo y en las cards. JPG, PNG o WebP.",
               )}
+
+              <BoxViewEditor
+                key={targetKey ?? "closed"}
+                imageUrl={previewSrc}
+                value={{
+                  boxImageUrl: values.boxImageUrl,
+                  boxImageScale: values.boxImageScale,
+                  boxImageX: values.boxImageX,
+                  boxImageY: values.boxImageY,
+                  boxImageRotation: values.boxImageRotation,
+                }}
+                onChange={updateBox}
+                onUpload={(file) => upload(file, "box")}
+                uploading={uploading === "box"}
+                error={errors.boxImageUrl ?? errors.boxImageScale ?? errors.boxImageX ?? errors.boxImageY ?? errors.boxImageRotation}
+              />
 
               <div className={styles.switchRow}>
                 <span id={id("featured-label")} className={styles.label}>
@@ -233,7 +306,7 @@ export function ProductEditor({ target, onClose, onSave }: ProductEditorProps) {
             <Button variant="secondary" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || uploading !== null}>
               {saving ? "Guardando…" : isNew ? "Crear producto" : "Guardar cambios"}
             </Button>
           </footer>
