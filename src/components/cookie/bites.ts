@@ -21,7 +21,7 @@ export const BITES: readonly BiteSpec[] = [
 
 export const BITE_COUNT = BITES.length;
 
-export const DEFAULT_MESSAGES = ["Mmm...", "Una más.", "Bueno... se terminó."] as const;
+export const DEFAULT_MESSAGES = ["Mmm...", "Una más.", "Bueno... ahora sí."] as const;
 
 function toXY(angleDeg: number, distance: number) {
   const rad = (angleDeg * Math.PI) / 180;

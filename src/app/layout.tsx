@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
 import { CartProvider } from "@/components/cart/CartProvider";
 import { site } from "@/data/site";
+import { entryScript } from "@/lib/entry-gate";
 import "./globals.css";
 
 // Títulos: grotesca contemporánea con carácter. Textos: sans limpia.
@@ -33,6 +34,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         {/* Habilita los estilos de reveal solo cuando hay JS (sin JS el contenido queda visible). */}
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
+        {/* Si ya se comió la cookie de entrada en esta sesión, no se pinta (sin parpadeo). */}
+        <script dangerouslySetInnerHTML={{ __html: entryScript }} />
       </head>
       <body>
         <a className="skip-link" href="#contenido">

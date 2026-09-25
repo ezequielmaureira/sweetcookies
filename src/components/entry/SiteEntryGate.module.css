@@ -1,0 +1,72 @@
+/* La página real se renderiza debajo (SSR); la entrada la cubre. */
+.page {
+  display: contents;
+}
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 4svh, 40px);
+  padding: max(20px, env(safe-area-inset-top)) var(--gutter) max(24px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: var(--color-cream);
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Sin JS no hay cookie que morder: se ve la página directamente. */
+:global(html:not(.js)) .gate,
+/* Ya entró en esta sesión (script de <head>): nunca se pinta la entrada. */
+:global(html[data-entered]) .gate {
+  display: none;
+}
+
+/* Sin scroll de la página de fondo mientras la entrada está abierta. */
+:global(html.js:not([data-entered])):has(.gate) {
+  overflow: hidden;
+}
+
+.logo {
+  flex: none;
+}
+
+.cookie {
+  width: min(86vw, 54svh, 560px);
+}
+
+.leaving {
+  animation: gateOut 650ms var(--ease-out) forwards;
+  pointer-events: none;
+}
+
+@keyframes gateOut {
+  to {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+}
+
+@media (min-width: 1024px) {
+  .cookie {
+    width: min(40vw, 58svh, 560px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaving {
+    animation: gateOutReduced 150ms linear forwards;
+  }
+
+  @keyframes gateOutReduced {
+    to {
+      opacity: 0;
+    }
+  }
+}

@@ -5,7 +5,7 @@ import { BITE_COUNT, BITES, DEFAULT_MESSAGES, biteCircles, biteMask, bitePoint }
 describe("mordidas", () => {
   it("son 3, con un mensaje por mordida", () => {
     assert.equal(BITE_COUNT, 3);
-    assert.deepEqual([...DEFAULT_MESSAGES], ["Mmm...", "Una más.", "Bueno... se terminó."]);
+    assert.deepEqual([...DEFAULT_MESSAGES], ["Mmm...", "Una más.", "Bueno... ahora sí."]);
   });
   it("sin mordidas no hay máscara", () => {
     assert.equal(biteMask(0), undefined);

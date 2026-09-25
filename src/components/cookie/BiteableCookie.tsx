@@ -8,7 +8,8 @@ import styles from "./BiteableCookie.module.css";
 const THROTTLE_MS = 350;
 /** Pocas miguitas por mordida: sutil, nada explosivo. */
 const CRUMB_COUNT = 5;
-const COMPLETE_DELAY_MS = 900;
+/** Pausa tras la última mordida para leer el mensaje antes de continuar. */
+const COMPLETE_DELAY_MS = 550;
 const COMPLETE_DELAY_REDUCED_MS = 250;
 
 type Crumb = { id: number; x: number; y: number; dx: number; dy: number; size: number; delay: number; tone: number };
@@ -22,10 +23,6 @@ type BiteableCookieProps = {
   /** Texto antes del primer mordisco. */
   hint?: string;
   messages?: readonly [string, string, string];
-  /** Indicador de 3 mordidas (pantalla de acceso). */
-  showProgress?: boolean;
-  /** Contenido al terminar (ej. CTA). */
-  completeContent?: React.ReactNode;
   onComplete?: () => void;
   sizes?: string;
   priority?: boolean;
@@ -33,23 +30,20 @@ type BiteableCookieProps = {
 
 /**
  * Cookie real que se muerde con click, tap, Enter o Space (botón nativo).
- * 3 mordidas → mensaje final → contenido de cierre. Clicks rápidos se ignoran
+ * 3 mordidas → mensaje final → onComplete. Clicks rápidos se ignoran
  * durante THROTTLE_MS para no saltear estados.
  */
 export function BiteableCookie({
   src,
   isCutout = false,
   alt,
-  hint = "Tocá la cookie",
+  hint = "Probala para entrar.",
   messages = DEFAULT_MESSAGES,
-  showProgress = false,
-  completeContent,
   onComplete,
   sizes = "(min-width: 1024px) 460px, 80vw",
   priority = false,
 }: BiteableCookieProps) {
   const [bites, setBites] = useState(0);
-  const [complete, setComplete] = useState(false);
   const [crumbs, setCrumbs] = useState<Crumb[]>([]);
   const last = useRef(0);
   const crumbId = useRef(0);
@@ -92,10 +86,7 @@ export function BiteableCookie({
 
     if (next === BITE_COUNT) {
       timers.current.push(
-        window.setTimeout(() => {
-          setComplete(true);
-          onCompleteRef.current?.();
-        }, reduced ? COMPLETE_DELAY_REDUCED_MS : COMPLETE_DELAY_MS),
+        window.setTimeout(() => onCompleteRef.current?.(), reduced ? COMPLETE_DELAY_REDUCED_MS : COMPLETE_DELAY_MS),
       );
     }
   };
@@ -110,7 +101,7 @@ export function BiteableCookie({
   const photo = (className: string, style?: React.CSSProperties) => (
     <span className={`${styles.layer} ${className}`} style={style} aria-hidden="true">
       {src ? (
-        <Image src={src} alt="" fill priority={priority} sizes={sizes} className={isCutout ? styles.contain : styles.cover} />
+        <Image src={src} alt="" fill draggable={false} priority={priority} sizes={sizes} className={isCutout ? styles.contain : styles.cover} />
       ) : (
         <span className={styles.missing} />
       )}
@@ -163,16 +154,8 @@ export function BiteableCookie({
             {message}
           </span>
         </p>
-        {showProgress && (
-          <ol className={styles.progress} aria-label={`Mordidas: ${bites} de ${BITE_COUNT}`}>
-            {Array.from({ length: BITE_COUNT }, (_, i) => (
-              <li key={i} className={i < bites ? styles.progressDone : undefined} />
-            ))}
-          </ol>
-        )}
       </div>
 
-      {complete && completeContent && <div className={styles.complete}>{completeContent}</div>}
     </div>
   );
 }

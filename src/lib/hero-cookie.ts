@@ -2,7 +2,7 @@ import { brandImages, flavors } from "@/data/cookies";
 import { resolveFirstImage, resolveImage } from "@/lib/images";
 
 /**
- * Foto REAL de la cookie interactiva (Hero y acceso al panel), solo servidor.
+ * Foto REAL de la cookie (entrada al sitio y Hero), solo servidor.
  * Orden: recorte sin fondo → foto cenital → primera foto de sabor disponible.
  */
 export function getHeroCookie() {

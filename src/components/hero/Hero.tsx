@@ -1,7 +1,7 @@
+import Image from "next/image";
 import { ButtonLink } from "@/components/ui/Button";
 import { Parallax } from "@/components/ui/Parallax";
 import { routes, sectionIds } from "@/data/site";
-import { BiteableCookie } from "@/components/cookie/BiteableCookie";
 import styles from "./Hero.module.css";
 
 type HeroProps = {
@@ -40,21 +40,19 @@ export function Hero({ cookieSrc, isCutout, imageAlt }: HeroProps) {
 
         <div className={styles.media}>
           <Parallax speed={0.04} className={styles.stage}>
-            <div className={styles.cookie}>
-              <BiteableCookie
-                src={cookieSrc}
-                isCutout={isCutout}
-                alt={imageAlt}
-                priority
-                completeContent={
-                  <>
-                    <p className={styles.again}>¿Pedimos otra?</p>
-                    <ButtonLink href={routes.buildBox} arrow>
-                      Armá tu caja
-                    </ButtonLink>
-                  </>
-                }
-              />
+            {/* La interacción de mordidas ya ocurrió en la entrada: acá la cookie es solo producto. */}
+            <div className={`${styles.cookie} ${isCutout ? styles.cutout : styles.round}`}>
+              {cookieSrc && (
+                <Image
+                  src={cookieSrc}
+                  alt={imageAlt}
+                  fill
+                  priority
+                  draggable={false}
+                  sizes="(min-width: 1024px) 540px, 86vw"
+                  className={styles.cookieImage}
+                />
+              )}
             </div>
           </Parallax>
         </div>
