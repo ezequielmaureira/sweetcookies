@@ -10,12 +10,17 @@ const auth = createClerkAuth({
   secretKey: env.clerkSecretKey,
   publishableKey: env.clerkPublishableKey,
   authorizedParties: env.allowedOrigins,
+  adminEmails: env.adminEmails,
 });
 
 const app = createApp({ repo, auth, allowedOrigins: env.allowedOrigins });
 
 const server = serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, (info) => {
-  console.log(`sweetcookies-api escuchando en :${info.port} · orígenes admin: ${env.allowedOrigins.join(", ")}`);
+  // No se loguean los emails: solo cuántos admins hay configurados.
+  console.log(
+    `sweetcookies-api escuchando en :${info.port} · orígenes admin: ${env.allowedOrigins.join(", ")} · admins configurados: ${env.adminEmails.size}`,
+  );
+  if (env.adminEmails.size === 0) console.warn("ADMIN_EMAILS vacío: nadie puede usar /api/admin.");
 });
 
 const shutdown = () => {

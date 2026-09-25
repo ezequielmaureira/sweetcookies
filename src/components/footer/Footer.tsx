@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { site } from "@/data/site";
+import { ADMIN_HOME_URL } from "@/lib/admin/config";
 import { getPublicSettings, instagramUrl } from "@/lib/site-settings";
 import styles from "./Footer.module.css";
 
@@ -26,6 +28,12 @@ export async function Footer() {
             </span>
           </a>
         )}
+
+        {/* Acceso discreto al panel. No es una medida de seguridad: el acceso real lo
+            controlan Clerk + ADMIN_EMAILS en el servidor. */}
+        <Link href={ADMIN_HOME_URL} className={styles.admin} prefetch={false} rel="nofollow">
+          Administrador
+        </Link>
       </div>
     </footer>
   );

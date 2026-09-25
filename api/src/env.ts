@@ -1,3 +1,5 @@
+import { parseAdminEmails } from "./auth.ts";
+
 /**
  * Variables de entorno del backend. Nunca se loguean sus valores.
  */
@@ -8,6 +10,8 @@ export type Env = {
   clerkPublishableKey: string;
   /** Orígenes permitidos para CORS de los endpoints admin (y authorizedParties de Clerk). */
   allowedOrigins: string[];
+  /** ADMIN_EMAILS normalizado. Vacío = nadie es admin. */
+  adminEmails: ReadonlySet<string>;
 };
 
 function required(name: string): string {
@@ -32,5 +36,6 @@ export function loadEnv(): Env {
     clerkSecretKey: required("CLERK_SECRET_KEY"),
     clerkPublishableKey: required("CLERK_PUBLISHABLE_KEY"),
     allowedOrigins,
+    adminEmails: parseAdminEmails(process.env.ADMIN_EMAILS),
   };
 }
