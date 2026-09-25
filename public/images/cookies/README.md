@@ -34,8 +34,8 @@ interfaz de Instagram (sin barras, avatar, botones ni textos del post):
 
 | Archivo                  | Publicación de origen                                  |
 | ------------------------ | ------------------------------------------------------ |
-| `hero-cookie-cutout.png` | Red Velvet (recorte sin fondo, sin el borde de sticker) |
-| `red-velvet.jpg`         | Mismo recorte Red Velvet sobre fondo liso              |
+| `hero-cookie-cutout.png` | Cookie clásica con chips (foto provista; sin fondo ni halo). Entrada y Hero |
+| `red-velvet.jpg`         | Recorte de la Red Velvet sobre fondo liso              |
 | `cookies-cream.jpg`      | Cookie con Oreo y crema                                |
 | `pistacho.jpg`           | Dos cookies de pistacho en caja                        |
 | `limon-frambuesa.jpg`    | Cookie de limón con chocolate blanco y frambuesa       |

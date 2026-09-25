@@ -56,7 +56,8 @@ describe("mordidas", () => {
     const left = [0, 1, 2, 3, 4].map(remaining);
     for (let i = 1; i < left.length; i++) assert.ok(left[i] < left[i - 1], `mordida ${i}: ${left[i]} >= ${left[i - 1]}`);
     assert.ok(left[1] > 0.9, "la 1ª es chica");
-    assert.ok(left[4] > 0.2 && left[4] < 0.5, `la última deja poco pero algo: ${left[4]}`);
+    // La última deja una porción (cerca de la mitad): el corte sigue la masa entre chips.
+    assert.ok(left[4] > 0.3 && left[4] < 0.6, `la última deja una porción lógica: ${left[4]}`);
   });
 
   it("las mordidas no son círculos: el radio desde su centro varía", () => {

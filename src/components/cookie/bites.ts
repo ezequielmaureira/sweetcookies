@@ -2,8 +2,8 @@
  * Geometría de las mordidas (pura, determinista, testeable).
  *
  * Coordenadas en % del cuadrado que contiene la cookie (0–100, centro 50/50).
- * Ajustada a la foto real public/images/cookies/hero-cookie-cutout.png
- * (Red Velvet): el borde de la cookie queda a ~47 % del centro.
+ * Ajustada a la foto public/images/cookies/hero-cookie-cutout.png (cookie
+ * clásica con chips): el borde de la cookie queda a ~47 % del centro.
  *
  * Cada mordida es el arco de una mandíbula (no un círculo): una curva ancha
  * con ondulación suave, marcas de dientes de tamaño desigual y un borde
@@ -34,19 +34,20 @@ export const COOKIE_EDGE = 47;
 export type BiteStep = readonly BiteSpec[];
 
 /**
- * 4 mordidas progresivas:
+ * 4 mordidas progresivas, en zonas del borde con masa (sin chips):
  * 1ª chica arriba a la derecha → 2ª algo mayor abajo a la izquierda →
  * 3ª marcada a la derecha (se une con la 1ª) → 4ª: bocado final de tres
- * mandíbulas de tamaño normal que dejan solo un pedazo a la izquierda.
+ * mandíbulas de tamaño normal. Su corte sigue un camino de masa entre las
+ * columnas de chips, así el pedazo que queda conserva los chips enteros.
  */
 export const BITES: readonly BiteStep[] = [
-  [{ angle: -30, depth: 10, width: 13, height: 17, skew: 3, teeth: 4, seed: 19 }],
-  [{ angle: 148, depth: 12, width: 17, height: 19, skew: -4, teeth: 5, seed: 29 }],
-  [{ angle: -6, depth: 21, width: 24, height: 27, skew: -3, teeth: 7, seed: 47 }],
+  [{ angle: -40, depth: 9, width: 13, height: 16, skew: 3, teeth: 4, seed: 19 }],
+  [{ angle: 140, depth: 12, width: 16, height: 19, skew: -4, teeth: 5, seed: 29 }],
+  [{ angle: -12, depth: 17, width: 21, height: 25, skew: -3, teeth: 6, seed: 47 }],
   [
-    { angle: -50, depth: 31, width: 25, height: 34, skew: -4, teeth: 7, seed: 83 },
-    { angle: 12, depth: 50, width: 27, height: 36, skew: 4, teeth: 7, seed: 97 },
-    { angle: 66, depth: 34, width: 25, height: 34, skew: 5, teeth: 7, seed: 131 },
+    { angle: -50, depth: 29, width: 24, height: 38, skew: -8, teeth: 6, seed: 83 },
+    { angle: -6, depth: 42, width: 26, height: 34, skew: 4, teeth: 7, seed: 97 },
+    { angle: 46, depth: 25, width: 25, height: 30, skew: 5, teeth: 6, seed: 131 },
   ],
 ];
 

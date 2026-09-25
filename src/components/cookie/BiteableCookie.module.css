@@ -71,12 +71,12 @@
 }
 
 /*
- * Miga expuesta en el borde de cada mordida: la misma foto llevada a un rojo
- * mate de interior de red velvet. Se comprime el rango antes de colorear para
- * que el chocolate blanco cortado no quede como un destello claro.
+ * Miga expuesta en el borde de cada mordida: la misma foto, apenas más clara y
+ * menos saturada. El interior de una cookie con chips es masa dorada pálida,
+ * más clara que la corteza tostada; los chips conservan su color.
  */
 .rim {
-  filter: grayscale(1) contrast(0.55) brightness(0.52) sepia(1) hue-rotate(-50deg) saturate(2.8);
+  filter: saturate(0.8) brightness(1.08) contrast(0.9);
 }
 
 /* Sin foto real todavía: lugar neutro (no se dibuja una cookie). */
@@ -111,17 +111,17 @@
   animation: crumb 900ms cubic-bezier(0.45, 0, 0.8, 0.55) both;
 }
 
-/* Tonos tomados de la cookie real (Red Velvet con chocolate blanco). */
+/* Tonos tomados de la cookie real (masa dorada con chips de chocolate). */
 .tone0 {
-  background: #7e2c2e;
+  background: #d8a868;
 }
 
 .tone1 {
-  background: #5e1f22;
+  background: #b77a3e;
 }
 
 .tone2 {
-  background: #efe4c8;
+  background: #4a2a1a;
 }
 
 /* Texto */
