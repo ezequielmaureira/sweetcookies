@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
-import { flavorsById } from "@/data/cookies";
 import { formatCookieCount } from "@/lib/cart";
 import { prefetchPublicSettings } from "@/lib/use-public-settings";
 import { BoxPreview } from "./BoxPreview";
@@ -10,7 +9,6 @@ import { CustomerForm } from "./CustomerForm";
 import { FlavorSelector } from "./FlavorSelector";
 import { MobileBoxBar } from "./MobileBoxBar";
 import { OrderSummary } from "./OrderSummary";
-import type { FlavorImages } from "./types";
 import styles from "./BoxBuilder.module.css";
 
 const SECTION = {
@@ -19,11 +17,9 @@ const SECTION = {
   confirm: "paso-confirmar",
 } as const;
 
-type BoxBuilderProps = { images: FlavorImages };
-
 /** Armá tu caja: 1) sabores, 2) caja + resumen, 3) datos y WhatsApp. Todo en una pantalla. */
-export function BoxBuilder({ images }: BoxBuilderProps) {
-  const { items, lines, totalCount, incrementItem, decrementItem, removeItem, clearCart } = useCart();
+export function BoxBuilder() {
+  const { items, lines, totalCount, totalCents, productsById, incrementItem, decrementItem, removeItem, clearCart } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [announcement, setAnnouncement] = useState("");
@@ -46,7 +42,7 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
   }, [checkoutOpen]);
 
   const announce = (id: string, quantity: number) => {
-    const name = flavorsById[id]?.name ?? "";
+    const name = productsById[id]?.name ?? "";
     const text = quantity === 0 ? `${name} quitada de tu caja.` : `${name}: ${quantity} en tu caja.`;
     // Alterna un carácter invisible para que se repita el anuncio aunque el texto sea igual.
     setAnnouncement((prev) => (prev.endsWith("​") ? text : `${text}​`));
@@ -54,7 +50,7 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
 
   const handleIncrement = (id: string) => {
     incrementItem(id);
-    announce(id, (items[id] ?? 0) + 1);
+    announce(id, Math.min((items[id] ?? 0) + 1, productsById[id]?.stock ?? 0));
   };
   const handleDecrement = (id: string) => {
     decrementItem(id);
@@ -128,7 +124,6 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
             Elegí tus sabores
           </StepHeading>
           <FlavorSelector
-            images={images}
             quantities={items}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
@@ -140,10 +135,11 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
             <StepHeading id={`${SECTION.box}-title`} n={2}>
               Armá tu caja
             </StepHeading>
-            <BoxPreview lines={lines} totalCount={totalCount} images={images} />
+            <BoxPreview lines={lines} totalCount={totalCount} />
             <OrderSummary
               lines={lines}
               totalCount={totalCount}
+              totalCents={totalCents}
               onRemove={handleRemove}
               onKeepChoosing={goToFlavors}
               onContinue={openCheckout}
@@ -160,7 +156,7 @@ export function BoxBuilder({ images }: BoxBuilderProps) {
             </StepHeading>
             {checkoutOpen ? (
               <>
-                <OrderSummary lines={lines} totalCount={totalCount} compact />
+                <OrderSummary lines={lines} totalCount={totalCount} totalCents={totalCents} compact />
               </>
             ) : (
               <p className={styles.confirmHint}>

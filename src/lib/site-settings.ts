@@ -1,6 +1,5 @@
 import { site } from "@/data/site";
 import { apiUrl, fetchWithTimeout } from "@/lib/api";
-import { getConfiguredWhatsAppNumber } from "@/lib/whatsapp";
 import { parsePublicSettings, type PublicSettings } from "@/lib/settings-parse";
 
 export { instagramUrl, parsePublicSettings, type PublicSettings } from "@/lib/settings-parse";
@@ -12,11 +11,12 @@ export { instagramUrl, parsePublicSettings, type PublicSettings } from "@/lib/se
 export const PUBLIC_SETTINGS_PATH = "/api/public/settings";
 
 /**
- * Respaldo si la API no responde: Instagram conocido y, solo como transición,
- * NEXT_PUBLIC_WHATSAPP_NUMBER (vacío = botón deshabilitado, nunca un número inventado).
+ * Respaldo si la API no responde: solo el Instagram conocido. El teléfono del
+ * negocio no tiene respaldo en el código: sin API no se puede pedir (nunca un
+ * número inventado ni hardcodeado).
  */
 export const FALLBACK_SETTINGS: PublicSettings = {
-  whatsappNumber: getConfiguredWhatsAppNumber(),
+  whatsappNumber: null,
   instagramHandle: site.instagram.handle,
   whatsappOrdersEnabled: true,
 };

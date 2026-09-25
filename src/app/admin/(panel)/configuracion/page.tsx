@@ -4,7 +4,7 @@ import styles from "@/components/admin/Admin.module.css";
 
 export default function AdminSettingsPage() {
   return (
-    <>
+    <div className={styles.narrow}>
       <header className={styles.pageHeader}>
         <Link href="/admin" className={styles.back}>
           ← Panel
@@ -13,6 +13,6 @@ export default function AdminSettingsPage() {
         <p className={styles.lead}>Los cambios se aplican en la web al instante, sin redeploy.</p>
       </header>
       <SettingsForm />
-    </>
+    </div>
   );
 }

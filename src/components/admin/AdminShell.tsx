@@ -3,6 +3,7 @@ import { UserButton } from "@clerk/nextjs";
 import { Brand } from "@/components/brand/Brand";
 import { brandImages } from "@/data/cookies";
 import { resolveImage } from "@/lib/images";
+import { AdminNav } from "./AdminNav";
 import styles from "./Admin.module.css";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -20,6 +21,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </Link>
             <UserButton />
           </div>
+        </div>
+        <div className="container">
+          <AdminNav />
         </div>
       </header>
       <main id="contenido" className={`container ${styles.main}`}>

@@ -2,10 +2,15 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.ts";
 import { createClerkAuth } from "./auth.ts";
 import { loadEnv } from "./env.ts";
-import { createPrismaRepository } from "./repository.ts";
+import { createProductRepository } from "./catalog-repository.ts";
+import { createOrderRepository } from "./order-repository.ts";
+import { createPrismaClient, createSettingsRepository } from "./repository.ts";
 
 const env = loadEnv();
-const repo = createPrismaRepository(env.databaseUrl);
+const prisma = createPrismaClient(env.databaseUrl);
+const repo = createSettingsRepository(prisma);
+const products = createProductRepository(prisma);
+const orders = createOrderRepository(prisma);
 const auth = createClerkAuth({
   secretKey: env.clerkSecretKey,
   publishableKey: env.clerkPublishableKey,
@@ -13,7 +18,7 @@ const auth = createClerkAuth({
   adminEmails: env.adminEmails,
 });
 
-const app = createApp({ repo, auth, allowedOrigins: env.allowedOrigins });
+const app = createApp({ repo, products, orders, auth, allowedOrigins: env.allowedOrigins });
 
 const server = serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, (info) => {
   // No se loguean los emails: solo cuántos admins hay configurados.
@@ -25,7 +30,7 @@ const server = serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, 
 
 const shutdown = () => {
   server.close(() => {
-    void repo.disconnect().finally(() => process.exit(0));
+    void prisma.$disconnect().finally(() => process.exit(0));
   });
 };
 process.on("SIGINT", shutdown);

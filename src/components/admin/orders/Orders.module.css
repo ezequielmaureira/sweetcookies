@@ -1,0 +1,437 @@
+.orders {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ---------- Resumen ---------- */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stat {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: #fffdf9;
+  transition: opacity var(--dur-fast) ease;
+}
+
+.summary[aria-busy="true"] .stat {
+  opacity: 0.6;
+}
+
+.statProfit {
+  border-color: rgba(58, 36, 25, 0.35);
+  background: var(--color-chocolate);
+}
+
+.statLabel {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.statProfit .statLabel {
+  color: rgba(250, 246, 239, 0.72);
+}
+
+.statValue {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-family: var(--font-display);
+  font-size: clamp(1.125rem, 2.4vw + 0.5rem, 1.875rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-chocolate);
+  font-variant-numeric: tabular-nums;
+}
+
+.statProfit .statValue {
+  color: var(--color-cream);
+}
+
+/* ---------- Filtros ---------- */
+.filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.searchFilter {
+  grid-column: 1 / -1;
+}
+
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.filters .filter:last-of-type {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 900px) {
+  .filters {
+    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)) auto;
+  }
+
+  .searchFilter,
+  .filters .filter:last-of-type {
+    grid-column: auto;
+  }
+}
+
+.filterLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid rgba(58, 36, 25, 0.22);
+  border-radius: var(--radius-sm);
+  background: #fffdf9;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--color-chocolate);
+  box-shadow: 0 0 0 3px rgba(176, 78, 54, 0.22);
+}
+
+.clear {
+  grid-column: 1 / -1;
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-chocolate);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+@media (min-width: 900px) {
+  .clear {
+    grid-column: auto;
+  }
+}
+
+.live {
+  min-height: 1.4em;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.error {
+  font-size: 0.9375rem;
+  color: var(--color-terracotta);
+}
+
+.empty {
+  padding: 32px 24px;
+  border: 1px dashed var(--color-line);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  text-align: center;
+}
+
+/* ---------- Lista ---------- */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  transition: opacity var(--dur-fast) ease;
+}
+
+.list[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.headRow {
+  display: none;
+}
+
+.row {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: #fffdf9;
+  overflow: hidden;
+}
+
+.rowOpen {
+  border-color: rgba(58, 36, 25, 0.32);
+}
+
+/* Mobile: tarjeta compacta (sin scroll horizontal). */
+.rowButton {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "number customer chevron"
+    "date date date"
+    "total profit profit";
+  gap: 6px 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rowButton:hover {
+  background: rgba(243, 235, 223, 0.5);
+}
+
+.number {
+  grid-area: number;
+  font-weight: 600;
+  color: var(--color-chocolate);
+  font-variant-numeric: tabular-nums;
+}
+
+.customer {
+  grid-area: customer;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.customerName {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customerMeta {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date {
+  grid-area: date;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.total {
+  grid-area: total;
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-chocolate);
+}
+
+.profit {
+  grid-area: profit;
+  color: var(--color-chocolate-soft);
+}
+
+.mobileLabel {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+.chevron {
+  grid-area: chevron;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--color-muted);
+  transition: transform var(--dur-fast) ease;
+}
+
+.chevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rowOpen .chevron {
+  transform: rotate(180deg);
+}
+
+/* Desktop: filas tipo tabla. */
+@media (min-width: 900px) {
+  .headRow,
+  .rowButton {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 0.9fr) 32px;
+    grid-template-areas: none;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .headRow {
+    padding: 0 16px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .rowButton > * {
+    grid-area: auto;
+  }
+
+  .total {
+    text-align: right;
+  }
+
+  .date {
+    font-size: 0.875rem;
+  }
+
+  .mobileLabel {
+    display: none;
+  }
+}
+
+/* ---------- Detalle ---------- */
+.detail {
+  padding: 4px 16px 18px;
+  border-top: 1px solid var(--color-line);
+}
+
+.detailGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 14px;
+}
+
+.detailInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9375rem;
+}
+
+.muted {
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.notes {
+  color: var(--color-chocolate-soft);
+  font-style: italic;
+}
+
+.items {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.items th,
+.items td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+  font-weight: 400;
+}
+
+.items thead th {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.items tbody th {
+  font-weight: 500;
+}
+
+.items tfoot th,
+.items tfoot td {
+  border-bottom: 0;
+  font-weight: 600;
+  color: var(--color-chocolate);
+}
+
+.items .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* En mobile se ocultan las columnas unitarias: queda producto, cantidad, subtotal y ganancia. */
+@media (max-width: 599px) {
+  .items th:nth-child(3),
+  .items td:nth-child(3),
+  .items th:nth-child(4),
+  .items td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* ---------- Paginado ---------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pageButton {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(58, 36, 25, 0.28);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--color-chocolate);
+  cursor: pointer;
+}
+
+.pageButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pageInfo {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .list,
+  .stat {
+    transition: none;
+  }
+}

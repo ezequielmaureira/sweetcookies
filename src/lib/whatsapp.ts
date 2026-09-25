@@ -1,7 +1,10 @@
 /**
  * Construcción del pedido para WhatsApp.
  * Sin dependencias de React ni del catálogo: recibe datos simples.
+ * El número del negocio NO está en el código: viene de la configuración en la
+ * base (SiteSettings), devuelto por el servidor al confirmar el pedido.
  */
+import { formatPrice } from "./catalog.ts";
 import type { CustomerDetails, OrderLine } from "./order";
 
 /**
@@ -17,12 +20,6 @@ export function normalizeWhatsAppNumber(raw: string | null | undefined): string 
   return digits;
 }
 
-/** Número configurado en NEXT_PUBLIC_WHATSAPP_NUMBER, normalizado, o null. */
-export function getConfiguredWhatsAppNumber(): string | null {
-  // Referencia literal para que Next.js la inyecte en el bundle del cliente.
-  return normalizeWhatsAppNumber(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER);
-}
-
 /** Limpia texto libre: saca espacios sobrantes y colapsa líneas vacías repetidas. */
 function cleanText(value: string, { multiline = false } = {}): string {
   const text = value.replace(/\r\n?/g, "\n");
@@ -35,34 +32,41 @@ function cleanText(value: string, { multiline = false } = {}): string {
     .trim();
 }
 
-export function buildOrderMessage(lines: OrderLine[], customer: CustomerDetails): string {
+/** Datos del pedido guardado (número y total calculado por el servidor). */
+export type SavedOrderInfo = { number: number; total: string };
+
+export function buildOrderMessage(lines: OrderLine[], customer: CustomerDetails, order?: SavedOrderInfo): string {
   const validLines = lines.filter((line) => line.quantity > 0);
   const total = validLines.reduce((sum, line) => sum + line.quantity, 0);
+  const cookies = `${total} ${total === 1 ? "cookie" : "cookies"}`;
 
-  const name = cleanText(customer.name);
+  const name = cleanText(`${customer.name} ${customer.lastName ?? ""}`);
   const phone = cleanText(customer.phone);
+  const email = cleanText(customer.email ?? "");
   const address = cleanText(customer.address);
   const notes = cleanText(customer.notes, { multiline: true });
 
   const parts: string[] = [
-    "🍪 NUEVO PEDIDO — SWEET COOKIES",
+    order ? `🍪 NUEVO PEDIDO #${order.number} — SWEET COOKIES` : "🍪 NUEVO PEDIDO — SWEET COOKIES",
     "",
     "Hola! Quiero hacer este pedido:",
     "",
-    ...validLines.map((line) => `${line.quantity} × ${line.name}`),
+    ...validLines.map((line) => `${line.quantity} × ${line.name}${line.subtotal ? ` — ${formatPrice(line.subtotal)}` : ""}`),
     "",
-    `Total: ${total} ${total === 1 ? "cookie" : "cookies"}`,
+    order ? `Total: ${formatPrice(order.total)} (${cookies})` : `Total: ${cookies}`,
     "",
     `Nombre: ${name}`,
   ];
 
   if (phone) parts.push(`Teléfono: ${phone}`);
+  if (email) parts.push(`Email: ${email}`);
   if (customer.method === "retiro") parts.push("Modalidad: Retiro");
   if (customer.method === "envio") {
     parts.push("Modalidad: Envío");
     if (address) parts.push(`Dirección: ${address}`);
   }
   if (notes) parts.push("", "Observaciones:", notes);
+  if (order) parts.push("", `Número de pedido: #${order.number}`);
   parts.push("", "Gracias!");
 
   return parts.join("\n");

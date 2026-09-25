@@ -3,10 +3,9 @@
 import Image from "next/image";
 import { useState } from "react";
 import type { CartLine } from "@/components/cart/CartProvider";
-import type { Flavor } from "@/data/cookies";
 import { buildBoxLayout } from "@/lib/box";
 import { formatCookieCount } from "@/lib/cart";
-import type { FlavorImages } from "./types";
+import { isRemoteImage, type Product } from "@/lib/catalog";
 import styles from "./BoxPreview.module.css";
 
 const COLUMNS = 4;
@@ -15,23 +14,22 @@ const MAX_VISIBLE = 16;
 type BoxPreviewProps = {
   lines: CartLine[];
   totalCount: number;
-  images: FlavorImages;
   /** Tamaño oficial de caja (a futuro). null = la caja muestra el pedido tal cual. */
   capacity?: number | null;
 };
 
 /** Paso 2: caja Sweet Cookies con una cookie dibujada por unidad del pedido. */
-export function BoxPreview({ lines, totalCount, images, capacity = null }: BoxPreviewProps) {
+export function BoxPreview({ lines, totalCount, capacity = null }: BoxPreviewProps) {
   const layout = buildBoxLayout(
-    lines.map(({ flavor, quantity }) => ({ id: flavor.id, quantity })),
+    lines.map(({ product, quantity }) => ({ id: product.id, quantity })),
     { columns: COLUMNS, maxVisible: MAX_VISIBLE, capacity },
   );
-  const byId = Object.fromEntries(lines.map(({ flavor }) => [flavor.id, flavor]));
+  const byId = Object.fromEntries(lines.map(({ product }) => [product.id, product]));
 
   const description =
     totalCount === 0
       ? "Tu caja está vacía."
-      : `Tu caja con ${formatCookieCount(totalCount)}: ${lines.map((l) => `${l.quantity} ${l.flavor.name}`).join(", ")}.`;
+      : `Tu caja con ${formatCookieCount(totalCount)}: ${lines.map((l) => `${l.quantity} ${l.product.name}`).join(", ")}.`;
 
   return (
     <div className={styles.box} role="img" aria-label={description}>
@@ -44,7 +42,7 @@ export function BoxPreview({ lines, totalCount, images, capacity = null }: BoxPr
         <ul className={styles.grid} style={{ "--cols": COLUMNS } as React.CSSProperties}>
           {layout.units.map((unit) => (
             <li key={unit.key} className={styles.slot}>
-              <BoxCookie flavor={byId[unit.flavorId]} src={images[unit.flavorId] ?? null} />
+              <BoxCookie product={byId[unit.flavorId]} />
             </li>
           ))}
           {layout.hiddenCount > 0 && (
@@ -74,14 +72,15 @@ function monogram(name: string) {
     .join("");
 }
 
-function BoxCookie({ flavor, src }: { flavor: Flavor; src: string | null }) {
+function BoxCookie({ product }: { product: Product }) {
   const [failed, setFailed] = useState(false);
+  const src = product.imageUrl;
   return (
-    <span className={styles.cookie} style={{ "--tint": flavor.tint } as React.CSSProperties} title={flavor.name}>
+    <span className={styles.cookie} title={product.name}>
       {src && !failed ? (
-        <Image src={src} alt="" fill sizes="96px" className={styles.photo} onError={() => setFailed(true)} />
+        <Image src={src} alt="" fill sizes="96px" unoptimized={isRemoteImage(src)} className={styles.photo} onError={() => setFailed(true)} />
       ) : (
-        <span className={styles.monogram}>{monogram(flavor.name)}</span>
+        <span className={styles.monogram}>{monogram(product.name)}</span>
       )}
     </span>
   );

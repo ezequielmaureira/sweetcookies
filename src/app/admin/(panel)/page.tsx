@@ -1,30 +1,31 @@
 import Link from "next/link";
 import styles from "@/components/admin/Admin.module.css";
 
+const SECTIONS = [
+  { href: "/admin/productos", title: "Productos", text: "Catálogo, precios, costos, stock y destacados." },
+  { href: "/admin/pedidos", title: "Pedidos", text: "Pedidos, facturación y ganancia, con filtros." },
+  { href: "/admin/configuracion", title: "Configuración", text: "Teléfono de pedidos, Instagram y WhatsApp." },
+];
+
 export default function AdminHomePage() {
   return (
     <>
       <header className={styles.pageHeader}>
         <p className="kicker">Panel</p>
         <h1 className={styles.title}>Hola.</h1>
-        <p className={styles.lead}>Desde acá manejás la configuración de Sweet Cookies.</p>
+        <p className={styles.lead}>Desde acá manejás Sweet Cookies: lo que cambies se ve en la web al instante.</p>
       </header>
 
       <ul className={styles.cards}>
-        <li>
-          <Link href="/admin/configuracion" className={styles.card}>
-            <span className={styles.cardTitle}>Configuración</span>
-            <span className={styles.cardText}>WhatsApp, Instagram y pedidos.</span>
-            <span className={styles.cardArrow} aria-hidden="true">→</span>
-          </Link>
-        </li>
-        <li>
-          <div className={`${styles.card} ${styles.cardDisabled}`} aria-disabled="true">
-            <span className={styles.cardTitle}>Cookies</span>
-            <span className={styles.cardText}>Sabores, fotos y disponibilidad.</span>
-            <span className={styles.soon}>Próximamente</span>
-          </div>
-        </li>
+        {SECTIONS.map((section) => (
+          <li key={section.href}>
+            <Link href={section.href} className={styles.card}>
+              <span className={styles.cardTitle}>{section.title}</span>
+              <span className={styles.cardText}>{section.text}</span>
+              <span className={styles.cardArrow} aria-hidden="true">→</span>
+            </Link>
+          </li>
+        ))}
       </ul>
     </>
   );

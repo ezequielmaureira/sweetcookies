@@ -1,17 +1,15 @@
-import { brandImages, flavors } from "@/data/cookies";
-import { resolveFirstImage, resolveImage } from "@/lib/images";
+import { brandImages } from "@/data/cookies";
+import { resolveImage } from "@/lib/images";
 
 /**
  * Foto REAL de la cookie (entrada al sitio y Hero), solo servidor.
- * Orden: recorte sin fondo → foto cenital → primera foto de sabor disponible.
+ * Orden: recorte sin fondo → foto cenital. Es un asset de marca, no un producto.
  */
 export function getHeroCookie() {
   const cutout = resolveImage(brandImages.heroCutout);
-  const src = cutout ?? resolveFirstImage([brandImages.hero, ...flavors.map((f) => f.image)]);
-  const flavor = flavors.find((f) => src?.includes(`/${f.image}.`));
   return {
-    src,
+    src: cutout ?? resolveImage(brandImages.hero),
     isCutout: Boolean(cutout),
-    alt: flavor?.alt ?? "Cookie artesanal de Sweet Cookies",
+    alt: "Cookie artesanal de Sweet Cookies",
   };
 }

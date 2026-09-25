@@ -1,4 +1,3 @@
-import { flavors } from "@/data/cookies";
 import { EMPTY_CART, sanitizeCartItems, type CartItems } from "./cart";
 
 /**
@@ -12,7 +11,6 @@ import { EMPTY_CART, sanitizeCartItems, type CartItems } from "./cart";
 const STORAGE_KEY = "sweetcookies:cart";
 const STORAGE_VERSION = 1;
 
-const validIds: ReadonlySet<string> = new Set(flavors.map((flavor) => flavor.id));
 const listeners = new Set<() => void>();
 
 let state: CartItems = EMPTY_CART;
@@ -26,7 +24,7 @@ function readStorage(): CartItems {
     if (!parsed || typeof parsed !== "object" || (parsed as { v?: unknown }).v !== STORAGE_VERSION) {
       return EMPTY_CART;
     }
-    return sanitizeCartItems((parsed as { items?: unknown }).items, validIds);
+    return sanitizeCartItems((parsed as { items?: unknown }).items);
   } catch {
     // JSON corrupto o storage bloqueado (modo privado, permisos): carrito vacío.
     return EMPTY_CART;

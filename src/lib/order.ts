@@ -11,7 +11,9 @@ export const deliveryMethodLabels: Record<DeliveryMethod, string> = {
 
 export type CustomerDetails = {
   name: string;
+  lastName: string;
   phone: string;
+  email: string;
   method: DeliveryMethod | "";
   address: string;
   notes: string;
@@ -19,7 +21,9 @@ export type CustomerDetails = {
 
 export const EMPTY_CUSTOMER: CustomerDetails = {
   name: "",
+  lastName: "",
   phone: "",
+  email: "",
   method: "",
   address: "",
   notes: "",
@@ -28,14 +32,17 @@ export const EMPTY_CUSTOMER: CustomerDetails = {
 /** Largos máximos de cada campo (evitan mensajes gigantes). */
 export const FIELD_LIMITS = {
   name: 80,
+  lastName: 80,
   phone: 30,
+  email: 120,
   address: 200,
   notes: 600,
 } as const;
 
-export type OrderLine = { name: string; quantity: number };
+/** Línea del mensaje. Con precios (comprobante del servidor) se muestran importes. */
+export type OrderLine = { name: string; quantity: number; subtotal?: string };
 
-export type CustomerField = "name" | "method" | "address";
+export type CustomerField = "name" | "email" | "method" | "address";
 export type FieldErrors = Partial<Record<CustomerField, string>>;
 export type OrderIssue = "empty-cart" | "missing-whatsapp-number";
 
@@ -48,6 +55,9 @@ export type OrderValidation = {
 export function validateCustomer(customer: CustomerDetails): FieldErrors {
   const errors: FieldErrors = {};
   if (!customer.name.trim()) errors.name = "Contanos tu nombre.";
+  if (customer.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customer.email.trim())) {
+    errors.email = "Revisá el email.";
+  }
   if (customer.method !== "retiro" && customer.method !== "envio") {
     errors.method = "Elegí retiro o envío.";
   }

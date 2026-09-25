@@ -20,12 +20,3 @@ export function resolveImage(baseName: string, dir = COOKIE_IMAGES_DIR): string 
   }
   return null;
 }
-
-/** Devuelve la primera imagen existente de una lista de nombres base. */
-export function resolveFirstImage(baseNames: string[], dir = COOKIE_IMAGES_DIR): string | null {
-  for (const name of baseNames) {
-    const found = resolveImage(name, dir);
-    if (found) return found;
-  }
-  return null;
-}

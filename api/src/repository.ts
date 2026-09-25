@@ -8,24 +8,29 @@ export type SettingsRepository = {
   ping(): Promise<void>;
 };
 
-export function createPrismaRepository(databaseUrl: string): SettingsRepository & { disconnect(): Promise<void> } {
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
+/** Un único cliente Prisma (adapter pg) compartido por todos los repositorios. */
+export function createPrismaClient(databaseUrl: string): PrismaClient {
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
+}
 
-  const toSettings = (row: {
-    whatsappNumber: string | null;
-    instagramHandle: string | null;
-    whatsappOrdersEnabled: boolean;
-    updatedAt: Date;
-  } | null): AdminSettings =>
-    row
-      ? {
-          whatsappNumber: row.whatsappNumber,
-          instagramHandle: row.instagramHandle,
-          whatsappOrdersEnabled: row.whatsappOrdersEnabled,
-          updatedAt: row.updatedAt.toISOString(),
-        }
-      : { ...DEFAULT_SETTINGS, updatedAt: null };
+type SettingsRow = {
+  whatsappNumber: string | null;
+  instagramHandle: string | null;
+  whatsappOrdersEnabled: boolean;
+  updatedAt: Date;
+};
 
+export const toSettings = (row: SettingsRow | null): AdminSettings =>
+  row
+    ? {
+        whatsappNumber: row.whatsappNumber,
+        instagramHandle: row.instagramHandle,
+        whatsappOrdersEnabled: row.whatsappOrdersEnabled,
+        updatedAt: row.updatedAt.toISOString(),
+      }
+    : { ...DEFAULT_SETTINGS, updatedAt: null };
+
+export function createSettingsRepository(prisma: PrismaClient): SettingsRepository {
   return {
     async get() {
       return toSettings(await prisma.siteSettings.findUnique({ where: { id: SETTINGS_ID } }));
@@ -42,6 +47,5 @@ export function createPrismaRepository(databaseUrl: string): SettingsRepository 
     async ping() {
       await prisma.$queryRaw`SELECT 1`;
     },
-    disconnect: () => prisma.$disconnect(),
   };
 }

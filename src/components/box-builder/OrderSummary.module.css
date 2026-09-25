@@ -106,3 +106,15 @@
 .compact .line {
   min-height: 40px;
 }
+
+.amount {
+  flex-shrink: 0;
+  font-size: 0.9375rem;
+  color: var(--color-chocolate-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.count {
+  font-weight: 400;
+  color: var(--color-muted);
+}

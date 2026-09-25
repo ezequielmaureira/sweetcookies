@@ -10,13 +10,16 @@ type QuantityStepperProps = {
   onIncrement: () => void;
   onDecrement: () => void;
   disabled?: boolean;
+  /** Máximo permitido (stock disponible). */
+  max?: number;
 };
 
 /**
  * [ + Agregar ] cuando la cantidad es 0; [-] n [+] cuando hay cookies.
  * Mantiene el foco en un control equivalente cuando cambia entre ambos estados.
  */
-export function QuantityStepper({ name, quantity, onIncrement, onDecrement, disabled }: QuantityStepperProps) {
+export function QuantityStepper({ name, quantity, onIncrement, onDecrement, disabled, max = MAX_QUANTITY_PER_FLAVOR }: QuantityStepperProps) {
+  const limit = Math.min(max, MAX_QUANTITY_PER_FLAVOR);
   const addRef = useRef<HTMLButtonElement>(null);
   const plusRef = useRef<HTMLButtonElement>(null);
   const pendingFocus = useRef<"add" | "plus" | null>(null);
@@ -37,7 +40,7 @@ export function QuantityStepper({ name, quantity, onIncrement, onDecrement, disa
           pendingFocus.current = "plus";
           onIncrement();
         }}
-        disabled={disabled}
+        disabled={disabled || limit <= 0}
         aria-label={`Agregar ${name}`}
       >
         <span aria-hidden="true">+</span> Agregar
@@ -69,8 +72,8 @@ export function QuantityStepper({ name, quantity, onIncrement, onDecrement, disa
         type="button"
         className={styles.control}
         onClick={onIncrement}
-        disabled={disabled || quantity >= MAX_QUANTITY_PER_FLAVOR}
-        aria-label={`Agregar ${name}`}
+        disabled={disabled || quantity >= limit}
+        aria-label={quantity >= limit ? `${name}: no hay más stock disponible` : `Agregar ${name}`}
       >
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M3.5 8h9M8 3.5v9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />

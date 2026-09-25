@@ -1,31 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import type { Flavor } from "@/data/cookies";
+import type { Product } from "@/lib/catalog";
 import { CookieCard } from "./CookieCard";
-import type { FlavorWithImage } from "./FlavorsSection";
 import styles from "./FlavorsSection.module.css";
 
-export function FlavorsList({ items }: { items: FlavorWithImage[] }) {
+export function FlavorsList({ products }: { products: Product[] }) {
   const [announcement, setAnnouncement] = useState("");
 
-  const handleAdded = (flavor: Flavor) => {
+  const handleAdded = (product: Product) => {
     // Un carácter invisible distinto fuerza a repetir el anuncio si se agrega el mismo sabor.
-    setAnnouncement((prev) => `${flavor.name} agregada al carrito${prev.endsWith("​") ? "" : "​"}`);
+    setAnnouncement((prev) => `${product.name} agregada al carrito${prev.endsWith("​") ? "" : "​"}`);
   };
 
   return (
     <>
       <div className={styles.scroller}>
         <ul className={`container ${styles.list}`}>
-          {items.map(({ flavor, imageSrc }, i) => (
+          {products.map((product, i) => (
             <li
-              key={flavor.id}
+              key={product.id}
               className={styles.item}
               data-reveal
               style={{ "--reveal-delay": `${(i % 3) * 90}ms` } as React.CSSProperties}
             >
-              <CookieCard flavor={flavor} imageSrc={imageSrc} onAdded={handleAdded} />
+              <CookieCard product={product} onAdded={handleAdded} />
             </li>
           ))}
         </ul>

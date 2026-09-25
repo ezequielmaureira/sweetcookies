@@ -53,8 +53,57 @@
 }
 
 .main {
+  max-width: 1240px;
+  padding-block: 40px 96px;
+}
+
+/* Formularios y textos: columna cómoda de lectura dentro del panel ancho. */
+.narrow {
   max-width: 760px;
-  padding-block: 48px 96px;
+}
+
+/* Navegación del panel */
+.nav {
+  display: flex;
+  gap: 4px;
+  margin-inline: -10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav::-webkit-scrollbar {
+  display: none;
+}
+
+.navLink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 10px;
+  font-size: 0.9375rem;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.navLink:hover {
+  color: var(--color-chocolate);
+}
+
+.navLink[aria-current="page"] {
+  color: var(--color-chocolate);
+  font-weight: 600;
+}
+
+.navLink[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--color-chocolate);
 }
 
 .pageHeader {
@@ -98,6 +147,12 @@
   }
 }
 
+@media (min-width: 1024px) {
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .card {
   position: relative;
   display: flex;
@@ -138,20 +193,29 @@ a.card:hover {
   font-size: 1.25rem;
 }
 
-.cardDisabled {
-  background: transparent;
-  border-style: dashed;
+/* Secciones de configuración */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: #fffdf9;
 }
 
-.soon {
-  align-self: flex-start;
-  margin-top: auto;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--color-cream-deep);
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--color-chocolate-soft);
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-chocolate);
+}
+
+.sectionLead {
+  margin-top: -12px;
+  font-size: 0.9375rem;
+  color: var(--color-muted);
 }
 
 /* Formulario */
@@ -331,4 +395,13 @@ a.card:hover {
   a.card:hover {
     transform: none;
   }
+}
+
+/* Dentro de una sección, el switch no necesita otra caja alrededor. */
+.section .toggleRow {
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  border-radius: 0;
+  background: none;
 }

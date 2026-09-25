@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Sans } from "next/font/google";
-import { CartProvider } from "@/components/cart/CartProvider";
 import { site } from "@/data/site";
 import { entryScript } from "@/lib/entry-gate";
 import "./globals.css";
@@ -41,7 +40,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <a className="skip-link" href="#contenido">
           Saltar al contenido
         </a>
-        <CartProvider>{children}</CartProvider>
+        {children}
       </body>
     </html>
   );

@@ -3,26 +3,29 @@
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { CookieImage } from "@/components/ui/CookieImage";
-import type { Flavor } from "@/data/cookies";
+import { availabilityLabel, formatPrice, productAlt, type Product } from "@/lib/catalog";
 import styles from "./CookieCard.module.css";
 
 type CookieCardProps = {
-  flavor: Flavor;
-  imageSrc: string | null;
+  product: Product;
   /** Llamado al agregar; usado para anunciar el cambio a lectores de pantalla. */
-  onAdded?: (flavor: Flavor) => void;
+  onAdded?: (product: Product) => void;
 };
 
-export function CookieCard({ flavor, imageSrc, onAdded }: CookieCardProps) {
-  const { addItem } = useCart();
+export function CookieCard({ product, onAdded }: CookieCardProps) {
+  const { addItem, items } = useCart();
+  const inCart = items[product.id] ?? 0;
+  const soldOut = inCart >= product.stock;
+  const availability = availabilityLabel(product.stock);
   const [added, setAdded] = useState(false);
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
   const handleAdd = () => {
-    addItem(flavor.id);
-    onAdded?.(flavor);
+    if (soldOut) return;
+    addItem(product.id);
+    onAdded?.(product);
     setAdded(true);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setAdded(false), 1400);
@@ -32,26 +35,31 @@ export function CookieCard({ flavor, imageSrc, onAdded }: CookieCardProps) {
     <article className={styles.card}>
       <div className={styles.media}>
         <CookieImage
-          src={imageSrc}
-          alt={flavor.alt}
+          src={product.imageUrl}
+          alt={productAlt(product)}
           sizes="(min-width: 1024px) 380px, (min-width: 640px) 45vw, 74vw"
-          placeholderLabel={flavor.name}
+          placeholderLabel={product.name}
           className={styles.image}
         />
+        {product.featured && <span className={styles.featured}>Destacada</span>}
       </div>
 
       <div className={styles.body}>
         <div className={styles.text}>
-          <h3 className={styles.name}>{flavor.name}</h3>
-          {flavor.description && <p className={styles.description}>{flavor.description}</p>}
+          <h3 className={styles.name}>{product.name}</h3>
+          {product.description && <p className={styles.description}>{product.description}</p>}
+          <p className={styles.price}>
+            {formatPrice(product.price)}
+            {availability && <span className={styles.availability}>{availability}</span>}
+          </p>
         </div>
 
         <button
           type="button"
           className={[styles.add, added ? styles.added : ""].join(" ")}
           onClick={handleAdd}
-          disabled={!flavor.available}
-          aria-label={`Agregar ${flavor.name}`}
+          disabled={soldOut}
+          aria-label={soldOut ? `${product.name}: ya tenés todo el stock disponible` : `Agregar ${product.name}`}
         >
           <span className={styles.addLabel} aria-hidden="true">
             <span className={styles.addDefault}>

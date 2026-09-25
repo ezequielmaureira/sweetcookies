@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { buildOrderMessage, buildWhatsAppUrl, normalizeWhatsAppNumber } from "./whatsapp.ts";
 import { validateOrder, type CustomerDetails } from "./order.ts";
 
-const customer: CustomerDetails = { name: "Ezequiel", phone: "", method: "retiro", address: "", notes: "" };
+const customer: CustomerDetails = { name: "Ezequiel", lastName: "", phone: "", email: "", method: "retiro", address: "", notes: "" };
 
 describe("normalizeWhatsAppNumber", () => {
   it("deja solo dígitos", () => {
@@ -68,6 +68,25 @@ describe("buildOrderMessage", () => {
   });
 });
 
+describe("buildOrderMessage con pedido guardado", () => {
+  it("usa número de pedido, importes y total del servidor", () => {
+    const message = buildOrderMessage(
+      [
+        { name: "Cookie Chips Clásica", quantity: 2, subtotal: "10000.00" },
+        { name: "Double Chocolate", quantity: 1, subtotal: "6000.50" },
+      ],
+      { ...customer, lastName: "Maureira", email: "eze@mail.com" },
+      { number: 1024, total: "16000.50" },
+    );
+    assert.match(message, /^🍪 NUEVO PEDIDO #1024 — SWEET COOKIES/);
+    assert.match(message, /2 × Cookie Chips Clásica — \$\s?10\.000\n/);
+    assert.match(message, /1 × Double Chocolate — \$\s?6\.000,50\n/);
+    assert.match(message, /Total: \$\s?16\.000,50 \(3 cookies\)/);
+    assert.match(message, /Nombre: Ezequiel Maureira\nEmail: eze@mail.com\n/);
+    assert.match(message, /Número de pedido: #1024\n\nGracias!$/);
+  });
+});
+
 describe("buildWhatsAppUrl", () => {
   it("encodea caracteres especiales y saltos de línea", () => {
     const url = buildWhatsAppUrl("5490000000000", "1 × Limón & Frambuesa\n¿Ñandú? #1 🍪");
@@ -89,6 +108,7 @@ describe("validateOrder", () => {
     });
     assert.equal(result.isValid, false);
     assert.deepEqual(Object.keys(result.fieldErrors).sort(), ["method", "name"]);
+    assert.ok(validateOrder({ customer: { ...customer, email: "no-es-mail" }, totalCount: 1, hasWhatsAppNumber: true }).fieldErrors.email);
     assert.deepEqual(result.issues, ["empty-cart", "missing-whatsapp-number"]);
   });
   it("exige dirección solo para envío", () => {

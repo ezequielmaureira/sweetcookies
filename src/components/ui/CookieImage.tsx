@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { isRemoteImage } from "@/lib/catalog";
 import styles from "./CookieImage.module.css";
 
 type CookieImageProps = {
@@ -45,6 +46,8 @@ export function CookieImage({ src, alt, sizes, priority, placeholderLabel, class
       fill
       sizes={sizes}
       priority={priority}
+      // Imágenes https cargadas desde el admin: sin optimizador (no hay dominios configurados).
+      unoptimized={isRemoteImage(src)}
       className={[styles.image, className].filter(Boolean).join(" ")}
       onError={() => setFailed(true)}
     />

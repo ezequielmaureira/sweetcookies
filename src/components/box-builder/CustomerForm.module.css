@@ -227,3 +227,36 @@
     transition: none;
   }
 }
+
+/* Agrupa todos los campos: se deshabilitan juntos mientras se registra el pedido. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.group:disabled {
+  opacity: 0.72;
+}
+
+/* Nombre + apellido / teléfono + email: dos columnas desde tablet. */
+.row {
+  display: grid;
+  gap: 22px;
+}
+
+@media (min-width: 640px) {
+  .row {
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+}
+
+.problems {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
