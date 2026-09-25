@@ -120,16 +120,17 @@
   animation: crumb 950ms cubic-bezier(0.3, 0.6, 0.6, 1) both;
 }
 
+/* Tonos de la cookie real (Red Velvet con chocolate blanco). */
 .tone0 {
-  background: #c79357;
+  background: #8f3a36;
 }
 
 .tone1 {
-  background: #a8733f;
+  background: #6a2527;
 }
 
 .tone2 {
-  background: #4a2c1c;
+  background: #efe6cf;
 }
 
 /* Texto */

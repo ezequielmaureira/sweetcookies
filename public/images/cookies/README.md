@@ -26,3 +26,23 @@ agregar fotos, reiniciá `npm run dev` o volvé a correr `npm run build`.
 
 Recomendado: fotos de producto de al menos 1600 px de lado, las cookies
 centradas. Los sabores se recortan en formato 4:5 y la caja en 5:4.
+
+## Origen de las fotos actuales
+
+Todas salen de publicaciones reales de @sweet.cookies.rio4, recortadas sin la
+interfaz de Instagram (sin barras, avatar, botones ni textos del post):
+
+| Archivo                  | Publicación de origen                                  |
+| ------------------------ | ------------------------------------------------------ |
+| `hero-cookie-cutout.png` | Red Velvet (recorte sin fondo, sin el borde de sticker) |
+| `red-velvet.jpg`         | Mismo recorte Red Velvet sobre fondo liso              |
+| `cookies-cream.jpg`      | Cookie con Oreo y crema                                |
+| `pistacho.jpg`           | Dos cookies de pistacho en caja                        |
+| `limon-frambuesa.jpg`    | Cookie de limón con chocolate blanco y frambuesa       |
+| `chocotorta.jpg`         | Cookies Chocotorta                                     |
+| `franui.jpg`             | Detalle de la cookie estilo Franui de la foto de caja  |
+| `box-cookies.jpg`        | Caja con 2 Franui + 2 Chocotorta                       |
+| `logo-sweet-cookies.png` | Logo real (sin cambios)                                |
+
+Las mordidas de `src/components/cookie/bites.ts` están ajustadas a
+`hero-cookie-cutout.png`: si se cambia esa foto, revisar las posiciones.

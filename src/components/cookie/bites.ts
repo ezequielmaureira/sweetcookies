@@ -7,11 +7,16 @@ export type Circle = { x: number; y: number; r: number };
 /** Mordida: centro fuera/sobre el borde + "dientes" alrededor para un borde irregular. */
 type BiteSpec = { angle: number; distance: number; radius: number };
 
-/** 3 mordidas: dos normales y una grande que la deja casi terminada. */
+/**
+ * 3 mordidas: dos normales y una grande que la deja casi terminada.
+ * Ajustadas a la foto real (hero-cookie-cutout.png, Red Velvet): el borde de la
+ * cookie queda a ~47–48 % del centro, así que cada centro cae sobre/fuera del
+ * borde y los dientes no tocan los trozos grandes de chocolate blanco.
+ */
 export const BITES: readonly BiteSpec[] = [
-  { angle: -38, distance: 52, radius: 17 },
-  { angle: 128, distance: 53, radius: 19 },
-  { angle: 32, distance: 44, radius: 30 },
+  { angle: -40, distance: 51, radius: 18 },
+  { angle: 132, distance: 50, radius: 20 },
+  { angle: 40, distance: 48, radius: 27 },
 ];
 
 export const BITE_COUNT = BITES.length;

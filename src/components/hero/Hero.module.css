@@ -48,19 +48,17 @@
   position: relative;
 }
 
-/* Superficie limpia donde apoya la cookie (sin marcos ni formas decorativas). */
+/* La cookie real apoya directo sobre la página: protagonista, sin caja alrededor. */
 .stage {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-block: 32px 20px;
-  border-radius: var(--radius-lg);
-  background: var(--color-cream-deep);
+  padding-block: 12px 0;
 }
 
 .cookie {
-  width: min(72%, 40svh, 360px);
+  width: min(86%, 48svh, 400px);
 }
 
 .again {
@@ -89,7 +87,7 @@
 
 @media (min-width: 640px) {
   .cookie {
-    width: min(52%, 44svh, 380px);
+    width: min(60%, 50svh, 440px);
   }
 }
 
@@ -121,12 +119,11 @@
   }
 
   .stage {
-    min-height: min(640px, 76svh);
-    padding-block: 48px 32px;
+    padding-block: 24px;
   }
 
   .cookie {
-    width: min(72%, 440px);
+    width: min(90%, 64svh, 540px);
   }
 }
 

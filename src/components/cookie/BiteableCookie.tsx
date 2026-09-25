@@ -6,6 +6,8 @@ import { BITE_COUNT, DEFAULT_MESSAGES, biteMask, bitePoint } from "./bites";
 import styles from "./BiteableCookie.module.css";
 
 const THROTTLE_MS = 350;
+/** Pocas miguitas por mordida: sutil, nada explosivo. */
+const CRUMB_COUNT = 5;
 const COMPLETE_DELAY_MS = 900;
 const COMPLETE_DELAY_REDUCED_MS = 250;
 
@@ -74,13 +76,13 @@ export function BiteableCookie({
 
     if (!reduced) {
       const { x, y } = bitePoint(next - 1);
-      const fresh: Crumb[] = Array.from({ length: 7 }, (_, i) => ({
+      const fresh: Crumb[] = Array.from({ length: CRUMB_COUNT }, (_, i) => ({
         id: ++crumbId.current,
         x,
         y,
-        dx: (x - 50) * (0.6 + Math.random() * 0.8) + (Math.random() - 0.5) * 36,
-        dy: 30 + Math.random() * 60,
-        size: 2.5 + Math.random() * 4.5,
+        dx: (x - 50) * (0.6 + Math.random() * 0.8) + (Math.random() - 0.5) * 28,
+        dy: 24 + Math.random() * 44,
+        size: 2.5 + Math.random() * 3.5,
         delay: i * 16,
         tone: i % 3,
       }));
