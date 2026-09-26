@@ -17,7 +17,11 @@ const SECTION = {
   confirm: "paso-confirmar",
 } as const;
 
-/** Armá tu caja: 1) sabores, 2) caja + resumen, 3) datos y WhatsApp. Todo en una pantalla. */
+/**
+ * Armá tu caja: 1) sabores, 2) caja + resumen, 3) datos y WhatsApp. Todo en una pantalla.
+ * La caja se ve MIENTRAS se eligen los sabores: en mobile, una caja compacta
+ * fija arriba de la lista; en desktop, la columna derecha fija.
+ */
 export function BoxBuilder() {
   const { items, lines, totalCount, totalCents, productsById, incrementItem, decrementItem, removeItem, clearCart } = useCart();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -123,6 +127,10 @@ export function BoxBuilder() {
           <StepHeading id={`${SECTION.flavors}-title`} n={1} ref={flavorsHeadingRef}>
             Elegí tus sabores
           </StepHeading>
+          {/* Mobile/tablet: la caja en vivo queda fija arriba mientras se recorre la lista. */}
+          <div className={styles.liveBox}>
+            <BoxPreview lines={lines} totalCount={totalCount} totalCents={totalCents} compact />
+          </div>
           <FlavorSelector
             quantities={items}
             onIncrement={handleIncrement}
@@ -135,7 +143,10 @@ export function BoxBuilder() {
             <StepHeading id={`${SECTION.box}-title`} n={2}>
               Armá tu caja
             </StepHeading>
-            <BoxPreview lines={lines} totalCount={totalCount} />
+            {/* Desktop: caja grande en la columna fija (en mobile ya está arriba, en vivo). */}
+            <div className={styles.boxDesktop}>
+              <BoxPreview lines={lines} totalCount={totalCount} />
+            </div>
             <OrderSummary
               lines={lines}
               totalCount={totalCount}
@@ -183,7 +194,7 @@ export function BoxBuilder() {
         </div>
       </section>
 
-      <MobileBoxBar totalCount={totalCount} boxTargetId={SECTION.box} hideWhenVisibleIds={[SECTION.box, SECTION.confirm]} />
+      <MobileBoxBar totalCount={totalCount} totalCents={totalCents} boxTargetId={SECTION.box} hideWhenVisibleIds={[SECTION.box, SECTION.confirm]} />
 
       <p className="visually-hidden" aria-live="polite">
         {announcement}

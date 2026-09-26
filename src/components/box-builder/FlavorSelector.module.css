@@ -161,3 +161,76 @@
   color: var(--color-chocolate);
   cursor: pointer;
 }
+
+/*
+ * Mobile/tablet: filas compactas (foto chica · nombre + precio · cantidad) para
+ * elegir rápido sin perder de vista la caja en vivo. Desktop: cards.
+ */
+@media (max-width: 1023px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .option {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px 10px 10px;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-md);
+    background: #fffdf9;
+    transition: border-color var(--dur-med) var(--ease-out);
+  }
+
+  .selected {
+    border-color: var(--color-terracotta);
+  }
+
+  .media {
+    width: 72px;
+    border-radius: 14px;
+  }
+
+  .selected .media::after {
+    box-shadow: none;
+  }
+
+  .badge {
+    top: 4px;
+    right: 4px;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 6px;
+    font-size: 0.75rem;
+    line-height: 22px;
+  }
+
+  .name {
+    font-size: 1.0625rem;
+  }
+
+  .description {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 2px;
+    font-size: 0.8125rem;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+  }
+
+  .price {
+    margin-top: 4px;
+  }
+
+  .action {
+    width: 132px;
+  }
+}
+
+@media (max-width: 1023px) and (hover: hover) {
+  .option:hover .media {
+    transform: none;
+  }
+}

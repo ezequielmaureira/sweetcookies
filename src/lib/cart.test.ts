@@ -42,32 +42,3 @@ describe("withQuantity", () => {
   });
 });
 
-import { buildBoxLayout } from "./box.ts";
-
-describe("buildBoxLayout", () => {
-  it("una unidad por cookie y completa la fila", () => {
-    const layout = buildBoxLayout(
-      [
-        { id: "pistacho", quantity: 2 },
-        { id: "red-velvet", quantity: 1 },
-      ],
-      { columns: 4, maxVisible: 16 },
-    );
-    assert.deepEqual(
-      layout.units.map((u) => u.flavorId),
-      ["pistacho", "pistacho", "red-velvet"],
-    );
-    assert.equal(layout.emptySlots, 1);
-    assert.equal(layout.hiddenCount, 0);
-  });
-  it("resume el excedente como +N", () => {
-    const layout = buildBoxLayout([{ id: "pistacho", quantity: 20 }], { columns: 4, maxVisible: 16 });
-    assert.equal(layout.units.length, 15);
-    assert.equal(layout.hiddenCount, 5);
-    assert.equal(layout.emptySlots, 0);
-  });
-  it("respeta una capacidad futura", () => {
-    const layout = buildBoxLayout([{ id: "pistacho", quantity: 2 }], { columns: 4, maxVisible: 16, capacity: 6 });
-    assert.equal(layout.emptySlots, 4);
-  });
-});

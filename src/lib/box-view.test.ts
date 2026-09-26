@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildBoxLayout } from "./box.ts";
+import { EMPTY_SLOTS, reconcileSlots } from "./box-slots.ts";
 import { boxFormat, boxImageStyle, boxViewSource } from "./box-view.ts";
 import { DEFAULT_BOX_VIEW } from "./catalog.ts";
 
@@ -36,16 +36,14 @@ describe("formato de la caja (lugares fijos)", () => {
     assert.deepEqual(boxFormat(13), { capacity: 16, columns: 4, rows: 4 });
   });
   it("cada cookie va a un lugar distinto y los libres quedan vacíos", () => {
+    const state = reconcileSlots(EMPTY_SLOTS, [
+      { id: "a", quantity: 3 },
+      { id: "b", quantity: 2 },
+    ]);
     const format = boxFormat(5);
-    const layout = buildBoxLayout(
-      [
-        { id: "a", quantity: 3 },
-        { id: "b", quantity: 2 },
-      ],
-      { columns: format.columns, maxVisible: 16, capacity: format.capacity },
-    );
-    assert.equal(layout.units.length, 5);
-    assert.equal(new Set(layout.units.map((u) => u.key)).size, 5, "una key (lugar) por cookie");
-    assert.equal(layout.units.length + layout.emptySlots, 6);
+    const units = state.slots.filter(Boolean);
+    assert.equal(units.length, 5);
+    assert.equal(new Set(units.map((u) => u?.key)).size, 5, "una key (lugar) por cookie");
+    assert.equal(format.capacity - units.length, 1, "queda 1 lugar libre en la caja de 6");
   });
 });

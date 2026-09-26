@@ -2,24 +2,24 @@
   padding-bottom: 24px;
 }
 
-/* ---------- Intro ---------- */
+/* ---------- Intro (compacta en mobile: la caja tiene que verse enseguida) ---------- */
 .intro {
-  padding-block: 24px 40px;
+  padding-block: 12px 24px;
   animation: enterUp 800ms var(--ease-out) both;
 }
 
 .title {
   max-width: 14ch;
-  margin-top: 16px;
-  font-size: clamp(2.5rem, 7vw, 4.75rem);
+  margin-top: 10px;
+  font-size: clamp(2rem, 7vw, 4.75rem);
   line-height: 1;
   letter-spacing: -0.035em;
 }
 
 .lead {
   max-width: 36ch;
-  margin-top: 16px;
-  font-size: clamp(1.0625rem, 1vw + 0.8rem, 1.1875rem);
+  margin-top: 10px;
+  font-size: clamp(1rem, 1vw + 0.8rem, 1.1875rem);
   color: var(--color-muted);
 }
 
@@ -28,7 +28,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin: 36px 0 0;
+  margin: 20px 0 0;
   padding: 0;
   list-style: none;
 }
@@ -77,7 +77,7 @@
   display: flex;
   align-items: baseline;
   gap: 12px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .stepHeadingNumber {
@@ -105,7 +105,25 @@
 .layout {
   display: flex;
   flex-direction: column;
-  gap: 64px;
+  gap: 40px;
+}
+
+/*
+ * Caja en vivo (mobile/tablet): fija debajo del header mientras se eligen
+ * sabores. Fondo del sitio + sombra suave abajo para separarla de la lista.
+ */
+.liveBox {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 20;
+  margin: 0 calc(var(--gutter) * -1) 16px;
+  padding: 10px var(--gutter) 12px;
+  background: var(--color-cream);
+  box-shadow: 0 10px 16px -14px rgba(58, 36, 25, 0.45);
+}
+
+.boxDesktop {
+  display: none;
 }
 
 .flavors,
@@ -183,24 +201,22 @@
   }
 }
 
-/* ---------- Tablet: caja y resumen lado a lado ---------- */
-@media (min-width: 640px) and (max-width: 1023px) {
-  .sticky {
-    display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-    align-items: start;
-    gap: 28px 32px;
-  }
-
-  .sticky > :first-child {
-    grid-column: 1 / -1;
-  }
-}
-
 /* ---------- Desktop ---------- */
 @media (min-width: 1024px) {
   .intro {
     padding-block: 40px 64px;
+  }
+
+  .stepHeading {
+    margin-bottom: 24px;
+  }
+
+  .liveBox {
+    display: none;
+  }
+
+  .boxDesktop {
+    display: block;
   }
 
   .layout {
@@ -208,6 +224,11 @@
     grid-template-columns: minmax(0, 1.35fr) minmax(360px, 1fr);
     align-items: start;
     gap: clamp(40px, 5vw, 80px);
+  }
+
+  /* La columna ocupa todo el alto de la fila: así la caja puede quedar fija mientras se baja. */
+  .boxColumn {
+    align-self: stretch;
   }
 
   .sticky {

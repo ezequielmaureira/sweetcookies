@@ -2,20 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { formatCookieCount } from "@/lib/cart";
+import { formatCents } from "@/lib/catalog";
 import styles from "./MobileBoxBar.module.css";
 
 type MobileBoxBarProps = {
   totalCount: number;
+  /** Total estimado (se muestra junto a la cantidad). */
+  totalCents: number;
   boxTargetId: string;
   /** Se oculta mientras alguno de estos elementos está en pantalla. */
   hideWhenVisibleIds: string[];
 };
 
 /**
- * Barra compacta fija abajo (solo mobile/tablet): muestra cuántas cookies hay
- * y lleva a la caja. Se oculta cuando la caja o la confirmación están a la vista.
+ * Barra compacta fija abajo (solo mobile/tablet): cantidad + total y
+ * "Continuar", que lleva al resumen del pedido. Se oculta cuando el resumen o
+ * la confirmación están a la vista (la caja en vivo ya se ve arriba).
  */
-export function MobileBoxBar({ totalCount, boxTargetId, hideWhenVisibleIds }: MobileBoxBarProps) {
+export function MobileBoxBar({ totalCount, totalCents, boxTargetId, hideWhenVisibleIds }: MobileBoxBarProps) {
   const [targetsVisible, setTargetsVisible] = useState(true);
   const ids = hideWhenVisibleIds.join(",");
 
@@ -44,7 +48,7 @@ export function MobileBoxBar({ totalCount, boxTargetId, hideWhenVisibleIds }: Mo
     <div className={[styles.bar, show ? styles.visible : ""].join(" ")} inert={!show}>
       <p className={styles.count}>
         <span className={styles.dot} aria-hidden="true" />
-        Tu caja · <strong>{formatCookieCount(totalCount)}</strong>
+        <strong>{formatCookieCount(totalCount)}</strong> · {formatCents(totalCents)}
       </p>
       <a
         href={`#${boxTargetId}`}
@@ -54,7 +58,7 @@ export function MobileBoxBar({ totalCount, boxTargetId, hideWhenVisibleIds }: Mo
           document.getElementById(boxTargetId)?.scrollIntoView({ block: "start" });
         }}
       >
-        Ver caja
+        Continuar
       </a>
     </div>
   );

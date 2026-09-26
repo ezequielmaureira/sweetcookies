@@ -1,9 +1,10 @@
-/* Caja vista desde arriba: bandeja limpia con una cookie por unidad. */
+/*
+ * Caja de cookies vista desde arriba:
+ *   cartón blanco (borde) → paredes internas con profundidad → papel
+ *   ajedrezado rojo/blanco → un lugar fijo por cookie.
+ */
 .box {
   position: relative;
-  padding: 10px;
-  border-radius: var(--radius-lg);
-  background: var(--color-beige);
 }
 
 .lid {
@@ -11,7 +12,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 12px 14px;
+  padding: 0 4px 12px;
 }
 
 .brand {
@@ -30,18 +31,55 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tray {
+.frame {
   position: relative;
-  padding: clamp(12px, 3vw, 20px);
-  border-radius: calc(var(--radius-lg) - 8px);
-  background: var(--color-cream);
-  box-shadow: inset 0 1px 0 rgba(58, 36, 25, 0.06);
+}
+
+/* Borde de cartón blanco, con la sombra de la caja apoyada. */
+.carton {
+  padding: clamp(8px, 2vw, 12px);
+  border: 1px solid rgba(58, 36, 25, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(160deg, #fffdf9 0%, #f6f0e6 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 2px 4px rgba(58, 36, 25, 0.06),
+    0 18px 34px -18px rgba(58, 36, 25, 0.42);
+}
+
+/* Paredes internas: la sombra de arriba y los costados da la profundidad. */
+.walls {
+  padding: clamp(6px, 1.6vw, 9px);
+  border-radius: 11px;
+  background: #ece3d6;
+  box-shadow:
+    inset 0 9px 10px -7px rgba(58, 36, 25, 0.34),
+    inset 7px 0 9px -8px rgba(58, 36, 25, 0.2),
+    inset -7px 0 9px -8px rgba(58, 36, 25, 0.2),
+    inset 0 -4px 6px -5px rgba(58, 36, 25, 0.14);
+}
+
+/* Papel ajedrezado rojo y blanco (tono pastelero, no de juguete) con un leve brillo. */
+.paper {
+  --check: clamp(14px, 3.6vw, 20px);
+  padding: clamp(8px, 2.2vw, 14px);
+  border-radius: 6px;
+  background-color: #fbf6ee;
+  background-image:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 45%, rgba(58, 36, 25, 0.06) 100%),
+    repeating-conic-gradient(rgba(190, 52, 44, 0.84) 0% 25%, transparent 0% 50%);
+  background-size:
+    100% 100%,
+    var(--check) var(--check);
+  box-shadow:
+    inset 0 0 0 1px rgba(58, 36, 25, 0.06),
+    inset 0 3px 6px -2px rgba(58, 36, 25, 0.22);
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr));
-  gap: clamp(8px, 2vw, 14px);
+  gap: clamp(6px, 1.8vw, 12px);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -49,62 +87,134 @@
 
 /* Un lugar fijo por cookie: la grilla garantiza que nunca se superpongan. */
 .slot {
+  position: relative;
   display: grid;
   place-items: center;
   aspect-ratio: 1 / 1;
   min-width: 0;
 }
 
-.cookie {
-  display: block;
-  width: 92%;
-  animation: cookieIn 520ms var(--ease-out) both;
+.slot > * {
+  grid-area: 1 / 1;
 }
 
-.more,
+/* Lugar libre: un hueco claro sobre el papel. */
 .empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 88%;
+  width: 84%;
   aspect-ratio: 1 / 1;
+  border: 1.5px dashed rgba(58, 36, 25, 0.3);
   border-radius: 47% 53% 49% 51% / 52% 48% 52% 48%;
+  background: rgba(255, 253, 249, 0.72);
+}
+
+.cookie {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 94%;
+  animation: cookieIn 340ms var(--ease-out) both;
+}
+
+.leaving {
+  animation: cookieOut 240ms ease-in both;
+  pointer-events: none;
 }
 
 .more {
+  display: grid;
+  place-items: center;
+  width: 84%;
+  aspect-ratio: 1 / 1;
+  border-radius: 47% 53% 49% 51% / 52% 48% 52% 48%;
   background: var(--color-chocolate);
   color: var(--color-cream);
   font-size: 0.875rem;
   font-weight: 600;
 }
 
-/* Lugar libre de la caja: se ve el hueco, con la misma forma despareja. */
-.empty {
-  border: 1.5px dashed rgba(58, 36, 25, 0.18);
-}
-
 .emptyText {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 20px;
+  inset: 22% 14%;
+  display: grid;
+  place-items: center;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(255, 253, 249, 0.92);
+  box-shadow: 0 4px 14px rgba(58, 36, 25, 0.12);
   font-size: 0.9375rem;
   text-align: center;
-  color: var(--color-muted);
-  background: rgba(250, 246, 239, 0.7);
-  border-radius: inherit;
+  color: var(--color-chocolate-soft);
 }
 
+/* ---------- Versión compacta (caja en vivo, mobile) ---------- */
+.compact {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.compact .carton {
+  flex: none;
+  padding: 6px;
+  border-radius: 14px;
+}
+
+.compact .walls {
+  padding: 5px;
+  border-radius: 9px;
+}
+
+.compact .paper {
+  --check: 11px;
+  padding: 6px;
+}
+
+.compact .grid {
+  grid-template-columns: repeat(var(--cols, 4), var(--slot, 52px));
+  gap: 4px;
+}
+
+.info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bigCount {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--color-chocolate);
+  font-variant-numeric: tabular-nums;
+  animation: countPop 300ms var(--ease-out);
+}
+
+.total {
+  margin-top: 6px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-chocolate-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin-top: 6px;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--color-muted);
+}
+
+/* Entra desde arriba, como si la apoyaran en la caja. */
 @keyframes cookieIn {
   0% {
     opacity: 0;
-    transform: translateY(-14px) scale(0.6) rotate(-25deg);
-  }
-  65% {
-    opacity: 1;
-    transform: translateY(2px) scale(1.04) rotate(4deg);
+    transform: translateY(-10px) scale(0.82);
   }
   100% {
     opacity: 1;
@@ -112,9 +222,36 @@
   }
 }
 
+@keyframes cookieOut {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.82);
+  }
+}
+
+@keyframes countPop {
+  0% {
+    transform: scale(0.85);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cookie {
-    animation: fadeIn 200ms linear both;
+    animation: fadeIn 160ms linear both;
+  }
+
+  .leaving {
+    animation: fadeOut 160ms linear both;
+  }
+
+  .bigCount {
+    animation: none;
   }
 }
 
@@ -122,7 +259,10 @@
   from {
     opacity: 0;
   }
+}
+
+@keyframes fadeOut {
   to {
-    opacity: 1;
+    opacity: 0;
   }
 }
