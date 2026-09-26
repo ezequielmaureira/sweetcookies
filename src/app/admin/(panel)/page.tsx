@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { OrdersSwitch } from "@/components/admin/orders-status/OrdersSwitch";
+import { ButtonLink } from "@/components/ui/Button";
 import styles from "@/components/admin/Admin.module.css";
 
 const SECTIONS = [
@@ -18,6 +19,13 @@ export default function AdminHomePage() {
       </header>
 
       <OrdersSwitch />
+
+      {/* TEMPORAL: acceso de prueba a la demo "Descubrí el relleno". Se elimina cuando se conecte a los productos. */}
+      <p style={{ marginBottom: 32 }}>
+        <ButtonLink href="/descubri-el-relleno" variant="secondary" arrow>
+          🍪 Probar “Descubrí el relleno”
+        </ButtonLink>
+      </p>
 
       <ul className={styles.cards}>
         {SECTIONS.map((section) => (
