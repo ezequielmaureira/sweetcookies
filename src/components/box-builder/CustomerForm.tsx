@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { Button } from "@/components/ui/Button";
 import { formatPrice } from "@/lib/catalog";
+import { OrdersPausedNotice } from "./OrdersPausedNotice";
 import {
   EMPTY_CUSTOMER,
   FIELD_LIMITS,
@@ -50,7 +51,10 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
   // Estado de pedidos (pausados / sin número): viene de la API (base de datos), no del build.
   const publicSettings = usePublicSettings();
   const settingsLoading = publicSettings.status === "loading";
-  const ordersPaused = publicSettings.settings?.whatsappOrdersEnabled === false;
+  // Interruptor maestro del negocio. También se activa si el servidor rechaza el pedido por pausa.
+  const [pausedByServer, setPausedByServer] = useState(false);
+  const ordersPaused = publicSettings.settings?.ordersEnabled === false || pausedByServer;
+  const pausedMessage = publicSettings.settings?.ordersDisabledMessage ?? null;
   const hasWhatsApp = Boolean(publicSettings.settings?.whatsappNumber) && !ordersPaused;
   const instagramHandle = publicSettings.settings?.instagramHandle ?? null;
   const [customer, setCustomer] = useState<CustomerDetails>(EMPTY_CUSTOMER);
@@ -112,7 +116,8 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
         setErrors((prev) => ({ ...prev, ...(created.fields as FieldErrors) }));
         setState({ kind: "error", message: "Revisá los datos marcados." });
       } else if (created.kind === "paused") {
-        setState({ kind: "error", message: "Los pedidos están pausados en este momento." });
+        setPausedByServer(true);
+        setState({ kind: "idle" });
       } else if (created.kind === "rate-limit") {
         setState({ kind: "error", message: "Recibimos varios pedidos seguidos desde tu conexión. Esperá unos minutos y probá de nuevo." });
       } else {
@@ -305,12 +310,7 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
             Tu caja está vacía. Agregá al menos una cookie.
           </p>
         )}
-        {ordersPaused && !done && (
-          <p className={styles.formError} role="status">
-            Los pedidos por WhatsApp están pausados temporalmente.
-            {instagramHandle && ` Podés escribirnos por Instagram: ${instagramHandle}.`}
-          </p>
-        )}
+        {ordersPaused && !done && <OrdersPausedNotice message={pausedMessage} instagramHandle={instagramHandle} />}
         {!settingsLoading && !ordersPaused && !hasWhatsApp && !done && (
           <p className={styles.formError} role="status">
             {IS_DEV
@@ -331,7 +331,8 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
           </div>
         )}
 
-        {!done && (
+        {/* Pedidos pausados: no hay botón (no se crea pedido ni se abre WhatsApp). */}
+        {!done && !ordersPaused && (
           <Button
             type="submit"
             className={styles.whatsapp}

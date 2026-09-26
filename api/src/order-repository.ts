@@ -102,7 +102,7 @@ export function createOrderRepository(prisma: PrismaClient): OrderRepository {
       const attempt = () =>
         prisma.$transaction(async (tx) => {
           const settings = await tx.siteSettings.findUnique({ where: { id: SETTINGS_ID } });
-          if (settings && !settings.whatsappOrdersEnabled) throw new OrderError("orders_paused");
+          if (settings && !settings.ordersEnabled) throw new OrderError("orders_paused");
           if (!settings?.whatsappNumber) throw new OrderError("whatsapp_not_configured");
 
           // 1-5) Productos reales + precio/costo de la base → snapshots y totales.

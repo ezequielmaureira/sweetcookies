@@ -18,7 +18,10 @@ model SiteSettings {
   whatsappNumber        String?  @map("whatsapp_number") @db.VarChar(15)
   /// Usuario de Instagram con @ (ej. @sweet.cookies.rio4). null = no mostrar.
   instagramHandle       String?  @map("instagram_handle") @db.VarChar(31)
-  whatsappOrdersEnabled Boolean  @default(true) @map("whatsapp_orders_enabled")
+  /// Interruptor maestro "Pedidos activos": false = se ve el catálogo pero no se aceptan pedidos nuevos.
+  ordersEnabled         Boolean  @default(true) @map("orders_enabled")
+  /// Mensaje opcional para el comprador cuando los pedidos están pausados (ej. vacaciones).
+  ordersDisabledMessage String?  @map("orders_disabled_message") @db.VarChar(200)
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
   /// Id de Clerk del último admin que modificó la configuración (auditoría mínima).

@@ -31,28 +31,30 @@ describe("validateSettingsInput", () => {
     const result = validateSettingsInput({
       whatsappNumber: "+54 9 358 412-3456",
       instagramHandle: "sweet.cookies.rio4",
-      whatsappOrdersEnabled: false,
+      ordersEnabled: false,
       id: "hack",
       updatedBy: "x",
     });
     assert.deepEqual(result, {
       ok: true,
-      data: { whatsappNumber: "5493584123456", instagramHandle: "@sweet.cookies.rio4", whatsappOrdersEnabled: false },
+      data: { whatsappNumber: "5493584123456", instagramHandle: "@sweet.cookies.rio4", ordersEnabled: false },
     });
   });
   it("permite vaciar número e Instagram", () => {
-    const result = validateSettingsInput({ whatsappNumber: "", instagramHandle: null, whatsappOrdersEnabled: true });
-    assert.deepEqual(result, { ok: true, data: { whatsappNumber: null, instagramHandle: null, whatsappOrdersEnabled: true } });
+    const result = validateSettingsInput({ whatsappNumber: "", instagramHandle: null, ordersEnabled: true });
+    assert.deepEqual(result, { ok: true, data: { whatsappNumber: null, instagramHandle: null, ordersEnabled: true } });
+    // Sin el interruptor: no se toca (el panel lo cambia con su propio PATCH).
+    assert.deepEqual(validateSettingsInput({ whatsappNumber: "", instagramHandle: "" }), { ok: true, data: { whatsappNumber: null, instagramHandle: null } });
   });
   it("devuelve errores por campo", () => {
-    const result = validateSettingsInput({ whatsappNumber: "123", instagramHandle: "a b", whatsappOrdersEnabled: "yes" });
+    const result = validateSettingsInput({ whatsappNumber: "123", instagramHandle: "a b", ordersEnabled: "yes" });
     assert.equal(result.ok, false);
-    if (!result.ok) assert.deepEqual(Object.keys(result.errors).sort(), ["instagramHandle", "whatsappNumber", "whatsappOrdersEnabled"]);
+    if (!result.ok) assert.deepEqual(Object.keys(result.errors).sort(), ["instagramHandle", "ordersEnabled", "whatsappNumber"]);
   });
   it("rechaza bodies que no son objetos", () => {
     assert.equal(validateSettingsInput(null).ok, false);
     assert.equal(validateSettingsInput([1]).ok, false);
-    assert.equal(validateSettingsInput({ whatsappNumber: 5493584123456, whatsappOrdersEnabled: true }).ok, false);
+    assert.equal(validateSettingsInput({ whatsappNumber: 5493584123456, ordersEnabled: true }).ok, false);
   });
 });
 

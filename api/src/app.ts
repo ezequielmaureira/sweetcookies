@@ -11,7 +11,7 @@ import { OrderError, parseOrderListQuery, validateOrderRequest } from "./orders.
 import { toAdminProduct, toPublicProduct, validateProductInput } from "./products.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { SettingsRepository } from "./repository.ts";
-import { validateSettingsInput, type PublicSettings } from "./settings.ts";
+import { validateOrdersPatch, validateSettingsInput, type PublicSettings } from "./settings.ts";
 
 type Deps = {
   repo: SettingsRepository;
@@ -86,10 +86,12 @@ export function createApp({
     const body: PublicSettings = {
       whatsappNumber: settings.whatsappNumber,
       instagramHandle: settings.instagramHandle,
-      whatsappOrdersEnabled: settings.whatsappOrdersEnabled,
+      ordersEnabled: settings.ordersEnabled,
+      ordersDisabledMessage: settings.ordersDisabledMessage,
     };
-    c.header("Cache-Control", "public, max-age=15, s-maxage=15, stale-while-revalidate=60");
-    return c.json(body);
+    c.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=30");
+    // whatsappOrdersEnabled: nombre anterior, para la web que todavía no se actualizó.
+    return c.json({ ...body, whatsappOrdersEnabled: body.ordersEnabled });
   });
 
   // Catálogo del comprador: mismos productos que el admin, sin costo ni ganancia.
@@ -176,6 +178,17 @@ export function createApp({
     if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
     const saved = await repo.update(result.data, c.get("userId"));
     log(`[admin] settings updated by ${c.get("userId")}`);
+    return c.json(saved);
+  });
+
+  // Interruptor maestro "Pedidos activos": se guarda al instante, sin tocar el resto.
+  app.patch("/api/admin/settings/orders", bodyLimit({ maxSize: 2 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const result = validateOrdersPatch(parsed.body);
+    if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
+    const saved = await repo.updateOrders(result.data, c.get("userId"));
+    log(`[admin] orders ${saved.ordersEnabled ? "enabled" : "paused"} by ${c.get("userId")}`);
     return c.json(saved);
   });
 

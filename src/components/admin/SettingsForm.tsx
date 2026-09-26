@@ -28,7 +28,7 @@ export function SettingsForm() {
   const uid = useId();
   const id = (field: string) => `${uid}-${field}`;
   const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [values, setValues] = useState<SettingsInput>({ whatsappNumber: "", instagramHandle: "", whatsappOrdersEnabled: true });
+  const [values, setValues] = useState<SettingsInput>({ whatsappNumber: "", instagramHandle: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -43,7 +43,6 @@ export function SettingsForm() {
         setValues({
           whatsappNumber: formatPhone(settings.whatsappNumber ?? ""),
           instagramHandle: settings.instagramHandle ?? "",
-          whatsappOrdersEnabled: settings.whatsappOrdersEnabled,
         });
         setUpdatedAt(settings.updatedAt);
         setLoadState("ready");
@@ -83,7 +82,6 @@ export function SettingsForm() {
       setValues({
         whatsappNumber: formatPhone(saved.whatsappNumber ?? ""),
         instagramHandle: saved.instagramHandle ?? "",
-        whatsappOrdersEnabled: saved.whatsappOrdersEnabled,
       });
       setUpdatedAt(saved.updatedAt);
       setErrors({});
@@ -150,32 +148,6 @@ export function SettingsForm() {
               {errors.whatsappNumber}
             </p>
           )}
-        </div>
-
-
-        <div className={styles.toggleRow}>
-          <div>
-            <p id={id("orders-label")} className={styles.label}>
-              Pedidos por WhatsApp
-            </p>
-            <p id={id("orders-help")} className={styles.help}>
-              {values.whatsappOrdersEnabled
-                ? "Activos: los clientes pueden enviar pedidos."
-                : "Pausados: la web muestra que los pedidos están pausados."}
-            </p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={values.whatsappOrdersEnabled}
-            aria-labelledby={id("orders-label")}
-            aria-describedby={id("orders-help")}
-            className={styles.switch}
-            onClick={() => update("whatsappOrdersEnabled", !values.whatsappOrdersEnabled)}
-          >
-            <span className={styles.switchLabel}>{values.whatsappOrdersEnabled ? "ON" : "OFF"}</span>
-            <span className={styles.switchThumb} aria-hidden="true" />
-          </button>
         </div>
       </section>
 

@@ -50,7 +50,7 @@ function memoryRepos(getSettings: () => AdminSettings) {
   const orders: OrderRepository = {
     create: async (request) => {
       const settings = getSettings();
-      if (!settings.whatsappOrdersEnabled) throw new OrderError("orders_paused");
+      if (!settings.ordersEnabled) throw new OrderError("orders_paused");
       if (!settings.whatsappNumber) throw new OrderError("whatsapp_not_configured");
       const priced = priceOrder(request.items, items);
       for (const line of priced.lines) {
@@ -83,7 +83,12 @@ function setup({ orderLimit = 100 } = {}) {
     get: async () => state,
     update: async (data, by) => {
       updates.push(by);
-      state = { ...data, updatedAt: new Date(0).toISOString() };
+      state = { ...state, ...data, updatedAt: new Date(0).toISOString() };
+      return state;
+    },
+    updateOrders: async (data, by) => {
+      updates.push(by);
+      state = { ...state, ...data, updatedAt: new Date(0).toISOString() };
       return state;
     },
     ping: async () => {},
@@ -139,7 +144,8 @@ describe("API", () => {
   it("GET /api/public/settings devuelve solo los campos públicos", async () => {
     const res = await setup().app.request("/api/public/settings", { headers: { Origin: "https://otro.com" } });
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(await json(res)).sort(), ["instagramHandle", "whatsappNumber", "whatsappOrdersEnabled"]);
+    // whatsappOrdersEnabled: alias del nombre anterior, para la web que todavía no se actualizó.
+    assert.deepEqual(Object.keys(await json(res)).sort(), ["instagramHandle", "ordersDisabledMessage", "ordersEnabled", "whatsappNumber", "whatsappOrdersEnabled"]);
     assert.equal(res.headers.get("access-control-allow-origin"), "*");
   });
 
@@ -151,26 +157,26 @@ describe("API", () => {
   it("admin con usuario sin rol → 403", async () => {
     const res = await setup().app.request("/api/admin/settings", { headers: { Authorization: "Bearer user-token" } });
     assert.equal(res.status, 403);
-    const put403 = await setup().app.request(put("user-token", { whatsappNumber: "5493584123456", whatsappOrdersEnabled: true }));
+    const put403 = await setup().app.request(put("user-token", { whatsappNumber: "5493584123456", ordersEnabled: true }));
     assert.equal(put403.status, 403);
   });
 
   it("admin → 200, guarda normalizado y audita", async () => {
     const { app, updates } = setup();
-    const res = await app.request(put("admin-token", { whatsappNumber: "+54 9 358 412-3456", instagramHandle: "@sweet.cookies.rio4", whatsappOrdersEnabled: false }));
+    const res = await app.request(put("admin-token", { whatsappNumber: "+54 9 358 412-3456", instagramHandle: "@sweet.cookies.rio4", ordersEnabled: false }));
     assert.equal(res.status, 200);
     const saved = await json(res);
     assert.equal(saved.whatsappNumber, "5493584123456");
-    assert.equal(saved.whatsappOrdersEnabled, false);
+    assert.equal(saved.ordersEnabled, false);
     assert.deepEqual(updates, ["user_admin"]);
     const pub = await json(await app.request("/api/public/settings"));
     assert.equal(pub.whatsappNumber, "5493584123456");
-    assert.equal(pub.whatsappOrdersEnabled, false);
+    assert.equal(pub.ordersEnabled, false);
   });
 
   it("validación → 422 con errores por campo; JSON roto → 400", async () => {
     const { app } = setup();
-    const res = await app.request(put("admin-token", { whatsappNumber: "12", whatsappOrdersEnabled: true }));
+    const res = await app.request(put("admin-token", { whatsappNumber: "12", ordersEnabled: true }));
     assert.equal(res.status, 422);
     assert.ok((await json(res)).fields.whatsappNumber);
     assert.equal((await app.request(put("admin-token", "{roto"))).status, 400);
@@ -198,7 +204,7 @@ describe("API", () => {
       products: memory.products,
       orders: memory.orders,
       images: memory.images,
-      repo: { get: async () => { throw new Error("postgres://user:secret@host/db"); }, update: async () => { throw new Error(); }, ping: async () => {} },
+      repo: { get: async () => { throw new Error("postgres://user:secret@host/db"); }, update: async () => { throw new Error(); }, updateOrders: async () => { throw new Error(); }, ping: async () => {} },
       auth: { authenticate: async () => null, isAdmin: async () => false },
       allowedOrigins: [ORIGIN],
       log: (m) => logs.push(m),
@@ -307,7 +313,7 @@ describe("API", () => {
 
   it("POST /api/orders: pedidos pausados, validación, CORS y límite por IP", async () => {
     const { app } = setup({ orderLimit: 2 });
-    await app.request(put("admin-token", { whatsappNumber: "5493581234567", whatsappOrdersEnabled: false }));
+    await app.request(put("admin-token", { whatsappNumber: "5493581234567", ordersEnabled: false }));
     const paused = await app.request(order({ items: [{ productId: "chips", quantity: 1 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }));
     assert.equal(paused.status, 409);
     assert.equal((await json(paused)).error, "orders_paused");
@@ -371,5 +377,50 @@ describe("API", () => {
     const pub = (await json(await app.request("/api/public/products"))).products[0];
     assert.equal(pub.boxImageX, 40);
     assert.equal(pub.imageUrl, "/images/cookies/hero-cookie-cutout.png");
+  });
+  it("interruptor de pedidos: solo admin, guarda al instante y no toca el resto", async () => {
+    const { app } = setup();
+    const patch = (token: string | null, body: unknown) =>
+      app.request("/api/admin/settings/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+      });
+    assert.equal((await patch(null, { ordersEnabled: false })).status, 401);
+    assert.equal((await patch("user-token", { ordersEnabled: false })).status, 403);
+    assert.equal((await patch("admin-token", { ordersEnabled: "no" })).status, 422);
+    assert.equal((await patch("admin-token", { ordersDisabledMessage: "x".repeat(201) })).status, 422);
+    assert.equal((await patch("admin-token", {})).status, 422);
+    const paused = await json(await patch("admin-token", { ordersEnabled: false, ordersDisabledMessage: "  Estamos de vacaciones hasta el 15 de octubre.  " }));
+    assert.equal(paused.ordersEnabled, false);
+    assert.equal(paused.ordersDisabledMessage, "Estamos de vacaciones hasta el 15 de octubre.");
+    assert.equal(paused.whatsappNumber, "5493581234567", "el teléfono sigue guardado");
+    const pub = await json(await app.request("/api/public/settings"));
+    assert.equal(pub.ordersEnabled, false);
+    assert.equal(pub.ordersDisabledMessage, "Estamos de vacaciones hasta el 15 de octubre.");
+  });
+
+  it("pedidos pausados: catálogo visible, pedido rechazado, sin Order y sin tocar stock; al reactivar vuelve a funcionar", async () => {
+    const { app, memory } = setup();
+    const patch = (body: unknown) =>
+      app.request("/api/admin/settings/orders", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: "Bearer admin-token" }, body: JSON.stringify(body) });
+    await patch({ ordersEnabled: false });
+    assert.equal((await json(await app.request("/api/public/products"))).products.length, 1, "los productos se siguen viendo");
+    const rejected = await app.request(order({ items: [{ productId: "chips", quantity: 2 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }));
+    assert.equal(rejected.status, 409);
+    assert.deepEqual(await json(rejected), { error: "orders_paused" });
+    assert.equal(memory.created.length, 0);
+    assert.equal(memory.items().find((p) => p.id === "chips")?.stock, 10);
+    await patch({ ordersEnabled: true });
+    const ok = await app.request(order({ items: [{ productId: "chips", quantity: 2 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }));
+    assert.equal(ok.status, 201);
+    assert.equal(memory.items().find((p) => p.id === "chips")?.stock, 8);
+  });
+
+  it("compatibilidad: acepta el nombre anterior del interruptor", async () => {
+    const { app } = setup();
+    const res = await app.request(put("admin-token", { whatsappNumber: "5493581234567", whatsappOrdersEnabled: false }));
+    assert.equal(res.status, 200);
+    assert.equal((await json(res)).ordersEnabled, false);
   });
 });

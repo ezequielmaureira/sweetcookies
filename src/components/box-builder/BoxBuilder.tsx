@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { formatCookieCount } from "@/lib/cart";
-import { prefetchPublicSettings } from "@/lib/use-public-settings";
+import { usePublicSettings } from "@/lib/use-public-settings";
 import { BoxPreview } from "./BoxPreview";
 import { CustomerForm } from "./CustomerForm";
 import { FlavorSelector } from "./FlavorSelector";
 import { MobileBoxBar } from "./MobileBoxBar";
 import { OrderSummary } from "./OrderSummary";
+import { OrdersPausedNotice } from "./OrdersPausedNotice";
 import styles from "./BoxBuilder.module.css";
 
 const SECTION = {
@@ -31,10 +32,9 @@ export function BoxBuilder() {
   const flavorsHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusConfirm = useRef(false);
 
-  // Pide la configuración de pedidos apenas se abre la página (el backend puede estar dormido).
-  useEffect(() => {
-    void prefetchPublicSettings();
-  }, []);
+  // Configuración de pedidos (interruptor maestro): se pide apenas se abre la página.
+  const publicSettings = usePublicSettings();
+  const ordersPaused = publicSettings.settings?.ordersEnabled === false;
 
   // Al abrir el paso 3, llevar la vista y el foco a su título.
   useEffect(() => {
@@ -120,6 +120,14 @@ export function BoxBuilder() {
             </li>
           ))}
         </ol>
+        {/* Pedidos pausados por el negocio: se puede mirar y armar, pero no confirmar. */}
+        {ordersPaused && (
+          <OrdersPausedNotice
+            className={styles.pausedNotice}
+            message={publicSettings.settings?.ordersDisabledMessage ?? null}
+            instagramHandle={publicSettings.settings?.instagramHandle}
+          />
+        )}
       </header>
 
       <div className={`container ${styles.layout}`}>

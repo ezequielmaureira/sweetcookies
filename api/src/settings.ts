@@ -6,7 +6,10 @@
 export type SiteSettingsData = {
   whatsappNumber: string | null;
   instagramHandle: string | null;
-  whatsappOrdersEnabled: boolean;
+  /** Interruptor maestro "Pedidos activos". false = catálogo visible, sin pedidos nuevos. */
+  ordersEnabled: boolean;
+  /** Mensaje opcional para el comprador mientras los pedidos están pausados. */
+  ordersDisabledMessage: string | null;
 };
 
 /** Datos que puede ver cualquiera (la web pública). */
@@ -21,8 +24,25 @@ export const SETTINGS_ID = "global";
 export const DEFAULT_SETTINGS: SiteSettingsData = {
   whatsappNumber: null,
   instagramHandle: null,
-  whatsappOrdersEnabled: true,
+  ordersEnabled: true,
+  ordersDisabledMessage: null,
 };
+
+export const ORDERS_MESSAGE_MAX = 200;
+
+/** Nombre anterior del interruptor (se acepta durante la transición de versiones). */
+function ordersEnabledFrom(input: Record<string, unknown>): unknown {
+  return input.ordersEnabled !== undefined ? input.ordersEnabled : input.whatsappOrdersEnabled;
+}
+
+/** Mensaje de pausa: texto de una o dos líneas; vacío = mensaje por defecto de la web. */
+function messageFrom(value: unknown): { ok: true; value: string | null } | { ok: false } {
+  if (value === null || value === undefined) return { ok: true, value: null };
+  if (typeof value !== "string") return { ok: false };
+  const text = value.replace(/\r\n?/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  if (text.length > ORDERS_MESSAGE_MAX) return { ok: false };
+  return { ok: true, value: text || null };
+}
 
 /** Solo dígitos, con código de país. 8 a 15 dígitos (E.164), sin 0 inicial. */
 export function normalizeWhatsAppNumber(raw: string): string | null {
@@ -43,15 +63,20 @@ export function normalizeInstagramHandle(raw: string): string | null {
 }
 
 export type SettingsField = keyof SiteSettingsData;
+
+/** PUT: número e Instagram siempre; el interruptor y su mensaje solo si vienen (si no, no se tocan). */
+export type SettingsUpdate = Pick<SiteSettingsData, "whatsappNumber" | "instagramHandle"> & Partial<Pick<SiteSettingsData, "ordersEnabled" | "ordersDisabledMessage">>;
+
 export type ValidationResult =
-  | { ok: true; data: SiteSettingsData }
+  | { ok: true; data: SettingsUpdate }
   | { ok: false; errors: Partial<Record<SettingsField | "body", string>> };
 
 /**
  * Valida el body de PUT /api/admin/settings.
  * - whatsappNumber: string (se normaliza) o null/"" para dejarlo sin configurar.
  * - instagramHandle: string (se normaliza) o null/"" para no mostrarlo.
- * - whatsappOrdersEnabled: boolean.
+ * - ordersEnabled (opcional; alias anterior: whatsappOrdersEnabled): boolean. Si no viene, no se toca.
+ * - ordersDisabledMessage (opcional): texto de hasta 200 caracteres o null.
  * Campos desconocidos se ignoran.
  */
 export function validateSettingsInput(body: unknown): ValidationResult {
@@ -83,13 +108,43 @@ export function validateSettingsInput(body: unknown): ValidationResult {
     errors.instagramHandle = "Usuario inválido.";
   }
 
-  if (typeof input.whatsappOrdersEnabled !== "boolean") {
-    errors.whatsappOrdersEnabled = "Valor inválido.";
+  const data: SettingsUpdate = { whatsappNumber, instagramHandle };
+  const ordersEnabled = ordersEnabledFrom(input);
+  if (ordersEnabled !== undefined) {
+    if (typeof ordersEnabled === "boolean") data.ordersEnabled = ordersEnabled;
+    else errors.ordersEnabled = "Valor inválido.";
+  }
+  if (input.ordersDisabledMessage !== undefined) {
+    const message = messageFrom(input.ordersDisabledMessage);
+    if (message.ok) data.ordersDisabledMessage = message.value;
+    else errors.ordersDisabledMessage = `Máximo ${ORDERS_MESSAGE_MAX} caracteres.`;
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
-  return {
-    ok: true,
-    data: { whatsappNumber, instagramHandle, whatsappOrdersEnabled: input.whatsappOrdersEnabled as boolean },
-  };
+  return { ok: true, data };
+}
+
+export type OrdersPatch = Partial<Pick<SiteSettingsData, "ordersEnabled" | "ordersDisabledMessage">>;
+
+/**
+ * Valida el cambio rápido del interruptor (PATCH /api/admin/settings/orders):
+ * solo ordersEnabled y/o ordersDisabledMessage; el resto de la configuración no se toca.
+ */
+export function validateOrdersPatch(body: unknown): { ok: true; data: OrdersPatch } | { ok: false; errors: Partial<Record<SettingsField | "body", string>> } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false, errors: { body: "Body inválido." } };
+  const input = body as Record<string, unknown>;
+  const data: OrdersPatch = {};
+  const errors: Partial<Record<SettingsField | "body", string>> = {};
+  if ("ordersEnabled" in input) {
+    if (typeof input.ordersEnabled === "boolean") data.ordersEnabled = input.ordersEnabled;
+    else errors.ordersEnabled = "Valor inválido.";
+  }
+  if ("ordersDisabledMessage" in input) {
+    const message = messageFrom(input.ordersDisabledMessage);
+    if (message.ok) data.ordersDisabledMessage = message.value;
+    else errors.ordersDisabledMessage = `Máximo ${ORDERS_MESSAGE_MAX} caracteres.`;
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  if (Object.keys(data).length === 0) return { ok: false, errors: { body: "No hay cambios." } };
+  return { ok: true, data };
 }

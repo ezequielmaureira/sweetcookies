@@ -259,3 +259,7 @@
     transition: none;
   }
 }
+
+.pausedNotice {
+  margin-top: 18px;
+}

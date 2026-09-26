@@ -18,7 +18,8 @@ export const PUBLIC_SETTINGS_PATH = "/api/public/settings";
 export const FALLBACK_SETTINGS: PublicSettings = {
   whatsappNumber: null,
   instagramHandle: site.instagram.handle,
-  whatsappOrdersEnabled: true,
+  ordersEnabled: true,
+  ordersDisabledMessage: null,
 };
 
 /** Tiempo de revalidación de las páginas que muestran settings (Footer). */

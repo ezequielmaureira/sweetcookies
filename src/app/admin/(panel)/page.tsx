@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { OrdersSwitch } from "@/components/admin/orders-status/OrdersSwitch";
 import styles from "@/components/admin/Admin.module.css";
 
 const SECTIONS = [
   { href: "/admin/productos", title: "Productos", text: "Catálogo, precios, costos, stock y destacados." },
   { href: "/admin/pedidos", title: "Pedidos", text: "Pedidos, facturación y ganancia, con filtros." },
-  { href: "/admin/configuracion", title: "Configuración", text: "Teléfono de pedidos, Instagram y WhatsApp." },
+  { href: "/admin/configuracion", title: "Configuración", text: "Teléfono de pedidos, Instagram y mensaje de pausa." },
 ];
 
 export default function AdminHomePage() {
@@ -15,6 +16,8 @@ export default function AdminHomePage() {
         <h1 className={styles.title}>Hola.</h1>
         <p className={styles.lead}>Desde acá manejás Sweet Cookies: lo que cambies se ve en la web al instante.</p>
       </header>
+
+      <OrdersSwitch />
 
       <ul className={styles.cards}>
         {SECTIONS.map((section) => (

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { OrdersSwitch } from "@/components/admin/orders-status/OrdersSwitch";
 import { SettingsForm } from "@/components/admin/SettingsForm";
 import styles from "@/components/admin/Admin.module.css";
 
@@ -12,6 +13,7 @@ export default function AdminSettingsPage() {
         <h1 className={styles.title}>Configuración</h1>
         <p className={styles.lead}>Los cambios se aplican en la web al instante, sin redeploy.</p>
       </header>
+      <OrdersSwitch withMessage />
       <SettingsForm />
     </div>
   );
