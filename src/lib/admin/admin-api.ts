@@ -96,6 +96,9 @@ export type ProductInput = BoxViewInput & {
 export const listProducts = async (token: string | null) =>
   (await adminRequest<{ products: AdminProduct[] }>("/api/admin/products", token)).products;
 
+export const getProduct = (token: string | null, id: string) =>
+  adminRequest<AdminProduct>(`/api/admin/products/${encodeURIComponent(id)}`, token);
+
 export const createProduct = (token: string | null, input: ProductInput) =>
   adminRequest<AdminProduct>("/api/admin/products", token, { method: "POST", body: JSON.stringify(input) });
 

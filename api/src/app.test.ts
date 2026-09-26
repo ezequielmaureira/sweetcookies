@@ -28,6 +28,7 @@ function memoryRepos(getSettings: () => AdminSettings) {
   const products: ProductRepository = {
     listPublic: async () => items.filter(isPurchasable).sort(compareCatalogOrder),
     listAll: async () => [...items].sort(compareCatalogOrder),
+    get: async (id) => items.find((p) => p.id === id) ?? null,
     create: async (data) => {
       const p = { ...product(), ...data, id: `p${items.length + 1}`, sortOrder: items.length + 1 };
       items.push(p);
@@ -238,6 +239,7 @@ describe("API", () => {
     assert.equal((await app.request("/api/admin/orders")).status, 401);
     const routes: [string, string][] = [
       ["GET", "/api/admin/products"],
+      ["GET", "/api/admin/products/chips"],
       ["POST", "/api/admin/products"],
       ["PATCH", "/api/admin/products/chips"],
       ["DELETE", "/api/admin/products/chips"],
@@ -337,6 +339,25 @@ describe("API", () => {
     assert.deepEqual(new Uint8Array(await res.arrayBuffer()), PNG_1x1);
     assert.equal((await app.request("/api/public/images/noexiste00000")).status, 404);
     assert.equal((await app.request("/api/public/images/..%2F..%2Fetc")).status, 404);
+  });
+
+  it("edición rápida: PATCH parcial de precio o stock, validado en el servidor", async () => {
+    const { app } = setup();
+    const admin = { Authorization: "Bearer admin-token", "Content-Type": "application/json" };
+    const patch = (body: unknown) => app.request("/api/admin/products/chips", { method: "PATCH", headers: admin, body: JSON.stringify(body) });
+    const price = await json(await patch({ price: "4500" }));
+    assert.equal(price.price, "4500.00");
+    assert.equal(price.stock, 10, "no toca el resto");
+    const zero = await json(await patch({ stock: 0 }));
+    assert.equal(zero.displayStatus, "OUT_OF_STOCK");
+    assert.equal((await json(await app.request("/api/public/products"))).products.length, 0);
+    const back = await json(await patch({ stock: 10 }));
+    assert.equal(back.displayStatus, "ACTIVE");
+    assert.equal((await patch({ stock: -1 })).status, 422);
+    assert.equal((await patch({ price: "abc" })).status, 422);
+    const one = await json(await app.request("/api/admin/products/chips", { headers: admin }));
+    assert.equal(one.price, "4500.00");
+    assert.equal((await app.request("/api/admin/products/nope", { headers: admin })).status, 404);
   });
 
   it("vista en caja: se guarda y se valida al editar", async () => {

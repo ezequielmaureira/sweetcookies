@@ -182,6 +182,11 @@ export function createApp({
   // Productos
   app.get("/api/admin/products", async (c) => c.json({ products: (await products.listAll()).map(toAdminProduct) }));
 
+  app.get("/api/admin/products/:id", async (c) => {
+    const product = await products.get(c.req.param("id") ?? "");
+    return product ? c.json(toAdminProduct(product)) : c.json({ error: "not_found" }, 404);
+  });
+
   app.post("/api/admin/products", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }), async (c: AppContext) => {
     const parsed = await readJson(c);
     if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);

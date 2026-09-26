@@ -7,6 +7,8 @@ export type ProductRepository = {
   listPublic(): Promise<ProductRecord[]>;
   /** Todos (admin), destacados primero y después el orden del catálogo. */
   listAll(): Promise<ProductRecord[]>;
+  /** null si no existe. */
+  get(id: string): Promise<ProductRecord | null>;
   create(data: ProductData): Promise<ProductRecord>;
   /** null si no existe. */
   update(id: string, data: Partial<ProductData>): Promise<ProductRecord | null>;
@@ -93,6 +95,11 @@ export function createProductRepository(prisma: PrismaClient): ProductRepository
 
     async listAll() {
       return (await prisma.product.findMany({ orderBy: CATALOG_ORDER })).map(toProductRecord);
+    },
+
+    async get(id) {
+      const row = await prisma.product.findUnique({ where: { id } });
+      return row ? toProductRecord(row) : null;
     },
 
     async create(data) {
