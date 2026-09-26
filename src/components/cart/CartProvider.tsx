@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState, useSyncExter
 import { EMPTY_CART, countItems, withQuantity, type CartItems } from "@/lib/cart";
 import { cartStore } from "@/lib/cart-store";
 import { toCents, type Product } from "@/lib/catalog";
+import { useLiveCatalog, type CatalogStatus } from "@/lib/use-live-catalog";
 
 export type { CartItems } from "@/lib/cart";
 
@@ -12,6 +13,10 @@ export type CartLine = { product: Product; quantity: number };
 type CartContextValue = {
   /** Catálogo real (base de datos): solo productos activos, con stock y precio. */
   products: Product[];
+  /** "error" solo si nunca se pudo cargar el catálogo (ni en el servidor ni en el navegador). */
+  catalogStatus: CatalogStatus;
+  /** Vuelve a pedir el catálogo a la API (sin caché). */
+  refreshCatalog: () => Promise<void>;
   productsById: Readonly<Record<string, Product>>;
   items: CartItems;
   /** Líneas válidas del carrito (en el orden en que se agregaron), limitadas al stock. */
@@ -35,7 +40,16 @@ const CartContext = createContext<CartContextValue | null>(null);
 
 const subscribeNothing = () => () => {};
 
-export function CartProvider({ products, children }: { products: Product[]; children: React.ReactNode }) {
+type CartProviderProps = {
+  /** Catálogo del render del servidor (puede venir de caché): se refresca en el navegador. */
+  initialProducts: Product[];
+  /** false si el servidor no pudo leer la API. */
+  catalogOk: boolean;
+  children: React.ReactNode;
+};
+
+export function CartProvider({ initialProducts, catalogOk, children }: CartProviderProps) {
+  const { products, status: catalogStatus, refresh: refreshCatalog } = useLiveCatalog(initialProducts, catalogOk);
   const items = useSyncExternalStore(cartStore.subscribe, cartStore.getSnapshot, cartStore.getServerSnapshot);
   const isHydrated = useSyncExternalStore(
     subscribeNothing,
@@ -92,6 +106,8 @@ export function CartProvider({ products, children }: { products: Product[]; chil
     const valid = Object.fromEntries(lines.map((l) => [l.product.id, l.quantity]));
     return {
       products,
+      catalogStatus,
+      refreshCatalog,
       productsById,
       items,
       lines,
@@ -106,7 +122,7 @@ export function CartProvider({ products, children }: { products: Product[]; chil
       setItemQuantity,
       clearCart,
     };
-  }, [products, productsById, items, isHydrated, addSignal, addItem, removeItem, incrementItem, decrementItem, setItemQuantity, clearCart]);
+  }, [products, catalogStatus, refreshCatalog, productsById, items, isHydrated, addSignal, addItem, removeItem, incrementItem, decrementItem, setItemQuantity, clearCart]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

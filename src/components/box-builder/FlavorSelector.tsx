@@ -14,9 +14,27 @@ type FlavorSelectorProps = {
 
 /** Paso 1: catálogo real (PostgreSQL) con selector de cantidad limitado al stock. */
 export function FlavorSelector({ quantities, onIncrement, onDecrement }: FlavorSelectorProps) {
-  const { products } = useCart();
+  const { products, catalogStatus, refreshCatalog } = useCart();
 
   if (products.length === 0) {
+    // Distinguir "cargando" / "no se pudo cargar" de "no hay productos disponibles".
+    if (catalogStatus === "loading") {
+      return (
+        <p className={styles.empty} role="status">
+          Cargando sabores…
+        </p>
+      );
+    }
+    if (catalogStatus === "error") {
+      return (
+        <div className={styles.empty} role="alert">
+          <p>No pudimos cargar los sabores. Revisá tu conexión.</p>
+          <button type="button" className={styles.retry} onClick={() => void refreshCatalog()}>
+            Reintentar
+          </button>
+        </div>
+      );
+    }
     return (
       <p className={styles.empty} role="status">
         No hay sabores disponibles en este momento. Volvé a intentar en un rato.

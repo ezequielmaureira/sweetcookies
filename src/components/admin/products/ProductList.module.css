@@ -298,8 +298,8 @@
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 36px;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -320,25 +320,35 @@
   cursor: not-allowed;
 }
 
-.confirm {
-  display: inline-flex;
-  flex-shrink: 0;
-  gap: 2px;
+/*
+ * Guardar / Cancelar: fila propia debajo del control, con separación clara
+ * del "+" y botones grandes (sin toques accidentales en mobile).
+ */
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .save,
 .discard {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .save {
+  border: 1px solid var(--color-chocolate);
   background: var(--color-chocolate);
   color: var(--color-cream);
 }
@@ -348,8 +358,9 @@
 }
 
 .discard {
-  background: transparent;
-  color: var(--color-muted);
+  border: 1px solid rgba(58, 36, 25, 0.28);
+  background: #fffdf9;
+  color: var(--color-chocolate);
 }
 
 .discard:hover:not(:disabled) {
@@ -358,8 +369,23 @@
 
 .save svg,
 .discard svg {
-  width: 16px;
-  height: 16px;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+}
+
+@media (min-width: 1000px) {
+  .actions {
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  .save,
+  .discard {
+    min-height: 36px;
+    padding: 0 8px;
+    font-size: 0.8125rem;
+  }
 }
 
 /* Estado */

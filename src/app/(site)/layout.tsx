@@ -10,12 +10,13 @@ import { resolveImage } from "@/lib/images";
  * una vez por sesión. El panel (/admin) y el login quedan fuera de este grupo.
  *
  * El catálogo sale de PostgreSQL (mismo origen que el admin) y se comparte con
- * el carrito de todas las páginas públicas.
+ * el carrito de todas las páginas públicas. El render del servidor es solo el
+ * primer contenido: el navegador lo refresca contra la API (ver useLiveCatalog).
  */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
   const catalog = await getPublicCatalog();
   return (
-    <CartProvider products={catalog.products}>
+    <CartProvider initialProducts={catalog.products} catalogOk={catalog.status === "ok"}>
       <SiteEntryGate logoSrc={resolveImage(brandImages.logo)} cookie={getHeroCookie()}>
         {children}
       </SiteEntryGate>

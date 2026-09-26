@@ -61,19 +61,22 @@ export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onT
     setDraft("stock", String(Math.max(0, (Number.isFinite(current) ? current : product.stock) + delta)));
   };
 
-  const confirm = (field: QuickField, name: string) => (
-    <span className={styles.confirm}>
+  /** Guardar / Cancelar: en una fila propia, separada de los controles (sin toques accidentales). */
+  const actions = (field: QuickField, name: string) => (
+    <div className={styles.actions}>
       <button type="button" className={styles.save} onClick={() => onSave([field])} disabled={busy} aria-label={`Guardar ${name} de ${product.name}`}>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M3.5 8.5 6.5 11.5 12.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
+        Guardar
       </button>
-      <button type="button" className={styles.discard} onClick={() => onDraft(field, undefined)} disabled={busy} aria-label={`Descartar cambio de ${name}`}>
+      <button type="button" className={styles.discard} onClick={() => onDraft(field, undefined)} disabled={busy} aria-label={`Cancelar cambio de ${name} de ${product.name}`}>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
+        Cancelar
       </button>
-    </span>
+    </div>
   );
 
   return (
@@ -108,8 +111,8 @@ export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onT
             disabled={busy}
             aria-describedby={pricePending ? `${uid}-pending` : undefined}
           />
-          {pricePending && confirm("price", "el precio")}
         </div>
+        {pricePending && actions("price", "el precio")}
       </div>
 
       <div className={styles.stockCell}>
@@ -133,8 +136,8 @@ export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onT
           <button type="button" className={styles.step} onClick={() => stepStock(1)} disabled={busy} aria-label={`Sumar 1 al stock de ${product.name}`}>
             +
           </button>
-          {stockPending && confirm("stock", "el stock")}
         </div>
+        {stockPending && actions("stock", "el stock")}
       </div>
 
       <div className={styles.statusCell}>

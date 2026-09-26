@@ -4,7 +4,8 @@ import { useEffect } from "react";
 
 /**
  * Observa todos los elementos con [data-reveal] y les agrega .is-visible
- * cuando entran en pantalla. Un único observer para toda la página.
+ * cuando entran en pantalla. Un único observer para toda la página; también
+ * toma los que aparecen después (ej. el catálogo que se refresca en el cliente).
  */
 export function RevealObserver() {
   useEffect(() => {
@@ -27,7 +28,23 @@ export function RevealObserver() {
     );
 
     elements.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+
+    const mutations = new MutationObserver((records) => {
+      for (const record of records) {
+        record.addedNodes.forEach((node) => {
+          if (!(node instanceof HTMLElement)) return;
+          const found = node.matches("[data-reveal]") ? [node] : [];
+          found.push(...node.querySelectorAll<HTMLElement>("[data-reveal]"));
+          found.filter((el) => !el.classList.contains("is-visible")).forEach((el) => observer.observe(el));
+        });
+      }
+    });
+    mutations.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      mutations.disconnect();
+    };
   }, []);
 
   return null;

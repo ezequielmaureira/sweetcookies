@@ -1,17 +1,39 @@
 "use client";
 
 import { useState } from "react";
+import { useCart } from "@/components/cart/CartProvider";
 import type { Product } from "@/lib/catalog";
 import { CookieCard } from "./CookieCard";
 import styles from "./FlavorsSection.module.css";
 
-export function FlavorsList({ products }: { products: Product[] }) {
+/** Lista del catálogo real (CartProvider lo refresca contra la API). */
+export function FlavorsList() {
+  const { products, catalogStatus, refreshCatalog } = useCart();
   const [announcement, setAnnouncement] = useState("");
 
   const handleAdded = (product: Product) => {
     // Un carácter invisible distinto fuerza a repetir el anuncio si se agrega el mismo sabor.
     setAnnouncement((prev) => `${product.name} agregada al carrito${prev.endsWith("​") ? "" : "​"}`);
   };
+
+  if (products.length === 0) {
+    return (
+      <div className="container">
+        {catalogStatus === "error" ? (
+          <div className={styles.empty} role="alert">
+            <p>No pudimos cargar los sabores en este momento.</p>
+            <button type="button" className={styles.retry} onClick={() => void refreshCatalog()}>
+              Reintentar
+            </button>
+          </div>
+        ) : (
+          <p className={styles.empty} role="status">
+            {catalogStatus === "loading" ? "Cargando sabores…" : "Estamos horneando: muy pronto vas a ver nuestros sabores acá."}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

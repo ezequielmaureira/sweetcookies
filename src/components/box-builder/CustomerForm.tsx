@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { Button } from "@/components/ui/Button";
@@ -47,8 +46,7 @@ function problemText(problem: OrderProblem): string {
  * devuelve el servidor (configuración en la base, nunca hardcodeado).
  */
 export function CustomerForm({ onReset }: CustomerFormProps) {
-  const router = useRouter();
-  const { lines, totalCount, clearCart, setItemQuantity, removeItem } = useCart();
+  const { lines, totalCount, clearCart, setItemQuantity, removeItem, refreshCatalog } = useCart();
   // Estado de pedidos (pausados / sin número): viene de la API (base de datos), no del build.
   const publicSettings = usePublicSettings();
   const settingsLoading = publicSettings.status === "loading";
@@ -104,7 +102,7 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
           if (problem.reason === "insufficient_stock" && problem.available > 0) setItemQuantity(problem.productId, problem.available);
           else removeItem(problem.productId);
         }
-        router.refresh(); // Stock actualizado en el catálogo.
+        void refreshCatalog(); // Stock real, directo de la API (sin caché).
         setState({
           kind: "error",
           message: "Algunos productos cambiaron mientras armabas tu caja. Ya ajustamos tu pedido; revisalo y volvé a enviarlo:",
@@ -139,7 +137,7 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
       }
     }
     setState({ kind: "done", order: created.order, url, popupBlocked });
-    router.refresh();
+    void refreshCatalog();
   };
 
   const handleReset = () => {
