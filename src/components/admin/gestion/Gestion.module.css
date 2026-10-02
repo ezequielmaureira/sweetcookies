@@ -665,3 +665,30 @@ a.item:hover {
 .historyItem .itemMeta {
   grid-column: 1 / -1;
 }
+
+/* Carga de precio simple */
+.bigInput {
+  min-height: 56px;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.secondaryFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--color-line);
+}
+
+.secondaryFields .label,
+.secondaryFields label {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.historyCost {
+  grid-column: 1 / -1;
+  font-weight: 600;
+  color: var(--color-chocolate);
+}

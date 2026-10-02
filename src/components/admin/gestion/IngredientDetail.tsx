@@ -8,27 +8,22 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/vouchers/ConfirmDialog";
 import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import {
-  PURCHASE_UNITS,
-  PURCHASE_UNIT_OPTION,
   addIngredientPrice,
   deleteIngredient,
   deleteIngredientPrice,
   formatBaseQuantity,
   formatDate,
   formatMoney,
-  formatPurchase,
   formatUnitCost,
   getIngredient,
   parseAmount,
   toApiNumber,
-  toBase,
   todayAR,
   updateIngredient,
   updateIngredientPrice,
   type BaseUnit,
   type IngredientDetail as Detail,
   type IngredientPrice,
-  type MeasureUnit,
 } from "@/lib/admin/gestion";
 import adminStyles from "../Admin.module.css";
 import { BaseUnitChoices } from "./BaseUnitChoices";
@@ -137,7 +132,7 @@ export function IngredientDetail({ id }: { id: string }) {
         <span className={styles.heroLabel}>Precio actual</span>
         <span className={styles.heroValue}>{ingredient.unitCost ? formatUnitCost(ingredient.unitCost, ingredient.baseUnit) : "⚠ Sin precio"}</span>
         <span className={styles.heroMeta}>{current
-            ? `Última compra: ${formatPurchase(current)} por ${formatMoney(current.totalPrice)} · ${formatDate(current.purchasedAt)}${current.supplierName ? ` · ${current.supplierName}` : ""}`
+            ? `Última compra: ${formatBaseQuantity(current.baseQuantity, ingredient.baseUnit)} por ${formatMoney(current.totalPrice)} · ${formatDate(current.purchasedAt)}`
             : "Cargá una compra para calcular el costo."}</span>
       </div>
 
@@ -158,7 +153,7 @@ export function IngredientDetail({ id }: { id: string }) {
             setNotice(null);
           }}
         >
-          + Cargar compra / precio
+          + Cargar precio
         </Button>
       )}
 
@@ -186,7 +181,7 @@ export function IngredientDetail({ id }: { id: string }) {
                 <li key={p.id} className={`${styles.historyItem} ${p.id === current?.id ? styles.historyCurrent : ""}`}>
                   <span>
                     <strong>{formatDate(p.purchasedAt)}</strong>
-                    {p.id === current?.id && " · actual"}
+                    {p.id === current?.id && " · ACTUAL"}
                   </span>
                   <span className={styles.historyActions}>
                     <button
@@ -205,9 +200,9 @@ export function IngredientDetail({ id }: { id: string }) {
                     </button>
                   </span>
                   <strong className={styles.historyPurchase}>
-                    {formatPurchase(p)} · {formatMoney(p.totalPrice)}
+                    {formatBaseQuantity(p.baseQuantity, ingredient.baseUnit)} por {formatMoney(p.totalPrice)}
                   </strong>
-                  <span className={styles.itemMeta}>Costo equivalente: {formatUnitCost(p.unitCost, ingredient.baseUnit)}</span>
+                  <span className={styles.historyCost}>{formatUnitCost(p.unitCost, ingredient.baseUnit)}</span>
                   {p.supplierName && <span className={styles.itemMeta}>Proveedor: {p.supplierName}</span>}
                 </li>
               ),
@@ -249,7 +244,7 @@ export function IngredientDetail({ id }: { id: string }) {
       >
         {priceToDelete && (
           <p>
-            {formatDate(priceToDelete.purchasedAt)} · {formatPurchase(priceToDelete)} · {formatMoney(priceToDelete.totalPrice)}. El costo actual pasa a la
+            {formatDate(priceToDelete.purchasedAt)} · {formatBaseQuantity(priceToDelete.baseQuantity, ingredient.baseUnit)} por {formatMoney(priceToDelete.totalPrice)}. El costo actual pasa a la
             compra más reciente que quede.
           </p>
         )}
@@ -272,47 +267,50 @@ export function IngredientDetail({ id }: { id: string }) {
 
 /* ---------- Cargar precio ---------- */
 
-/** "1.25" (API) → "1,25" (como se escribe en Argentina). */
-const toInput = (value: string) => value.replace(".", ",");
+/** Lo que se pregunta según la unidad del ingrediente (nunca se elige unidad). */
+const AMOUNT_LABEL: Record<BaseUnit, string> = { GRAM: "Gramos que trae", MILLILITER: "Mililitros que trae", UNIT: "Unidades que trae" };
+const AMOUNT_EXAMPLE: Record<BaseUnit, string> = { GRAM: "Ej.: 2500", MILLILITER: "Ej.: 750", UNIT: "Ej.: 30" };
+/** La compra se guarda directo en la unidad del ingrediente: g, ml o unidades. */
+const BASE_MEASURE = { GRAM: "G", MILLILITER: "ML", UNIT: "UNIT" } as const;
 
-/** Nueva compra (POST) o corrección de una existente (PUT, con `price`). */
+/** Número de la API → como se escribe acá ("45418.00" → "45418", "1.25" → "1,25"). */
+const toInput = (value: string) => String(Number(value)).replace(".", ",");
+
+/**
+ * Cargar o corregir una compra: solo PRECIO PAGADO y CUÁNTO TRAE (en gramos,
+ * mililitros o unidades, según el ingrediente). El costo se calcula solo.
+ * Editar abre este mismo formulario y corrige ESA compra (no crea otra).
+ */
 function PriceForm({ ingredient, price, onSaved, onCancel }: { ingredient: Detail; price?: IngredientPrice; onSaved: (d: Detail) => void; onCancel: () => void }) {
   const { getToken } = useAuth();
   const uid = useId();
-  const units = PURCHASE_UNITS[ingredient.baseUnit];
-  const [quantity, setQuantity] = useState(price ? toInput(price.purchaseQuantity) : "");
-  const [unit, setUnit] = useState<MeasureUnit>(price?.purchaseUnit ?? units[0]);
-  const [perPackage, setPerPackage] = useState(price?.unitsPerPackage ? toInput(price.unitsPerPackage) : "");
   const [total, setTotal] = useState(price ? toInput(price.totalPrice) : "");
+  const [amount, setAmount] = useState(price ? toInput(price.baseQuantity) : "");
   const [date, setDate] = useState(price?.purchasedAt ?? todayAR());
   const [supplier, setSupplier] = useState(price?.supplierName ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const q = parseAmount(quantity);
-  const pp = unit === "PACKAGE" ? parseAmount(perPackage) : 1;
   const t = parseAmount(total);
-  const base = q && pp ? toBase(q, unit, pp) : null;
-  const unitCost = base && t ? t / base : null;
+  const a = parseAmount(amount);
+  const unitCost = t && a ? t / a : null;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving) return;
     const e: Record<string, string> = {};
-    if (!q || q <= 0) e.quantity = "Ingresá cuánto compraste.";
-    if (unit === "PACKAGE" && (!pp || pp <= 0)) e.unitsPerPackage = "Ingresá cuántas unidades trae cada paquete.";
-    if (!t || t <= 0) e.totalPrice = "Ingresá el precio total pagado.";
+    if (!t || t <= 0) e.totalPrice = "Ingresá el precio pagado.";
+    if (!a || a <= 0) e.quantity = `Ingresá ${AMOUNT_LABEL[ingredient.baseUnit].toLowerCase()}.`;
     if (!date) e.purchasedAt = "Elegí la fecha.";
     setErrors(e);
-    if (Object.keys(e).length || !q || !t) return;
+    if (Object.keys(e).length || !t || !a) return;
     setSaving(true);
     setMessage(null);
     try {
       const input = {
-        quantity: toApiNumber(q, 4),
-        unit,
-        ...(unit === "PACKAGE" && pp ? { unitsPerPackage: toApiNumber(pp, 4) } : {}),
+        quantity: toApiNumber(a, 4),
+        unit: BASE_MEASURE[ingredient.baseUnit],
         totalPrice: toApiNumber(t, 2),
         purchasedAt: date,
         supplierName: supplier.trim() || undefined,
@@ -322,7 +320,7 @@ function PriceForm({ ingredient, price, onSaved, onCancel }: { ingredient: Detai
       onSaved(saved);
     } catch (err) {
       if (err instanceof AdminApiError && err.status === 422) setErrors(err.fields);
-      setMessage(adminErrorMessage(err, "No pudimos guardar el precio."));
+      setMessage(adminErrorMessage(err, "No pudimos guardar."));
       setSaving(false);
     }
   };
@@ -331,66 +329,29 @@ function PriceForm({ ingredient, price, onSaved, onCancel }: { ingredient: Detai
 
   return (
     <form className={adminStyles.section} onSubmit={submit} noValidate>
-      <h2 className={adminStyles.sectionTitle}>{price ? "Editar compra" : "Cargar compra / precio"}</h2>
-      <p className={adminStyles.sectionLead}>
-        {price ? "Corregí los datos de esta compra: el costo se recalcula y no se crea otra." : "Cargá la compra como la hiciste (ej. 2,5 kg por $ 120.000):"} el costo por{" "}
-        {ingredient.baseUnit === "UNIT" ? "unidad" : ingredient.baseUnit === "GRAM" ? "gramo" : "ml"} se calcula solo.
-      </p>
-
-      <div className={styles.row}>
-        <div className={adminStyles.field}>
-          <label htmlFor={`${uid}-q`} className={adminStyles.label}>
-            Cantidad comprada
-          </label>
-          <input id={`${uid}-q`} className={adminStyles.input} inputMode="decimal" autoComplete="off" placeholder="Ej.: 3" value={quantity} onChange={(e) => setQuantity(e.target.value)} aria-invalid={Boolean(errors.quantity)} />
-          {field("quantity")}
-        </div>
-        <div className={adminStyles.field}>
-          <label htmlFor={`${uid}-u`} className={adminStyles.label}>
-            Unidad
-          </label>
-          <select id={`${uid}-u`} className={`${adminStyles.input} ${styles.select}`} value={unit} onChange={(e) => setUnit(e.target.value as MeasureUnit)}>
-            {units.map((u) => (
-              <option key={u} value={u}>
-                {PURCHASE_UNIT_OPTION[u]}
-              </option>
-            ))}
-          </select>
-          {field("unit")}
-        </div>
-      </div>
-
-      {unit === "PACKAGE" && (
-        <div className={adminStyles.field}>
-          <label htmlFor={`${uid}-pp`} className={adminStyles.label}>
-            Unidades por paquete
-          </label>
-          <input id={`${uid}-pp`} className={adminStyles.input} inputMode="decimal" autoComplete="off" placeholder="Ej.: 12" value={perPackage} onChange={(e) => setPerPackage(e.target.value)} aria-invalid={Boolean(errors.unitsPerPackage)} />
-          {field("unitsPerPackage")}
-        </div>
-      )}
+      <h2 className={adminStyles.sectionTitle}>{price ? "Editar compra" : "Cargar precio"}</h2>
 
       <div className={adminStyles.field}>
         <label htmlFor={`${uid}-t`} className={adminStyles.label}>
-          Precio total pagado ($)
+          Precio pagado ($)
         </label>
-        <input id={`${uid}-t`} className={adminStyles.input} inputMode="decimal" autoComplete="off" placeholder="Ej.: 87.964" value={total} onChange={(e) => setTotal(e.target.value)} aria-invalid={Boolean(errors.totalPrice)} />
+        <input id={`${uid}-t`} className={`${adminStyles.input} ${styles.bigInput}`} inputMode="decimal" autoComplete="off" placeholder="Ej.: 120000" value={total} onChange={(e) => setTotal(e.target.value)} aria-invalid={Boolean(errors.totalPrice)} />
         {field("totalPrice")}
       </div>
 
-      {base !== null && (
-        <p className={styles.preview} aria-live="polite">
-          Equivale a {formatBaseQuantity(base, ingredient.baseUnit)}
-          {unitCost !== null && (
-            <>
-              {" "}
-              · Costo equivalente: <strong>{formatUnitCost(unitCost, ingredient.baseUnit)}</strong>
-            </>
-          )}
-        </p>
-      )}
+      <div className={adminStyles.field}>
+        <label htmlFor={`${uid}-a`} className={adminStyles.label}>
+          {AMOUNT_LABEL[ingredient.baseUnit]}
+        </label>
+        <input id={`${uid}-a`} className={`${adminStyles.input} ${styles.bigInput}`} inputMode="decimal" autoComplete="off" placeholder={AMOUNT_EXAMPLE[ingredient.baseUnit]} value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={Boolean(errors.quantity)} />
+        {field("quantity")}
+      </div>
 
-      <div className={styles.row}>
+      <p className={styles.preview} aria-live="polite">
+        Costo calculado: <strong>{unitCost !== null ? formatUnitCost(unitCost, ingredient.baseUnit) : "—"}</strong>
+      </p>
+
+      <div className={styles.secondaryFields}>
         <div className={adminStyles.field}>
           <label htmlFor={`${uid}-d`} className={adminStyles.label}>
             Fecha
@@ -402,14 +363,14 @@ function PriceForm({ ingredient, price, onSaved, onCancel }: { ingredient: Detai
           <label htmlFor={`${uid}-s`} className={adminStyles.label}>
             Proveedor (opcional)
           </label>
-          <input id={`${uid}-s`} className={adminStyles.input} maxLength={80} autoComplete="off" placeholder="Ej.: Distribuidora" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
+          <input id={`${uid}-s`} className={adminStyles.input} maxLength={80} autoComplete="off" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
           {field("supplierName")}
         </div>
       </div>
 
       <div className={adminStyles.actions}>
         <Button type="submit" disabled={saving}>
-          {saving ? "Guardando…" : price ? "Guardar cambios" : "Guardar compra"}
+          {saving ? "Guardando…" : "Guardar"}
         </Button>
         <Button variant="secondary" onClick={onCancel} disabled={saving}>
           Cancelar

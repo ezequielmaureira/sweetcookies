@@ -139,10 +139,7 @@ export const BASE_UNIT_SHORT: Record<BaseUnit, string> = { GRAM: "g", MILLILITER
 
 export const MEASURE_LABELS: Record<MeasureUnit, string> = { G: "g", KG: "kg", ML: "ml", L: "litros", UNIT: "unidades", PACKAGE: "paquetes" };
 
-/** Nombre de la unidad en el selector de compra. */
-export const PURCHASE_UNIT_OPTION: Record<MeasureUnit, string> = { G: "g", KG: "kg", ML: "ml", L: "litro", UNIT: "unidad", PACKAGE: "paquete" };
 
-export const PURCHASE_UNITS: Record<BaseUnit, MeasureUnit[]> = { GRAM: ["KG", "G"], MILLILITER: ["L", "ML"], UNIT: ["UNIT", "PACKAGE"] };
 export const RECIPE_UNITS: Record<BaseUnit, MeasureUnit[]> = { GRAM: ["G", "KG"], MILLILITER: ["ML", "L"], UNIT: ["UNIT"] };
 
 const FACTOR: Record<MeasureUnit, number> = { G: 1, KG: 1000, ML: 1, L: 1000, UNIT: 1, PACKAGE: 1 };
@@ -188,20 +185,6 @@ export function formatQuantity(value: string | number, unit: MeasureUnit) {
   const n = Number(value);
   const label = unit === "UNIT" && n === 1 ? "unidad" : unit === "PACKAGE" && n === 1 ? "paquete" : MEASURE_LABELS[unit];
   return `${quantityFormat.format(n)} ${label}`;
-}
-
-/**
- * La compra tal como se hizo: "2,5 kg", "500 g", "1 litro", "2 paquetes × 12 unidades".
- * Las cargadas en g/ml desde 1000 se muestran en kg/l ("1000 g" → "1 kg"), sin
- * cambiar el dato guardado.
- */
-export function formatPurchase(p: { purchaseQuantity: string; purchaseUnit: MeasureUnit; unitsPerPackage: string | null }) {
-  const n = Number(p.purchaseQuantity);
-  if (p.purchaseUnit === "G" && n >= 1000) return formatQuantity(n / 1000, "KG");
-  if (p.purchaseUnit === "ML" && n >= 1000) return `${quantityFormat.format(n / 1000)} ${n === 1000 ? "litro" : "litros"}`;
-  if (p.purchaseUnit === "L") return `${quantityFormat.format(n)} ${n === 1 ? "litro" : "litros"}`;
-  if (p.purchaseUnit === "PACKAGE" && p.unitsPerPackage) return `${formatQuantity(n, "PACKAGE")} × ${formatQuantity(p.unitsPerPackage, "UNIT")}`;
-  return formatQuantity(n, p.purchaseUnit);
 }
 
 export const formatBaseQuantity = (value: string | number, baseUnit: BaseUnit) =>
