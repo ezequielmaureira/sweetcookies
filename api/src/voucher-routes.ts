@@ -100,4 +100,15 @@ export function registerVoucherRoutes(app: Hono<{ Variables: Variables }>, { vou
     log(`[admin] voucher ${result.voucher?.code ?? publicId} cancel ${result.ok ? "ok" : "rejected"} by ${c.get("userId")}`);
     return transitionResponse(c, result);
   });
+
+  // Eliminación definitiva en CUALQUIER estado (activo, canjeado, anulado o vencido).
+  // Después, el QR y la URL responden como voucher inexistente (404).
+  app.delete("/api/admin/vouchers/:publicId", async (c: AppContext) => {
+    const publicId = c.req.param("publicId") ?? "";
+    if (!isValidPublicId(publicId)) return notFound(c);
+    const deleted = await vouchers.remove(publicId);
+    if (!deleted) return notFound(c);
+    log(`[admin] voucher ${deleted.code} (${deleted.status}) deleted by ${c.get("userId")}`);
+    return c.body(null, 204);
+  });
 }

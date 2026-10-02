@@ -42,3 +42,14 @@ async function transition(token: string | null, publicId: string, action: "redee
 
 export const redeemVoucher = (token: string | null, publicId: string) => transition(token, publicId, "redeem");
 export const cancelVoucher = (token: string | null, publicId: string) => transition(token, publicId, "cancel");
+
+/** Eliminación definitiva (cualquier estado). false = ya no existía. */
+export async function deleteVoucher(token: string | null, publicId: string): Promise<boolean> {
+  try {
+    await adminRequest<void>(`/api/admin/vouchers/${encodeURIComponent(publicId)}`, token, { method: "DELETE" });
+    return true;
+  } catch (error) {
+    if (error instanceof AdminApiError && error.status === 404) return false;
+    throw error;
+  }
+}

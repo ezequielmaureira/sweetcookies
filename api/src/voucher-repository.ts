@@ -29,6 +29,8 @@ export type VoucherRepository = {
   redeem(publicId: string, userId: string): Promise<VoucherTransition>;
   /** Anulación atómica: solo si sigue ACTIVE. */
   cancel(publicId: string, userId: string): Promise<VoucherTransition>;
+  /** Eliminación definitiva, en cualquier estado. null = no existía. */
+  remove(publicId: string): Promise<VoucherRecord | null>;
 };
 
 const isUniqueViolation = (error: unknown) => error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -98,6 +100,12 @@ export function createVoucherRepository(prisma: PrismaClient): VoucherRepository
       });
       const voucher = await prisma.voucher.findUnique({ where: { publicId } });
       return count === 1 && voucher ? { ok: true, voucher } : { ok: false, voucher };
+    },
+    async remove(publicId) {
+      const voucher = await prisma.voucher.findUnique({ where: { publicId } });
+      if (!voucher) return null;
+      const { count } = await prisma.voucher.deleteMany({ where: { publicId } });
+      return count === 1 ? voucher : null;
     },
   };
 }

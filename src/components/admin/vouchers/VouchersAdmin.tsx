@@ -2,12 +2,14 @@
 
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { VoucherStatusBadge } from "@/components/vouchers/VoucherStatusBadge";
 import { adminErrorMessage } from "@/lib/admin/admin-api";
 import { listVouchers, type AdminVoucherList } from "@/lib/admin/voucher-api";
 import { VOUCHER_FILTER_LABELS, boxLabel, formatVoucherDate, formatVoucherDateTime, type AdminVoucher, type VoucherFilter } from "@/lib/vouchers/voucher-format";
 import { useCancelVoucher } from "./useCancelVoucher";
+import { useDeleteVoucher } from "./useDeleteVoucher";
 import styles from "./Vouchers.module.css";
 
 const FILTERS = Object.keys(VOUCHER_FILTER_LABELS) as VoucherFilter[];
@@ -50,6 +52,14 @@ export function VouchersAdmin() {
     });
   const { askCancel, dialog, message } = useCancelVoucher(replace);
 
+  // Tras eliminar: la fila desaparece del historial.
+  const removeRow = (deleted: AdminVoucher) =>
+    setData((d) => (d ? { ...d, total: Math.max(0, d.total - 1), vouchers: d.vouchers.filter((v) => v.publicId !== deleted.publicId) } : d));
+  const { askDelete, dialog: deleteDialog, message: deleteMessage } = useDeleteVoucher(removeRow);
+  // Eliminado desde el detalle (/admin/vouchers/<id>): vuelve acá con ?eliminado=1.
+  const deletedFromDetail = useSearchParams().get("eliminado") === "1";
+  const deleteNotice = deleteMessage ?? (deletedFromDetail ? { kind: "ok" as const, text: "Voucher eliminado ✓" } : null);
+
   const vouchers = data?.vouchers ?? [];
 
   return (
@@ -81,6 +91,11 @@ export function VouchersAdmin() {
       {message && (
         <p className={message.kind === "ok" ? styles.ok : styles.error} role="status">
           {message.text}
+        </p>
+      )}
+      {deleteNotice && (
+        <p className={deleteNotice.kind === "ok" ? styles.ok : styles.error} role="status">
+          {deleteNotice.text}
         </p>
       )}
       {error && (
@@ -131,6 +146,9 @@ export function VouchersAdmin() {
                         Anular
                       </button>
                     )}
+                    <button type="button" className={styles.rowDanger} onClick={() => askDelete(v)}>
+                      Eliminar
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -153,6 +171,7 @@ export function VouchersAdmin() {
         </nav>
       )}
       {dialog}
+      {deleteDialog}
     </section>
   );
 }

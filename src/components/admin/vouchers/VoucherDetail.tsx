@@ -2,12 +2,14 @@
 
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { adminErrorMessage } from "@/lib/admin/admin-api";
 import { getVoucher } from "@/lib/admin/voucher-api";
 import type { AdminVoucher } from "@/lib/vouchers/voucher-format";
 import { VoucherSheet } from "./VoucherSheet";
 import { useCancelVoucher } from "./useCancelVoucher";
+import { useDeleteVoucher } from "./useDeleteVoucher";
 import styles from "./Vouchers.module.css";
 
 /** Ver un voucher del historial (estado real del backend) con sus acciones. */
@@ -18,6 +20,8 @@ export function VoucherDetail({ publicId }: { publicId: string }) {
   // Tras anular se relee el detalle (incluye quién lo anuló).
   const [version, setVersion] = useState(0);
   const { askCancel, dialog, message } = useCancelVoucher(() => setVersion((n) => n + 1));
+  const router = useRouter();
+  const { askDelete, dialog: deleteDialog, message: deleteMessage } = useDeleteVoucher(() => router.replace("/admin/vouchers?eliminado=1"));
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -48,14 +52,20 @@ export function VoucherDetail({ publicId }: { publicId: string }) {
           {message.text}
         </p>
       )}
+      {deleteMessage?.kind === "error" && (
+        <p className={styles.error} role="alert">
+          {deleteMessage.text}
+        </p>
+      )}
       {error && (
         <p className={styles.error} role="alert">
           {error}
         </p>
       )}
       {!voucher && !error && <p className={styles.live}>Cargando…</p>}
-      {voucher && <VoucherSheet voucher={voucher} onCancel={() => askCancel(voucher)} />}
+      {voucher && <VoucherSheet voucher={voucher} onCancel={() => askCancel(voucher)} onDelete={() => askDelete(voucher)} />}
       {dialog}
+      {deleteDialog}
     </>
   );
 }

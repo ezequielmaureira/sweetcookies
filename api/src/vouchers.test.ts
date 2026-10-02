@@ -120,6 +120,10 @@ function memoryVouchers() {
         (v) => v.status === "ACTIVE",
         (v) => Object.assign(v, { status: "CANCELLED", cancelledAt: new Date(), cancelledByUserId: userId }),
       ),
+    remove: async (publicId) => {
+      const i = rows.findIndex((r) => r.publicId === publicId);
+      return i === -1 ? null : rows.splice(i, 1)[0];
+    },
   };
   return { repo, rows };
 }

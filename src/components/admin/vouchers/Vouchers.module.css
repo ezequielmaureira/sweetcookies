@@ -521,3 +521,24 @@
 .toast:empty {
   min-height: 0;
 }
+
+/* Confirmación de eliminación */
+.deleteFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.deleteFacts dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.deleteFacts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  color: var(--color-ink);
+}

@@ -12,6 +12,8 @@ type Props = {
   voucher: AdminVoucher;
   /** Botón "Anular" (solo vouchers activos). */
   onCancel?: () => void;
+  /** Botón "Eliminar" (cualquier estado). */
+  onDelete?: () => void;
   /** Acciones extra al final (Crear otro, Volver…). */
   children?: React.ReactNode;
 };
@@ -21,7 +23,7 @@ type Props = {
  * ACTIVO: ver, compartir y guardar la imagen, WhatsApp / compartir, anular.
  * CANJEADO / VENCIDO: ver imagen · ANULADO: solo la preview.
  */
-export function VoucherSheet({ voucher, onCancel, children }: Props) {
+export function VoucherSheet({ voucher, onCancel, onDelete, children }: Props) {
   const { status } = voucher;
 
   return (
@@ -85,6 +87,11 @@ export function VoucherSheet({ voucher, onCancel, children }: Props) {
         {status === "ACTIVE" && onCancel && (
           <Button variant="secondary" className={styles.cancelButton} onClick={onCancel}>
             Anular
+          </Button>
+        )}
+        {onDelete && (
+          <Button variant="secondary" className={styles.cancelButton} onClick={onDelete}>
+            Eliminar
           </Button>
         )}
         {children}
