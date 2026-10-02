@@ -46,7 +46,7 @@ const INGREDIENTS: [string, BaseUnit, string | null][] = [
   ["PISTACHOS PELADOS SIN SAL", "GRAM", "111.16"],
   ["CAFÉ", "GRAM", "79.027"],
   ["LICOR DE CAFÉ", "MILLILITER", "10.45875"],
-  // En el Excel no tiene precio: queda "⚠ Sin precio" (las recetas que la usan, costo incompleto).
+  // En el Excel no tiene precio: queda "⚠ Sin precio". No va en Ferrero (corregido 02/10/2026).
   ["ESENCIA DE VAINILLA", "MILLILITER", null],
 ];
 
@@ -63,7 +63,6 @@ const RECIPES: [string, number, [string, string, Unit][]][] = [
       ["AZÚCAR RUBIA", "150", "G"],
       ["AZÚCAR COMÚN", "80", "G"],
       ["HUEVOS", "2", "UNIT"],
-      ["ESENCIA DE VAINILLA", "5", "ML"],
       ["CHIPS SEMI AMARGO", "120", "G"],
       ["AVELLANAS", "50", "G"],
       ["COBERTURA DE CHOCOLATE", "250", "G"],
