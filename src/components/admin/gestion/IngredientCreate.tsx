@@ -64,9 +64,8 @@ export function IngredientCreate() {
         </div>
 
         <fieldset className={adminStyles.field}>
-          <legend className={adminStyles.label}>Unidad base</legend>
+          <legend className={adminStyles.label}>¿Cómo se mide?</legend>
           <BaseUnitChoices name={`${uid}-unit`} value={baseUnit} onChange={setBaseUnit} />
-          <p className={adminStyles.help}>Es la unidad en la que se calcula el costo. Después vas a poder cargar compras en kg, litros o paquetes.</p>
           {errors.baseUnit && <p className={adminStyles.error}>{errors.baseUnit}</p>}
         </fieldset>
       </section>

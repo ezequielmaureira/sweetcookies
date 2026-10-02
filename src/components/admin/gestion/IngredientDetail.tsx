@@ -26,7 +26,6 @@ import {
   type IngredientPrice,
 } from "@/lib/admin/gestion";
 import adminStyles from "../Admin.module.css";
-import { BaseUnitChoices } from "./BaseUnitChoices";
 import styles from "./Gestion.module.css";
 
 type Notice = { kind: "ok" | "error"; text: string } | null;
@@ -128,6 +127,11 @@ export function IngredientDetail({ id }: { id: string }) {
         </p>
       )}
 
+      <IngredientSettings ingredient={ingredient} onSaved={(updated) => {
+        setIngredient(updated);
+        setNotice({ kind: "ok", text: "Cambios guardados ✓" });
+      }} />
+
       <div className={styles.hero}>
         <span className={styles.heroLabel}>Precio actual</span>
         <span className={styles.heroValue}>{ingredient.unitCost ? formatUnitCost(ingredient.unitCost, ingredient.baseUnit) : "⚠ Sin precio"}</span>
@@ -210,11 +214,6 @@ export function IngredientDetail({ id }: { id: string }) {
           </ul>
         )}
       </section>
-
-      <IngredientSettings ingredient={ingredient} onSaved={(updated) => {
-        setIngredient(updated);
-        setNotice({ kind: "ok", text: "Cambios guardados ✓" });
-      }} />
 
       <section className={`${adminStyles.section} ${styles.dangerZone}`}>
         <h2 className={adminStyles.sectionTitle}>Eliminar ingrediente</h2>
@@ -392,19 +391,17 @@ function IngredientSettings({ ingredient, onSaved }: { ingredient: Detail; onSav
   const uid = useId();
   const [name, setName] = useState(ingredient.name);
   const [active, setActive] = useState(ingredient.active);
-  const [baseUnit, setBaseUnit] = useState<BaseUnit>(ingredient.baseUnit);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  // Con precios o recetas, cambiar la unidad rompería los cálculos: se bloquea.
-  const unitLocked = ingredient.priceCount > 0 || ingredient.recipeCount > 0;
-  const dirty = name !== ingredient.name || active !== ingredient.active || baseUnit !== ingredient.baseUnit;
+  // La unidad del ingrediente se elige al crearlo y no se muestra ni se edita acá.
+  const dirty = name !== ingredient.name || active !== ingredient.active;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (saving || !dirty) return;
     setSaving(true);
     try {
-      const saved = await updateIngredient(await getToken(), ingredient.id, { name, active, ...(baseUnit !== ingredient.baseUnit ? { baseUnit } : {}) });
+      const saved = await updateIngredient(await getToken(), ingredient.id, { name, active });
       setErrors({});
       onSaved(saved);
     } catch (e) {
@@ -427,15 +424,8 @@ function IngredientSettings({ ingredient, onSaved }: { ingredient: Detail; onSav
 
       <label className={styles.switchRow}>
         <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-        Activo (se puede agregar en recetas nuevas)
+        Activo
       </label>
-
-      <fieldset className={adminStyles.field}>
-        <legend className={adminStyles.label}>Unidad base</legend>
-        <BaseUnitChoices name={`${uid}-unit`} value={baseUnit} onChange={setBaseUnit} disabled={unitLocked} />
-        {unitLocked && <p className={adminStyles.help}>No se puede cambiar: este ingrediente ya tiene precios cargados o se usa en recetas, y cambiarla rompería los cálculos.</p>}
-        {errors.baseUnit && <p className={adminStyles.error}>{errors.baseUnit}</p>}
-      </fieldset>
 
       <div className={adminStyles.actions}>
         <Button type="submit" variant="secondary" disabled={saving || !dirty}>
