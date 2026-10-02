@@ -47,7 +47,9 @@ const recipeInclude = {
 type RecipeWithRelations = {
   id: string;
   name: string;
-  yieldQuantity: number;
+  yieldQuantity: number | null;
+  status: RecipeRow["status"];
+  notes: string | null;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -165,7 +167,7 @@ export function createManagementRepository(prisma: PrismaClient) {
       const fields = await checkLines(input, new Set());
       if (Object.keys(fields).length) return { ok: false, status: 422, error: "validation_error", fields };
       const id = await prisma.$transaction(async (tx) => {
-        const recipe = await tx.recipe.create({ data: { name: input.name, yieldQuantity: input.yieldQuantity } });
+        const recipe = await tx.recipe.create({ data: { name: input.name, yieldQuantity: input.yieldQuantity, status: input.status ?? "COMPLETE", notes: input.notes ?? null } });
         const { lines, extras } = lineRows(recipe.id, input);
         if (lines.length) await tx.recipeIngredient.createMany({ data: lines });
         if (extras.length) await tx.recipeExtraCost.createMany({ data: extras });
@@ -176,13 +178,25 @@ export function createManagementRepository(prisma: PrismaClient) {
 
     /** Reemplaza nombre, rendimiento, ingredientes y gastos en una transacción. */
     async updateRecipe(id: string, input: RecipeInput): Promise<Result<{ id: string }>> {
-      const current = await prisma.recipe.findUnique({ where: { id }, select: { ingredients: { select: { ingredientId: true } } } });
+      const current = await prisma.recipe.findUnique({ where: { id }, select: { status: true, ingredients: { select: { ingredientId: true } } } });
       if (!current) return notFound;
+      // Sin estado en el pedido se conserva el actual: el rendimiento vacío solo vale en borrador.
+      if (input.yieldQuantity === null && (input.status ?? current.status) !== "DRAFT") {
+        return { ok: false, status: 422, error: "validation_error", fields: { yieldQuantity: "Una receta completa necesita rendimiento (cuántas cookies salen)." } };
+      }
       // Un ingrediente inactivo puede seguir en la receta que ya lo usaba.
       const fields = await checkLines(input, new Set(current.ingredients.map((l) => l.ingredientId)));
       if (Object.keys(fields).length) return { ok: false, status: 422, error: "validation_error", fields };
       await prisma.$transaction(async (tx) => {
-        await tx.recipe.update({ where: { id }, data: { name: input.name, yieldQuantity: input.yieldQuantity } });
+        await tx.recipe.update({
+          where: { id },
+          data: {
+            name: input.name,
+            yieldQuantity: input.yieldQuantity,
+            ...(input.status ? { status: input.status } : {}),
+            ...(input.notes !== undefined ? { notes: input.notes } : {}),
+          },
+        });
         await tx.recipeIngredient.deleteMany({ where: { recipeId: id } });
         await tx.recipeExtraCost.deleteMany({ where: { recipeId: id } });
         const { lines, extras } = lineRows(id, input);

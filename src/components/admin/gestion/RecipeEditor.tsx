@@ -23,6 +23,7 @@ import {
   type Ingredient,
   type MeasureUnit,
   type Recipe,
+  type RecipeStatus,
 } from "@/lib/admin/gestion";
 import adminStyles from "../Admin.module.css";
 import styles from "./Gestion.module.css";
@@ -37,7 +38,9 @@ const toInput = (value: string) => value.replace(".", ",");
 
 const fromRecipe = (r: Recipe) => ({
   name: r.name,
-  yieldText: String(r.yieldQuantity),
+  yieldText: r.yieldQuantity === null ? "" : String(r.yieldQuantity),
+  status: r.status,
+  notes: r.notes ?? "",
   lines: r.ingredients.map((l): Line => ({ key: newKey(), ingredientId: l.ingredientId, quantity: toInput(l.quantity), unit: l.unit })),
   extras: r.extraCosts.map((e): Extra => ({ key: newKey(), name: e.name, amount: toInput(e.amount) })),
 });
@@ -57,6 +60,8 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
   const [loaded, setLoaded] = useState(!recipeId);
   const [name, setName] = useState("");
   const [yieldText, setYieldText] = useState("");
+  const [status, setStatus] = useState<RecipeStatus>("COMPLETE");
+  const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([]);
   const [extras, setExtras] = useState<Extra[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -80,6 +85,8 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
           setName(s.name);
           setSavedName(s.name);
           setYieldText(s.yieldText);
+          setStatus(s.status);
+          setNotes(s.notes);
           setLines(s.lines);
           setExtras(s.extras);
           setLoaded(true);
@@ -128,7 +135,9 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
   const missing = lineInfo.filter((l) => l.missingPrice).length;
   const extrasCost = extras.reduce((sum, e) => sum + (parseAmount(e.amount) ?? 0), 0);
   const yieldQuantity = Number(yieldText.trim());
-  const validYield = Number.isInteger(yieldQuantity) && yieldQuantity >= 1;
+  const yieldPending = yieldText.trim() === "";
+  const validYield = !yieldPending && Number.isInteger(yieldQuantity) && yieldQuantity >= 1;
+  const isDraft = status === "DRAFT";
   const complete = missing === 0;
   const total = ingredientsCost + extrasCost;
 
@@ -151,7 +160,9 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
     if (saving) return;
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = "Escribí un nombre.";
-    if (!validYield) e.yieldQuantity = "Ingresá cuántas cookies salen (número entero mayor a 0).";
+    // En borrador el rendimiento puede quedar pendiente (vacío); en una receta completa es obligatorio.
+    if (yieldPending && !isDraft) e.yieldQuantity = "Una receta completa necesita rendimiento (cuántas cookies salen).";
+    else if (!yieldPending && !validYield) e.yieldQuantity = "Ingresá cuántas cookies salen (número entero mayor a 0).";
     lines.forEach((l, i) => {
       if (!l.ingredientId) e[`ingredients.${i}.ingredientId`] = "Elegí un ingrediente.";
       const q = parseAmount(l.quantity);
@@ -168,7 +179,9 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
     }
     const input = {
       name: name.trim(),
-      yieldQuantity,
+      yieldQuantity: yieldPending ? null : yieldQuantity,
+      status,
+      notes: notes.trim() || null,
       ingredients: lines.map((l) => ({ ingredientId: l.ingredientId, quantity: toApiNumber(parseAmount(l.quantity)!, 4), unit: l.unit })),
       extraCosts: extras.map((x) => ({ name: x.name.trim(), amount: toApiNumber(parseAmount(x.amount)!, 2) })),
     };
@@ -181,6 +194,8 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
         const s = fromRecipe(saved);
         setLines(s.lines);
         setExtras(s.extras);
+        setStatus(s.status);
+        setNotes(s.notes);
         setSavedName(s.name);
         setNotice({ kind: "ok", text: "Receta guardada ✓" });
         setSaving(false);
@@ -274,8 +289,44 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
           </div>
           <p id={`${uid}-yield-help`} className={adminStyles.help}>
             Usamos este número para calcular el costo de una cookie. Cambiarlo no modifica los ingredientes.
+            {isDraft && " En borrador podés dejarlo vacío si todavía no lo sabés."}
           </p>
           {err("yieldQuantity")}
+        </div>
+
+        <fieldset className={adminStyles.field}>
+          <legend className={adminStyles.label}>Estado</legend>
+          <div className={styles.choices2}>
+            {(
+              [
+                ["DRAFT", "Borrador", "Faltan datos"],
+                ["COMPLETE", "Completa", "Receta terminada"],
+              ] as const
+            ).map(([value, label, hint]) => (
+              <label key={value} className={styles.choice}>
+                <input type="radio" name={`${uid}-status`} value={value} checked={status === value} onChange={() => setStatus(value)} />
+                {label}
+                <small>{hint}</small>
+              </label>
+            ))}
+          </div>
+          <p className={adminStyles.help}>Pasala a “Completa” cuando tenga todos los ingredientes, cantidades y rendimiento.</p>
+        </fieldset>
+
+        <div className={adminStyles.field}>
+          <label htmlFor={`${uid}-notes`} className={adminStyles.label}>
+            Notas
+          </label>
+          <textarea
+            id={`${uid}-notes`}
+            className={`${adminStyles.input} ${styles.notes}`}
+            rows={3}
+            maxLength={1000}
+            placeholder="Ej.: Pendiente completar relleno."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+          {err("notes")}
         </div>
       </section>
 
@@ -440,33 +491,59 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
 
       <section className={styles.summary} aria-label="Resumen de costos">
         <h2 className={adminStyles.sectionTitle}>Resumen</h2>
-        {!complete && (
+        {isDraft ? (
           <p className={styles.warnBox}>
-            <strong>⚠ COSTO INCOMPLETO</strong>
+            <strong>⚠ RECETA INCOMPLETA</strong>
             <br />
-            No se puede calcular el costo final porque hay ingredientes sin precio ({missing}).
+            Faltan datos para calcular el costo real.
+            {missing > 0 && ` Además, ${missing} ${missing === 1 ? "ingrediente no tiene" : "ingredientes no tienen"} precio.`}
           </p>
+        ) : (
+          !complete && (
+            <p className={styles.warnBox}>
+              <strong>⚠ COSTO INCOMPLETO</strong>
+              <br />
+              No se puede calcular el costo final porque hay ingredientes sin precio ({missing}).
+            </p>
+          )
         )}
-        <div className={styles.summaryRow}>
-          <span>Costo ingredientes</span>
-          <span>{complete ? formatMoney(ingredientsCost) : "—"}</span>
-        </div>
-        <div className={styles.summaryRow}>
-          <span>Gastos adicionales</span>
-          <span>{formatMoney(extrasCost)}</span>
-        </div>
-        <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
-          <span>Costo total receta</span>
-          <span>{complete ? formatMoney(total) : "—"}</span>
-        </div>
-        <div className={styles.summaryRow}>
-          <span>Rendimiento de la receta</span>
-          <span>{validYield ? `${yieldQuantity} ${yieldQuantity === 1 ? "cookie" : "cookies"}` : "—"}</span>
-        </div>
-        <div className={styles.perCookie}>
-          <span className={styles.perCookieLabel}>Costo por 1 cookie</span>
-          <span className={styles.perCookieValue}>{complete && validYield ? formatMoney(total / yieldQuantity) : "—"}</span>
-        </div>
+        {isDraft ? (
+          <>
+            {/* Borrador: solo lo conocido, rotulado como PARCIAL (nunca como costo final). */}
+            <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
+              <span>Costo parcial (solo lo cargado)</span>
+              <span>{formatMoney(total)}</span>
+            </div>
+            <div className={styles.summaryRow}>
+              <span>Rendimiento de la receta</span>
+              <span>{validYield ? `${yieldQuantity} ${yieldQuantity === 1 ? "cookie" : "cookies"}` : "⚠ Pendiente definir"}</span>
+            </div>
+            <p className={adminStyles.help}>El costo por 1 cookie se muestra cuando la receta esté completa.</p>
+          </>
+        ) : (
+          <>
+            <div className={styles.summaryRow}>
+              <span>Costo ingredientes</span>
+              <span>{complete ? formatMoney(ingredientsCost) : "—"}</span>
+            </div>
+            <div className={styles.summaryRow}>
+              <span>Gastos adicionales</span>
+              <span>{formatMoney(extrasCost)}</span>
+            </div>
+            <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
+              <span>Costo total receta</span>
+              <span>{complete ? formatMoney(total) : "—"}</span>
+            </div>
+            <div className={styles.summaryRow}>
+              <span>Rendimiento de la receta</span>
+              <span>{validYield ? `${yieldQuantity} ${yieldQuantity === 1 ? "cookie" : "cookies"}` : "—"}</span>
+            </div>
+            <div className={styles.perCookie}>
+              <span className={styles.perCookieLabel}>Costo por 1 cookie</span>
+              <span className={styles.perCookieValue}>{complete && validYield ? formatMoney(total / yieldQuantity) : "—"}</span>
+            </div>
+          </>
+        )}
       </section>
 
       <div className={`${adminStyles.actions} ${adminStyles.stickyActions}`}>

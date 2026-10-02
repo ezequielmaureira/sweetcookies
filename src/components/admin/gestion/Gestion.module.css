@@ -437,3 +437,61 @@ a.item:hover {
   font-weight: 500;
   color: var(--color-ink);
 }
+
+/* Recetas: estado y filtro */
+.choices2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.chipOk,
+.chipWarn {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.chipOk {
+  background: #e4f1e1;
+  color: #2f6b34;
+}
+
+.chipWarn {
+  background: #fdf1dc;
+  color: #7a4710;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.filter {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: #fffdf9;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.filter[aria-pressed="true"] {
+  border-color: var(--color-chocolate);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+.notes {
+  min-height: 88px;
+  resize: vertical;
+  line-height: 1.4;
+}

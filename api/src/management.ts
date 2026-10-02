@@ -148,7 +148,11 @@ export function validatePriceInput(input: unknown, baseUnit: BaseUnit): Validati
 
 export type RecipeLineInput = { ingredientId: string; quantity: Decimal; unit: MeasureUnit };
 export type RecipeExtraInput = { name: string; amount: Decimal };
-export type RecipeInput = { name: string; yieldQuantity: number; lines: RecipeLineInput[]; extras: RecipeExtraInput[] };
+export type RecipeStatus = "DRAFT" | "COMPLETE";
+/** status/notes ausentes = no se cambian al editar (en una receta nueva: COMPLETE, sin notas). */
+export type RecipeInput = { name: string; yieldQuantity: number | null; status?: RecipeStatus; notes?: string | null; lines: RecipeLineInput[]; extras: RecipeExtraInput[] };
+
+export const RECIPE_NOTES_MAX = 1000;
 
 export const RECIPE_MAX_LINES = 80;
 
@@ -163,9 +167,33 @@ export function validateRecipeInput(input: unknown): Validation<RecipeInput> {
   const name = nameFrom(body.name);
   if (!name) errors.name = `Escribí un nombre (máximo ${NAME_MAX} caracteres).`;
 
-  const yieldQuantity = typeof body.yieldQuantity === "string" ? Number(body.yieldQuantity.trim()) : body.yieldQuantity;
-  if (typeof yieldQuantity !== "number" || !Number.isInteger(yieldQuantity) || yieldQuantity < 1 || yieldQuantity > 10000)
-    errors.yieldQuantity = "Ingresá cuántas cookies rinde (número entero, 1 o más).";
+  let status: RecipeStatus | undefined;
+  if (body.status !== undefined) {
+    if (body.status === "DRAFT" || body.status === "COMPLETE") status = body.status;
+    else errors.status = "Elegí Borrador o Completa.";
+  }
+
+  // Rendimiento: entero ≥ 1. Solo un BORRADOR puede dejarlo pendiente (null / vacío).
+  const rawYield = typeof body.yieldQuantity === "string" ? body.yieldQuantity.trim() : body.yieldQuantity;
+  let yieldQuantity: number | null = null;
+  if (rawYield === null || rawYield === undefined || rawYield === "") {
+    if (status !== "DRAFT") errors.yieldQuantity = "Una receta completa necesita rendimiento (cuántas cookies salen).";
+  } else {
+    const n = typeof rawYield === "string" ? Number(rawYield) : rawYield;
+    if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > 10000) errors.yieldQuantity = "Ingresá cuántas cookies salen (número entero mayor a 0).";
+    else yieldQuantity = n;
+  }
+
+  let notes: string | null | undefined;
+  if (body.notes !== undefined) {
+    if (body.notes === null) notes = null;
+    else if (typeof body.notes !== "string") errors.notes = "Formato inválido.";
+    else {
+      const text = body.notes.replace(/\r\n?/g, "\n").trim();
+      if (text.length > RECIPE_NOTES_MAX) errors.notes = `Máximo ${RECIPE_NOTES_MAX} caracteres.`;
+      else notes = text || null;
+    }
+  }
 
   const rawLines = Array.isArray(body.ingredients) ? body.ingredients : [];
   if (rawLines.length > RECIPE_MAX_LINES) errors.ingredients = `Máximo ${RECIPE_MAX_LINES} ingredientes.`;
@@ -194,7 +222,7 @@ export function validateRecipeInput(input: unknown): Validation<RecipeInput> {
   });
 
   if (Object.keys(errors).length || !name) return { ok: false, errors };
-  return { ok: true, data: { name, yieldQuantity: yieldQuantity as number, lines, extras } };
+  return { ok: true, data: { name, yieldQuantity, status, notes, lines, extras } };
 }
 
 /** ¿Esa unidad sirve para ese ingrediente en una receta? */
@@ -261,7 +289,9 @@ export const toIngredientJson = (i: IngredientRow) => ({
 export type RecipeRow = {
   id: string;
   name: string;
-  yieldQuantity: number;
+  yieldQuantity: number | null;
+  status: RecipeStatus;
+  notes: string | null;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -271,7 +301,9 @@ export type RecipeRow = {
 
 /**
  * Costo de la receta con los precios ACTUALES. Si falta el precio de algún
- * ingrediente, el costo queda incompleto (nunca se asume 0).
+ * ingrediente, el costo queda incompleto (nunca se asume 0). Sin rendimiento
+ * (borrador) no hay costo por cookie. En un BORRADOR el costo es siempre
+ * PARCIAL: la web no lo presenta como definitivo.
  */
 export function computeRecipe(r: RecipeRow) {
   let ingredientsCost = new Decimal(0);
@@ -302,6 +334,8 @@ export function computeRecipe(r: RecipeRow) {
     id: r.id,
     name: r.name,
     yieldQuantity: r.yieldQuantity,
+    status: r.status,
+    notes: r.notes,
     active: r.active,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -313,8 +347,10 @@ export function computeRecipe(r: RecipeRow) {
       /** Con faltantes: suma parcial (solo de referencia); total y por cookie = null. */
       ingredientsCost: money(ingredientsCost),
       extrasCost: money(extrasCost),
+      /** Suma de lo que tiene precio (ingredientes + gastos): en borrador es el "costo parcial". */
+      knownCost: money(total),
       totalCost: complete ? money(total) : null,
-      costPerCookie: complete ? money(total.div(r.yieldQuantity)) : null,
+      costPerCookie: complete && r.yieldQuantity ? money(total.div(r.yieldQuantity)) : null,
     },
   };
 }

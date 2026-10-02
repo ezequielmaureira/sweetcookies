@@ -6,9 +6,15 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ButtonLink } from "@/components/ui/Button";
 import { adminErrorMessage } from "@/lib/admin/admin-api";
-import { formatMoney, listRecipes, type Recipe } from "@/lib/admin/gestion";
+import { formatMoney, listRecipes, type Recipe, type RecipeStatus } from "@/lib/admin/gestion";
 import adminStyles from "../Admin.module.css";
 import styles from "./Gestion.module.css";
+
+const FILTERS: [RecipeStatus | "ALL", string][] = [
+  ["ALL", "Todas"],
+  ["COMPLETE", "Completas"],
+  ["DRAFT", "Borradores"],
+];
 
 const normalize = (s: string) => s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
@@ -19,6 +25,7 @@ export function RecipesList() {
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<RecipeStatus | "ALL">("ALL");
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -36,13 +43,21 @@ export function RecipesList() {
     };
   }, [getToken, isLoaded]);
 
-  const visible = (recipes ?? []).filter((r) => normalize(r.name).includes(normalize(q.trim())));
+  const visible = (recipes ?? []).filter((r) => (filter === "ALL" || r.status === filter) && normalize(r.name).includes(normalize(q.trim())));
 
   return (
     <>
       <div className={styles.toolbar}>
         <input type="search" className={`${adminStyles.input} ${styles.search}`} placeholder="Buscar receta" aria-label="Buscar receta" value={q} onChange={(e) => setQ(e.target.value)} />
         <ButtonLink href="/admin/gestion/recetas/nueva">+ Nueva receta</ButtonLink>
+      </div>
+      <div className={styles.filters} role="group" aria-label="Filtrar recetas">
+        {FILTERS.map(([value, label]) => (
+          <button key={value} type="button" className={styles.filter} aria-pressed={filter === value} onClick={() => setFilter(value)}>
+            {label}
+            {recipes && ` (${value === "ALL" ? recipes.length : recipes.filter((r) => r.status === value).length})`}
+          </button>
+        ))}
       </div>
 
       {deleted && (
@@ -61,7 +76,7 @@ export function RecipesList() {
         </p>
       )}
       {recipes && recipes.length === 0 && <p className={styles.empty}>Todavía no hay recetas. Creá la primera con “+ Nueva receta”.</p>}
-      {recipes && recipes.length > 0 && visible.length === 0 && <p className={styles.empty}>No hay recetas que coincidan con “{q}”.</p>}
+      {recipes && recipes.length > 0 && visible.length === 0 && <p className={styles.empty}>No hay recetas que coincidan con la búsqueda o el filtro.</p>}
 
       <ul className={styles.list}>
         {visible.map((r) => (
@@ -69,18 +84,23 @@ export function RecipesList() {
             <Link href={`/admin/gestion/recetas/${r.id}`} className={styles.item}>
               <span className={styles.itemHead}>
                 <span className={styles.itemName}>{r.name}</span>
-                <span className={styles.itemMeta}>Rinde {r.yieldQuantity} {r.yieldQuantity === 1 ? "cookie" : "cookies"}</span>
+                {r.status === "DRAFT" ? <span className={styles.chipWarn}>⚠ Borrador</span> : <span className={styles.chipOk}>Completa</span>}
               </span>
-              {r.summary.costPerCookie ? (
+              <span className={styles.itemMeta}>{r.yieldQuantity ? `Rinde ${r.yieldQuantity} ${r.yieldQuantity === 1 ? "cookie" : "cookies"}` : "⚠ Rendimiento pendiente"}</span>
+              {r.status === "DRAFT" ? (
+                <span className={styles.itemMeta}>{r.notes || "Faltan datos para calcular el costo real."}</span>
+              ) : r.summary.costPerCookie ? (
                 <span className={styles.cost}>{formatMoney(r.summary.costPerCookie)} por 1 cookie</span>
               ) : (
                 <span className={styles.warn}>⚠ Costo incompleto</span>
               )}
               <span className={styles.itemMeta}>
                 {r.ingredients.length} {r.ingredients.length === 1 ? "ingrediente" : "ingredientes"}
-                {r.summary.totalCost
-                  ? ` · Ingredientes ${formatMoney(r.summary.ingredientsCost)} · Gastos ${formatMoney(r.summary.extrasCost)} · Total ${formatMoney(r.summary.totalCost)}`
-                  : ` · Faltan ${r.summary.missingPrices} ${r.summary.missingPrices === 1 ? "precio" : "precios"}`}
+                {r.status === "DRAFT"
+                  ? ` · Costo parcial ${formatMoney(r.summary.knownCost)}`
+                  : r.summary.totalCost
+                    ? ` · Ingredientes ${formatMoney(r.summary.ingredientsCost)} · Gastos ${formatMoney(r.summary.extrasCost)} · Total ${formatMoney(r.summary.totalCost)}`
+                    : ` · Faltan ${r.summary.missingPrices} ${r.summary.missingPrices === 1 ? "precio" : "precios"}`}
               </span>
             </Link>
           </li>

@@ -51,10 +51,16 @@ export type RecipeLine = {
   subtotal: string | null;
 };
 
+/** Borrador: faltan datos (rellenos, cantidades, rendimiento). Completa: receta terminada. */
+export type RecipeStatus = "DRAFT" | "COMPLETE";
+
 export type Recipe = {
   id: string;
   name: string;
-  yieldQuantity: number;
+  /** null = rendimiento pendiente (solo en borrador). */
+  yieldQuantity: number | null;
+  status: RecipeStatus;
+  notes: string | null;
   active: boolean;
   ingredients: RecipeLine[];
   extraCosts: { id: string; name: string; amount: string }[];
@@ -63,6 +69,8 @@ export type Recipe = {
     missingPrices: number;
     ingredientsCost: string;
     extrasCost: string;
+    /** Lo que tiene precio (ingredientes + gastos). En borrador = costo parcial. */
+    knownCost: string;
     totalCost: string | null;
     costPerCookie: string | null;
   };
@@ -74,7 +82,9 @@ export type PriceInput = { quantity: string; unit: MeasureUnit; unitsPerPackage?
 
 export type RecipeInput = {
   name: string;
-  yieldQuantity: number;
+  yieldQuantity: number | null;
+  status: RecipeStatus;
+  notes: string | null;
   ingredients: { ingredientId: string; quantity: string; unit: MeasureUnit }[];
   extraCosts: { name: string; amount: string }[];
 };
