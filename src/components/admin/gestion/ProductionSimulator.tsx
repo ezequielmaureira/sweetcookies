@@ -6,11 +6,24 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/vouchers/ConfirmDialog";
 import { adminErrorMessage } from "@/lib/admin/admin-api";
-import { formatFactor, formatMoney, formatNeeded, formatUnitCost, listRecipes, simulateProduction, type Recipe, type SimulationResult } from "@/lib/admin/gestion";
+import {
+  COMPONENT_LABELS,
+  PARTS,
+  formatFactor,
+  formatMoney,
+  formatNeeded,
+  formatUnitCost,
+  listRecipes,
+  simulateProduction,
+  type Recipe,
+  type RecipeComponent,
+  type SimulationResult,
+} from "@/lib/admin/gestion";
 import adminStyles from "../Admin.module.css";
 import styles from "./Gestion.module.css";
 
-type Line = { key: string; recipeId: string; cookies: number };
+/** required = partes que FALTA preparar (por defecto: masa, relleno y terminación). */
+type Line = { key: string; recipeId: string; cookies: number; required: RecipeComponent[] };
 
 let seq = 0;
 const newKey = () => `s${++seq}`;
@@ -31,6 +44,7 @@ export function ProductionSimulator() {
   const [result, setResult] = useState<{ key: string; data: SimulationResult } | null>(null);
   const [simError, setSimError] = useState<{ key: string; text: string } | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [ingredientView, setIngredientView] = useState<"pending" | "all">("pending");
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -51,7 +65,9 @@ export function ProductionSimulator() {
 
   const byId = new Map((recipes ?? []).map((r) => [r.id, r]));
   // Solo entran al cálculo las líneas con receta, rendimiento definido y cantidad ≥ 1.
-  const items = lines.filter((l) => byId.get(l.recipeId)?.yieldQuantity && l.cookies >= 1).map((l) => ({ recipeId: l.recipeId, cookies: l.cookies }));
+  const items = lines
+    .filter((l) => byId.get(l.recipeId)?.yieldQuantity && l.cookies >= 1)
+    .map((l) => ({ recipeId: l.recipeId, cookies: l.cookies, requiredComponents: PARTS.filter((c) => l.required.includes(c)) }));
   const itemsKey = JSON.stringify(items);
 
   // Recalcula solo, con una pequeña espera mientras se escribe.
@@ -93,6 +109,9 @@ export function ProductionSimulator() {
   const updating = shown !== null && shown.key !== itemsKey;
   const detailById = new Map((shown?.data.recipes ?? []).map((d) => [d.recipeId, d]));
   const summary = shown?.data.summary;
+  const toggleRequired = (line: Line, part: RecipeComponent) =>
+    update(line.key, { required: line.required.includes(part) ? line.required.filter((c) => c !== part) : [...line.required, part] });
+  const pendingIngredients = (shown?.data.ingredients ?? []).filter((i) => Number(i.pendingQuantity) > 0);
 
   return (
     <div className={adminStyles.form}>
@@ -168,12 +187,29 @@ export function ProductionSimulator() {
                           </button>
                         </div>
                       </div>
+                      <fieldset className={styles.partsFieldset}>
+                        <legend className={adminStyles.label}>Necesito preparar</legend>
+                        <div className={styles.partToggles}>
+                          {PARTS.map((part) => (
+                            <label key={part} className={styles.partToggle}>
+                              <input type="checkbox" checked={line.required.includes(part)} onChange={() => toggleRequired(line, part)} />
+                              {COMPONENT_LABELS[part]}
+                            </label>
+                          ))}
+                        </div>
+                        {PARTS.filter((part) => !line.required.includes(part)).map((part) => (
+                          <p key={part} className={styles.ready}>
+                            ✓ {COMPONENT_LABELS[part]} ya preparad{part === "FILLING" ? "o" : "a"}
+                          </p>
+                        ))}
+                      </fieldset>
                       <p className={styles.lineCost}>
                         Rinde {recipe.yieldQuantity} · {line.cookies >= 1 ? `Equivale a ${formatFactor(String(line.cookies / recipe.yieldQuantity!))}` : "Ingresá la cantidad"}
                         {detail && (
                           <>
                             {" · "}
                             <strong className={styles.lineSubtotal}>{detail.totalCost ? formatMoney(detail.totalCost) : `${formatMoney(detail.knownCost)} parcial`}</strong>
+                            {detail.requiredComponents.length < PARTS.length && <> · pendiente {detail.pendingCost ? formatMoney(detail.pendingCost) : "⚠ incompleto"}</>}
                           </>
                         )}
                       </p>
@@ -193,7 +229,7 @@ export function ProductionSimulator() {
         </div>
 
         <div className={adminStyles.actions}>
-          <Button variant="secondary" onClick={() => setLines((prev) => [...prev, { key: newKey(), recipeId: "", cookies: 0 }])} disabled={lines.length >= recipes.length}>
+          <Button variant="secondary" onClick={() => setLines((prev) => [...prev, { key: newKey(), recipeId: "", cookies: 0, required: [...PARTS] }])} disabled={lines.length >= recipes.length}>
             + Agregar receta
           </Button>
           {lines.length > 0 && (
@@ -230,6 +266,17 @@ export function ProductionSimulator() {
                     {d.cookies} cookies · Receta base: {d.yieldQuantity} cookies · Equivale a {formatFactor(d.factor)}
                   </span>
                   <span className={styles.itemMeta}>Costo receta base: {d.baseCost ? formatMoney(d.baseCost) : "⚠ incompleto"}</span>
+                  <span className={styles.partList}>
+                    {(Object.keys(COMPONENT_LABELS) as RecipeComponent[])
+                      .filter((c) => d.components[c].lines > 0)
+                      .map((c) => (
+                        <span key={c} className={styles.partRow}>
+                          <span>{COMPONENT_LABELS[c]}</span>
+                          <span>{d.components[c].cost ? formatMoney(d.components[c].cost!) : <span className={styles.warn}>⚠ Incompleto</span>}</span>
+                          <span className={d.components[c].pending ? styles.partPending : styles.partReady}>{d.components[c].pending ? "Pendiente" : "✓ Ya preparada"}</span>
+                        </span>
+                      ))}
+                  </span>
                   {d.totalCost ? (
                     <span className={styles.cost}>
                       {formatMoney(d.totalCost)} · {formatMoney(d.costPerCookie!)} por cookie
@@ -240,31 +287,53 @@ export function ProductionSimulator() {
                     </span>
                   )}
                   {Number(d.extrasCost) > 0 && <span className={styles.itemMeta}>Incluye gastos adicionales: {formatMoney(d.extrasCost)}</span>}
+                  <span className={styles.itemMeta}>
+                    Total real {d.totalCost ? formatMoney(d.totalCost) : `${formatMoney(d.knownCost)} parcial`} · Pendiente{" "}
+                    {d.pendingCost ? formatMoney(d.pendingCost) : `⚠ ${formatMoney(d.pendingKnownCost)} parcial`}
+                  </span>
                 </li>
               ))}
             </ul>
           </section>
 
           <section className={adminStyles.section}>
-            <h2 className={adminStyles.sectionTitle}>Ingredientes necesarios</h2>
+            <h2 className={adminStyles.sectionTitle}>Ingredientes</h2>
+            <div className={styles.filters} role="group" aria-label="Ver ingredientes">
+              <button type="button" className={styles.filter} aria-pressed={ingredientView === "pending"} onClick={() => setIngredientView("pending")}>
+                Pendientes de preparar ({pendingIngredients.length})
+              </button>
+              <button type="button" className={styles.filter} aria-pressed={ingredientView === "all"} onClick={() => setIngredientView("all")}>
+                Necesarios totales ({shown.data.ingredients.length})
+              </button>
+            </div>
+            <p className={adminStyles.help}>
+              {ingredientView === "pending"
+                ? "Solo lo que falta preparar: no incluye las partes marcadas como ya preparadas."
+                : "Todo lo que lleva la producción completa, incluidas las partes ya preparadas."}
+            </p>
+            {ingredientView === "pending" && pendingIngredients.length === 0 && <p className={styles.empty}>No falta preparar nada: todas las partes están listas.</p>}
             <ul className={styles.list}>
-              {shown.data.ingredients.map((i) => (
-                <li key={i.ingredientId} className={styles.item}>
-                  <span className={styles.itemHead}>
-                    <span className={styles.itemName}>{i.name}</span>
-                    {i.cost ? <span className={styles.cost}>{formatMoney(i.cost)}</span> : <span className={styles.warn}>⚠ SIN PRECIO</span>}
-                  </span>
-                  <span className={styles.neededQty}>{formatNeeded(i.quantity, i.baseUnit)}</span>
-                  {i.unitCost ? (
-                    <span className={styles.itemMeta}>Costo actual: {formatUnitCost(i.unitCost, i.baseUnit)}</span>
-                  ) : (
-                    <Link href={`/admin/gestion/ingredientes/${i.ingredientId}`} className={styles.inlineLink}>
-                      Cargar precio →
-                    </Link>
-                  )}
-                  {shown.data.recipes.length > 1 && <span className={styles.itemMeta}>Para: {i.usedIn.join(", ")}</span>}
-                </li>
-              ))}
+              {(ingredientView === "pending" ? pendingIngredients : shown.data.ingredients).map((i) => {
+                const quantity = ingredientView === "pending" ? i.pendingQuantity : i.quantity;
+                const cost = ingredientView === "pending" ? i.pendingCost : i.cost;
+                return (
+                  <li key={i.ingredientId} className={styles.item}>
+                    <span className={styles.itemHead}>
+                      <span className={styles.itemName}>{i.name}</span>
+                      {cost ? <span className={styles.cost}>{formatMoney(cost)}</span> : <span className={styles.warn}>⚠ SIN PRECIO</span>}
+                    </span>
+                    <span className={styles.neededQty}>{formatNeeded(quantity, i.baseUnit)}</span>
+                    {i.unitCost ? (
+                      <span className={styles.itemMeta}>Costo actual: {formatUnitCost(i.unitCost, i.baseUnit)}</span>
+                    ) : (
+                      <Link href={`/admin/gestion/ingredientes/${i.ingredientId}`} className={styles.inlineLink}>
+                        Cargar precio →
+                      </Link>
+                    )}
+                    {shown.data.recipes.length > 1 && <span className={styles.itemMeta}>Para: {i.usedIn.join(", ")}</span>}
+                  </li>
+                );
+              })}
             </ul>
           </section>
 
@@ -297,7 +366,7 @@ export function ProductionSimulator() {
               <span>{formatMoney(summary.extrasCost)}</span>
             </div>
             <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
-              <span>{summary.complete ? (summary.hasDraft ? "Costo total (parcial)" : "Costo total") : "Costo parcial conocido"}</span>
+              <span>{summary.complete ? (summary.hasDraft ? "Costo total real (parcial)" : "Costo total real") : "Costo parcial conocido"}</span>
               <span>{formatMoney(summary.complete ? summary.totalCost! : summary.knownCost)}</span>
             </div>
             <div className={styles.perCookie}>
@@ -305,6 +374,17 @@ export function ProductionSimulator() {
               <span className={styles.perCookieValue}>{summary.averagePerCookie ? formatMoney(summary.averagePerCookie) : "—"}</span>
             </div>
             <p className={adminStyles.help}>Promedio general de toda la producción. Cada sabor tiene su propio costo en el detalle por receta.</p>
+            <div className={styles.pendingBox}>
+              <span className={styles.perCookieLabel}>Costo pendiente de producción</span>
+              <span className={styles.pendingValue}>{summary.pendingCost ? formatMoney(summary.pendingCost) : `⚠ ${formatMoney(summary.pendingKnownCost)} parcial`}</span>
+              <span className={adminStyles.help}>
+                Solo los ingredientes de las partes que falta preparar. Las partes ya preparadas siguen dentro del costo total real.
+                {Number(summary.extrasCost) > 0 && " Los gastos adicionales van en el costo total."}
+              </span>
+            </div>
+            {summary.hasUnassigned && (
+              <p className={styles.warnBox}>Hay ingredientes “Sin clasificar” en alguna receta: se cuentan siempre como pendientes. Clasificalos en la receta.</p>
+            )}
           </section>
         </div>
       )}

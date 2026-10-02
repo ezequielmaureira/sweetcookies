@@ -38,8 +38,20 @@ export type Ingredient = {
 
 export type IngredientDetail = Ingredient & { prices: IngredientPrice[] };
 
+/** Parte de la receta. UNASSIGNED = "Sin clasificar" (para revisar). */
+export type RecipeComponent = "UNASSIGNED" | "DOUGH" | "FILLING" | "FINISHING";
+
+export const COMPONENT_LABELS: Record<RecipeComponent, string> = { DOUGH: "Masa", FILLING: "Relleno", FINISHING: "Terminación", UNASSIGNED: "Sin clasificar" };
+
+/** Partes de una cookie, en orden de elaboración. */
+export const PARTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "FINISHING"];
+
+/** Costo de una parte: cost = null si le falta algún precio (nunca 0). */
+export type PartCost = { cost: string | null; knownCost: string; missingPrices: number; lines: number };
+
 export type RecipeLine = {
   id: string;
+  component: RecipeComponent;
   ingredientId: string;
   ingredientName: string;
   ingredientActive: boolean;
@@ -67,6 +79,8 @@ export type Recipe = {
   summary: {
     complete: boolean;
     missingPrices: number;
+    /** Costo de masa / relleno / terminación / sin clasificar. */
+    components: Record<RecipeComponent, PartCost>;
     ingredientsCost: string;
     extrasCost: string;
     /** Lo que tiene precio (ingredientes + gastos). En borrador = costo parcial. */
@@ -85,7 +99,7 @@ export type RecipeInput = {
   yieldQuantity: number | null;
   status: RecipeStatus;
   notes: string | null;
-  ingredients: { ingredientId: string; quantity: string; unit: MeasureUnit }[];
+  ingredients: { ingredientId: string; quantity: string; unit: MeasureUnit; component: RecipeComponent }[];
   extraCosts: { name: string; amount: string }[];
 };
 
@@ -193,28 +207,39 @@ export type SimulationResult = {
     yieldQuantity: number;
     /** Equivalencia en recetas ("2", "1.5"). */
     factor: string;
+    /** Partes que falta preparar. */
+    requiredComponents: RecipeComponent[];
     baseCost: string | null;
+    /** Costo de cada parte para estas cookies y si está pendiente. */
+    components: Record<RecipeComponent, PartCost & { pending: boolean }>;
     missingPrices: number;
     ingredientsCost: string;
     extrasCost: string;
     knownCost: string;
     totalCost: string | null;
     costPerCookie: string | null;
+    /** Solo las partes por preparar (sin gastos). */
+    pendingKnownCost: string;
+    pendingCost: string | null;
   }[];
   /** Ingredientes agrupados (orden alfabético). Etapa 2: cruzar con stock por ingredientId. */
   ingredients: {
     ingredientId: string;
     name: string;
     baseUnit: BaseUnit;
-    /** Cantidad necesaria en unidad base (g, ml o unidades). */
+    /** Cantidad necesaria en unidad base (g, ml o unidades), todas las partes. */
     quantity: string;
+    /** Solo de las partes que falta preparar. */
+    pendingQuantity: string;
     unitCost: string | null;
     cost: string | null;
+    pendingCost: string | null;
     usedIn: string[];
   }[];
   summary: {
     totalCookies: number;
     hasDraft: boolean;
+    hasUnassigned: boolean;
     complete: boolean;
     missingPrices: number;
     ingredientsCost: string;
@@ -222,10 +247,13 @@ export type SimulationResult = {
     knownCost: string;
     totalCost: string | null;
     averagePerCookie: string | null;
+    pendingComplete: boolean;
+    pendingKnownCost: string;
+    pendingCost: string | null;
   };
 };
 
-export const simulateProduction = (token: string | null, items: { recipeId: string; cookies: number }[]) =>
+export const simulateProduction = (token: string | null, items: { recipeId: string; cookies: number; requiredComponents: RecipeComponent[] }[]) =>
   adminRequest<SimulationResult>("/api/admin/production/simulate", token, { method: "POST", body: JSON.stringify({ items }) });
 
 const factorFormat = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });

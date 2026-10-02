@@ -146,7 +146,16 @@ export function validatePriceInput(input: unknown, baseUnit: BaseUnit): Validati
   };
 }
 
-export type RecipeLineInput = { ingredientId: string; quantity: Decimal; unit: MeasureUnit };
+/**
+ * Parte de la receta a la que pertenece cada ingrediente. UNASSIGNED = "Sin
+ * clasificar" (líneas anteriores a esta separación que el admin debe revisar).
+ */
+export type RecipeComponent = "UNASSIGNED" | "DOUGH" | "FILLING" | "FINISHING";
+export const RECIPE_COMPONENTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "FINISHING", "UNASSIGNED"];
+/** Las partes que se pueden marcar como "ya preparada" en el simulador. */
+export const PREPARABLE_COMPONENTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "FINISHING"];
+
+export type RecipeLineInput = { ingredientId: string; quantity: Decimal; unit: MeasureUnit; component: RecipeComponent };
 export type RecipeExtraInput = { name: string; amount: Decimal };
 export type RecipeStatus = "DRAFT" | "COMPLETE";
 /** status/notes ausentes = no se cambian al editar (en una receta nueva: COMPLETE, sin notas). */
@@ -203,10 +212,13 @@ export function validateRecipeInput(input: unknown): Validation<RecipeInput> {
     const ingredientId = typeof line.ingredientId === "string" ? line.ingredientId : "";
     const quantity = decimalFrom(line.quantity, QUANTITY);
     const unit = line.unit as MeasureUnit;
+    // Sin parte (clientes anteriores) = "Sin clasificar".
+    const component = line.component === undefined ? "UNASSIGNED" : (line.component as RecipeComponent);
+    if (!RECIPE_COMPONENTS.includes(component)) errors[`ingredients.${i}.component`] = "Elegí masa, relleno o terminación.";
     if (!ingredientId) errors[`ingredients.${i}.ingredientId`] = "Elegí un ingrediente.";
     if (!quantity || quantity.lte(0)) errors[`ingredients.${i}.quantity`] = "Ingresá la cantidad (mayor a 0).";
     if (!["G", "KG", "ML", "L", "UNIT"].includes(unit)) errors[`ingredients.${i}.unit`] = "Elegí la unidad.";
-    if (ingredientId && quantity && quantity.gt(0)) lines.push({ ingredientId, quantity, unit });
+    if (ingredientId && quantity && quantity.gt(0)) lines.push({ ingredientId, quantity, unit, component });
   });
 
   const rawExtras = Array.isArray(body.extraCosts) ? body.extraCosts : [];
@@ -295,38 +307,62 @@ export type RecipeRow = {
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
-  lines: { id: string; quantity: Decimal; unit: MeasureUnit; ingredient: { id: string; name: string; baseUnit: BaseUnit; active: boolean; unitCost: Decimal | null } }[];
+  lines: { id: string; quantity: Decimal; unit: MeasureUnit; component: RecipeComponent; ingredient: { id: string; name: string; baseUnit: BaseUnit; active: boolean; unitCost: Decimal | null } }[];
   extras: { id: string; name: string; amount: Decimal }[];
 };
+
+/* ---------- Costos por parte (motor común de recetas y simulador) ---------- */
+
+type PartTotals = { known: Decimal; missing: number; lines: number };
+type Parts = Record<RecipeComponent, PartTotals>;
+
+const emptyParts = (): Parts => ({
+  DOUGH: { known: new Decimal(0), missing: 0, lines: 0 },
+  FILLING: { known: new Decimal(0), missing: 0, lines: 0 },
+  FINISHING: { known: new Decimal(0), missing: 0, lines: 0 },
+  UNASSIGNED: { known: new Decimal(0), missing: 0, lines: 0 },
+});
+
+/**
+ * Cada línea de la receta × factor: cantidad en unidad base y costo con el
+ * precio actual, acumulado por parte (masa, relleno, terminación, sin clasificar).
+ * factor = 1 para la receta base; cookies / rendimiento en el simulador.
+ */
+function costLines(r: RecipeRow, factor: Decimal) {
+  const parts = emptyParts();
+  const lines = r.lines.map((line) => {
+    const baseQuantity = toBaseQuantity(line.quantity, line.unit).mul(factor);
+    const unitCost = line.ingredient.unitCost;
+    const subtotal = unitCost ? baseQuantity.mul(unitCost) : null;
+    const part = parts[line.component];
+    part.lines++;
+    if (subtotal) part.known = part.known.add(subtotal);
+    else part.missing++;
+    return { line, baseQuantity, unitCost, subtotal };
+  });
+  return { lines, parts };
+}
+
+const sumParts = (parts: Parts, components: readonly RecipeComponent[]) =>
+  components.reduce((acc, c) => ({ known: acc.known.add(parts[c].known), missing: acc.missing + parts[c].missing }), { known: new Decimal(0), missing: 0 });
+
+/** Costo de una parte: null si le falta algún precio (nunca 0). */
+const partJson = (p: PartTotals) => ({ cost: p.missing ? null : money(p.known), knownCost: money(p.known), missingPrices: p.missing, lines: p.lines });
+
+const partsJson = (parts: Parts) =>
+  Object.fromEntries(RECIPE_COMPONENTS.map((c) => [c, partJson(parts[c])])) as Record<RecipeComponent, ReturnType<typeof partJson>>;
 
 /**
  * Costo de la receta con los precios ACTUALES. Si falta el precio de algún
  * ingrediente, el costo queda incompleto (nunca se asume 0). Sin rendimiento
  * (borrador) no hay costo por cookie. En un BORRADOR el costo es siempre
- * PARCIAL: la web no lo presenta como definitivo.
+ * PARCIAL: la web no lo presenta como definitivo. Además, costo por parte.
  */
 export function computeRecipe(r: RecipeRow) {
-  let ingredientsCost = new Decimal(0);
-  let missing = 0;
-  const lines = r.lines.map((line) => {
-    const baseQuantity = toBaseQuantity(line.quantity, line.unit);
-    const unitCost = line.ingredient.unitCost;
-    const subtotal = unitCost ? baseQuantity.mul(unitCost) : null;
-    if (subtotal) ingredientsCost = ingredientsCost.add(subtotal);
-    else missing++;
-    return {
-      id: line.id,
-      ingredientId: line.ingredient.id,
-      ingredientName: line.ingredient.name,
-      ingredientActive: line.ingredient.active,
-      baseUnit: line.ingredient.baseUnit,
-      quantity: line.quantity.toString(),
-      unit: line.unit,
-      baseQuantity: baseQuantity.toString(),
-      unitCost: unitCost?.toString() ?? null,
-      subtotal: subtotal ? money(subtotal) : null,
-    };
-  });
+  const { lines, parts } = costLines(r, new Decimal(1));
+  const all = sumParts(parts, RECIPE_COMPONENTS);
+  const ingredientsCost = all.known;
+  const missing = all.missing;
   const extrasCost = r.extras.reduce((sum, e) => sum.add(e.amount), new Decimal(0));
   const complete = missing === 0;
   const total = ingredientsCost.add(extrasCost);
@@ -339,11 +375,25 @@ export function computeRecipe(r: RecipeRow) {
     active: r.active,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
-    ingredients: lines,
+    ingredients: lines.map(({ line, baseQuantity, unitCost, subtotal }) => ({
+      id: line.id,
+      ingredientId: line.ingredient.id,
+      ingredientName: line.ingredient.name,
+      ingredientActive: line.ingredient.active,
+      baseUnit: line.ingredient.baseUnit,
+      component: line.component,
+      quantity: line.quantity.toString(),
+      unit: line.unit,
+      baseQuantity: baseQuantity.toString(),
+      unitCost: unitCost?.toString() ?? null,
+      subtotal: subtotal ? money(subtotal) : null,
+    })),
     extraCosts: r.extras.map((e) => ({ id: e.id, name: e.name, amount: money(e.amount) })),
     summary: {
       complete,
       missingPrices: missing,
+      /** Costo de masa / relleno / terminación / sin clasificar (cost = null si falta un precio). */
+      components: partsJson(parts),
       /** Con faltantes: suma parcial (solo de referencia); total y por cookie = null. */
       ingredientsCost: money(ingredientsCost),
       extrasCost: money(extrasCost),
@@ -357,13 +407,17 @@ export function computeRecipe(r: RecipeRow) {
 
 /* ---------- Simulador de producción (solo cálculo: no guarda nada) ---------- */
 
-export type SimulationItem = { recipeId: string; cookies: number };
+/**
+ * requiredComponents = partes que FALTA preparar (por defecto las tres). Una
+ * parte ya preparada sigue en el costo TOTAL REAL; solo sale de lo PENDIENTE.
+ */
+export type SimulationItem = { recipeId: string; cookies: number; requiredComponents: RecipeComponent[] };
 
 export const SIMULATION_MAX_ITEMS = 50;
 
 const validCookies = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 100000;
 
-/** Pedido del simulador: { items: [{ recipeId, cookies }] }, cookies entero ≥ 1, sin recetas repetidas. */
+/** Pedido del simulador: { items: [{ recipeId, cookies, requiredComponents? }] }, cookies entero ≥ 1, sin recetas repetidas. */
 export function validateSimulationInput(input: unknown): Validation<SimulationItem[]> {
   const raw = obj(input).items;
   if (!Array.isArray(raw) || raw.length > SIMULATION_MAX_ITEMS) return { ok: false, errors: { items: `Entre 0 y ${SIMULATION_MAX_ITEMS} recetas.` } };
@@ -373,11 +427,16 @@ export function validateSimulationInput(input: unknown): Validation<SimulationIt
   raw.forEach((value, i) => {
     const item = obj(value);
     const recipeId = typeof item.recipeId === "string" ? item.recipeId : "";
-    const cookies = typeof item.cookies === "string" ? Number(item.cookies) : item.cookies;
+    // "quantity" se acepta como sinónimo de "cookies".
+    const rawCookies = item.cookies ?? item.quantity;
+    const cookies = typeof rawCookies === "string" ? Number(rawCookies) : rawCookies;
+    const required = item.requiredComponents === undefined ? [...PREPARABLE_COMPONENTS] : item.requiredComponents;
+    const validRequired = Array.isArray(required) && required.every((c) => PREPARABLE_COMPONENTS.includes(c as RecipeComponent));
     if (!recipeId) errors[`items.${i}.recipeId`] = "Elegí una receta.";
     else if (seen.has(recipeId)) errors[`items.${i}.recipeId`] = "Esa receta ya está en la simulación.";
     else if (!validCookies(cookies)) errors[`items.${i}.cookies`] = "Cantidad de cookies inválida.";
-    else items.push({ recipeId, cookies });
+    else if (!validRequired) errors[`items.${i}.requiredComponents`] = "Partes inválidas (masa, relleno o terminación).";
+    else items.push({ recipeId, cookies, requiredComponents: [...new Set(required as RecipeComponent[])] });
     seen.add(recipeId);
   });
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, data: items };
@@ -387,44 +446,56 @@ export function validateSimulationInput(input: unknown): Validation<SimulationIt
 export const recipeScaleFactor = (cookies: number, yieldQuantity: number) => new Decimal(cookies).div(yieldQuantity);
 
 /**
- * Simulación TEÓRICA de producción con los costos ACTUALES (misma conversión
- * a unidad base y mismo costo actual que computeRecipe). Escala ingredientes y
- * gastos por el factor de cada receta, agrupa ingredientes iguales y suma.
- * Sin precio → costo incompleto (nunca 0). Todo en Decimal; se redondea solo
- * al devolver.
+ * Simulación TEÓRICA de producción con los costos ACTUALES (mismo motor que
+ * computeRecipe: costLines). Escala ingredientes y gastos por el factor de cada
+ * receta, agrupa ingredientes iguales y suma. Sin precio → incompleto (nunca 0).
  *
- * Etapa 2: cada ingrediente sale con su id y cantidad en unidad base, listo para
- * cruzar con stock (faltante = necesario − stock) y armar la lista de compras;
- * los items (recetaId + cookies) pueden venir de los pedidos pendientes.
+ * Dos miradas:
+ *   - TOTAL REAL: todas las partes + gastos (lo que cuestan las cookies).
+ *   - PENDIENTE: solo las partes que falta preparar (requiredComponents).
+ *     Las líneas "Sin clasificar" se cuentan siempre como pendientes.
+ *     Los gastos adicionales van en el total real, no en el pendiente.
+ *
+ * Etapa 2: cada ingrediente sale con su id y cantidades (total y pendiente) en
+ * unidad base, listo para cruzar con stock (faltante = pendiente − stock) y con
+ * preparaciones semielaboradas por parte (ej. masa Ferrero lista para 20 cookies).
  */
 export function simulateProduction(recipes: Map<string, RecipeRow>, items: SimulationItem[]) {
-  type Total = { id: string; name: string; baseUnit: BaseUnit; unitCost: Decimal | null; quantity: Decimal; usedIn: string[] };
+  type Total = { id: string; name: string; baseUnit: BaseUnit; unitCost: Decimal | null; quantity: Decimal; pendingQuantity: Decimal; usedIn: string[] };
   const totals = new Map<string, Total>();
   let totalCookies = 0;
   let extrasCost = new Decimal(0);
   let hasDraft = false;
+  let hasUnassigned = false;
 
-  const detail = items.map(({ recipeId, cookies }) => {
+  const detail = items.map(({ recipeId, cookies, requiredComponents }) => {
     const r = recipes.get(recipeId)!;
     const factor = recipeScaleFactor(cookies, r.yieldQuantity!);
-    let recipeIngredients = new Decimal(0);
-    let missing = 0;
-    for (const line of r.lines) {
-      const quantity = toBaseQuantity(line.quantity, line.unit).mul(factor);
-      const unitCost = line.ingredient.unitCost;
-      if (unitCost) recipeIngredients = recipeIngredients.add(quantity.mul(unitCost));
-      else missing++;
-      const t: Total = totals.get(line.ingredient.id) ?? { id: line.ingredient.id, name: line.ingredient.name, baseUnit: line.ingredient.baseUnit, unitCost, quantity: new Decimal(0), usedIn: [] };
-      t.quantity = t.quantity.add(quantity);
+    const pendingParts: RecipeComponent[] = [...requiredComponents, "UNASSIGNED"];
+    const { lines, parts } = costLines(r, factor);
+    for (const { line, baseQuantity, unitCost } of lines) {
+      const t: Total = totals.get(line.ingredient.id) ?? {
+        id: line.ingredient.id,
+        name: line.ingredient.name,
+        baseUnit: line.ingredient.baseUnit,
+        unitCost,
+        quantity: new Decimal(0),
+        pendingQuantity: new Decimal(0),
+        usedIn: [],
+      };
+      t.quantity = t.quantity.add(baseQuantity);
+      if (pendingParts.includes(line.component)) t.pendingQuantity = t.pendingQuantity.add(baseQuantity);
       if (!t.usedIn.includes(r.name)) t.usedIn.push(r.name);
       totals.set(line.ingredient.id, t);
     }
+    const all = sumParts(parts, RECIPE_COMPONENTS);
+    const pending = sumParts(parts, pendingParts);
     const recipeExtras = r.extras.reduce((sum, e) => sum.add(e.amount), new Decimal(0)).mul(factor);
-    const complete = missing === 0;
-    const total = recipeIngredients.add(recipeExtras);
+    const total = all.known.add(recipeExtras);
     totalCookies += cookies;
     extrasCost = extrasCost.add(recipeExtras);
     if (r.status === "DRAFT") hasDraft = true;
+    if (parts.UNASSIGNED.lines > 0) hasUnassigned = true;
     return {
       recipeId,
       name: r.name,
@@ -433,31 +504,46 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
       yieldQuantity: r.yieldQuantity,
       /** Equivalencia en recetas (20 / 10 = 2; 15 / 10 = 1,5). */
       factor: factor.toDecimalPlaces(4).toString(),
+      requiredComponents,
       /** Costo de UNA receta base (null si le faltan precios). */
       baseCost: computeRecipe(r).summary.totalCost,
-      missingPrices: missing,
-      ingredientsCost: money(recipeIngredients),
+      /** Costo de cada parte para estas cookies, y si falta prepararla. */
+      components: Object.fromEntries(RECIPE_COMPONENTS.map((c) => [c, { ...partJson(parts[c]), pending: pendingParts.includes(c) }])),
+      missingPrices: all.missing,
+      ingredientsCost: money(all.known),
       extrasCost: money(recipeExtras),
       knownCost: money(total),
-      totalCost: complete ? money(total) : null,
-      costPerCookie: complete ? money(total.div(cookies)) : null,
+      /** TOTAL REAL: todas las partes + gastos (null si falta algún precio). */
+      totalCost: all.missing ? null : money(total),
+      costPerCookie: all.missing ? null : money(total.div(cookies)),
+      /** PENDIENTE: solo ingredientes de las partes por preparar (null si falta algún precio ahí). */
+      pendingKnownCost: money(pending.known),
+      pendingCost: pending.missing ? null : money(pending.known),
     };
   });
 
   let ingredientsCost = new Decimal(0);
+  let pendingIngredientsCost = new Decimal(0);
+  let pendingMissing = 0;
   const ingredients = [...totals.values()]
     .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }))
     .map((t) => {
       const cost = t.unitCost ? t.quantity.mul(t.unitCost) : null;
+      const pendingCost = t.unitCost ? t.pendingQuantity.mul(t.unitCost) : null;
       if (cost) ingredientsCost = ingredientsCost.add(cost);
+      if (pendingCost) pendingIngredientsCost = pendingIngredientsCost.add(pendingCost);
+      else if (t.pendingQuantity.gt(0)) pendingMissing++;
       return {
         ingredientId: t.id,
         name: t.name,
         baseUnit: t.baseUnit,
-        /** Cantidad necesaria en unidad base (g, ml o unidades). */
+        /** Cantidad necesaria en unidad base (g, ml o unidades), todas las partes. */
         quantity: t.quantity.toDecimalPlaces(4).toString(),
+        /** Solo de las partes que falta preparar (0 = ya está todo preparado). */
+        pendingQuantity: t.pendingQuantity.toDecimalPlaces(4).toString(),
         unitCost: t.unitCost?.toString() ?? null,
         cost: cost ? money(cost) : null,
+        pendingCost: pendingCost ? money(pendingCost) : null,
         usedIn: t.usedIn,
       };
     });
@@ -472,13 +558,20 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
       totalCookies,
       /** Incluye recetas en borrador: la simulación puede no tener todos los ingredientes. */
       hasDraft,
+      /** Hay líneas "Sin clasificar": se cuentan siempre como pendientes. */
+      hasUnassigned,
       complete,
       missingPrices,
       ingredientsCost: money(ingredientsCost),
       extrasCost: money(extrasCost),
       knownCost: money(total),
+      /** COSTO TOTAL REAL (todas las partes + gastos). */
       totalCost: complete ? money(total) : null,
       averagePerCookie: complete && totalCookies > 0 ? money(total.div(totalCookies)) : null,
+      /** COSTO PENDIENTE DE PRODUCCIÓN (ingredientes de las partes por preparar). */
+      pendingComplete: pendingMissing === 0,
+      pendingKnownCost: money(pendingIngredientsCost),
+      pendingCost: pendingMissing === 0 ? money(pendingIngredientsCost) : null,
     },
   };
 }

@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/vouchers/ConfirmDialog";
 import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import {
+  COMPONENT_LABELS,
   MEASURE_LABELS,
+  PARTS,
   RECIPE_UNITS,
   createRecipe,
   deleteRecipe,
@@ -23,12 +25,13 @@ import {
   type Ingredient,
   type MeasureUnit,
   type Recipe,
+  type RecipeComponent,
   type RecipeStatus,
 } from "@/lib/admin/gestion";
 import adminStyles from "../Admin.module.css";
 import styles from "./Gestion.module.css";
 
-type Line = { key: string; ingredientId: string; quantity: string; unit: MeasureUnit };
+type Line = { key: string; ingredientId: string; quantity: string; unit: MeasureUnit; component: RecipeComponent };
 type Extra = { key: string; name: string; amount: string };
 
 let seq = 0;
@@ -41,7 +44,7 @@ const fromRecipe = (r: Recipe) => ({
   yieldText: r.yieldQuantity === null ? "" : String(r.yieldQuantity),
   status: r.status,
   notes: r.notes ?? "",
-  lines: r.ingredients.map((l): Line => ({ key: newKey(), ingredientId: l.ingredientId, quantity: toInput(l.quantity), unit: l.unit })),
+  lines: r.ingredients.map((l): Line => ({ key: newKey(), ingredientId: l.ingredientId, quantity: toInput(l.quantity), unit: l.unit, component: l.component })),
   extras: r.extraCosts.map((e): Extra => ({ key: newKey(), name: e.name, amount: toInput(e.amount) })),
 });
 
@@ -133,6 +136,13 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
   });
   const ingredientsCost = lineInfo.reduce((sum, l) => sum + (l.subtotal ?? 0), 0);
   const missing = lineInfo.filter((l) => l.missingPrice).length;
+  /** Costo en vivo de cada parte (null = le falta algún precio). */
+  const partCost = (component: RecipeComponent) => {
+    const info = lineInfo.filter((_, i) => lines[i].component === component);
+    return { cost: info.some((l) => l.missingPrice) ? null : info.reduce((sum, l) => sum + (l.subtotal ?? 0), 0), count: info.length };
+  };
+  // "Sin clasificar" solo aparece si hay líneas así (recetas anteriores a la separación).
+  const visibleParts: RecipeComponent[] = lines.some((l) => l.component === "UNASSIGNED") ? [...PARTS, "UNASSIGNED"] : [...PARTS];
   const extrasCost = extras.reduce((sum, e) => sum + (parseAmount(e.amount) ?? 0), 0);
   const yieldQuantity = Number(yieldText.trim());
   const yieldPending = yieldText.trim() === "";
@@ -182,7 +192,7 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
       yieldQuantity: yieldPending ? null : yieldQuantity,
       status,
       notes: notes.trim() || null,
-      ingredients: lines.map((l) => ({ ingredientId: l.ingredientId, quantity: toApiNumber(parseAmount(l.quantity)!, 4), unit: l.unit })),
+      ingredients: lines.map((l) => ({ ingredientId: l.ingredientId, quantity: toApiNumber(parseAmount(l.quantity)!, 4), unit: l.unit, component: l.component })),
       extraCosts: extras.map((x) => ({ name: x.name.trim(), amount: toApiNumber(parseAmount(x.amount)!, 2) })),
     };
     setSaving(true);
@@ -225,6 +235,110 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
 
   const err = (key: string) => (errors[key] ? <p className={adminStyles.error}>{errors[key]}</p> : null);
   const activeIngredients = ingredients.filter((i) => i.active);
+
+  const renderLine = (line: Line, i: number) => {
+    const { ingredient, subtotal } = lineInfo[i];
+    const options = ingredient && !ingredient.active ? [ingredient, ...activeIngredients] : activeIngredients;
+    const units = ingredient ? RECIPE_UNITS[ingredient.baseUnit] : (["G"] as MeasureUnit[]);
+    return (
+      <div key={line.key} className={styles.line}>
+        <div className={adminStyles.field}>
+          <label htmlFor={`${uid}-${line.key}-i`} className={adminStyles.label}>
+            Ingrediente
+          </label>
+          <select
+            id={`${uid}-${line.key}-i`}
+            className={`${adminStyles.input} ${styles.select}`}
+            value={line.ingredientId}
+            onChange={(e) => {
+              updateLine(line.key, { ingredientId: e.target.value });
+              clearError(`ingredients.${i}.ingredientId`);
+            }}
+            aria-invalid={Boolean(errors[`ingredients.${i}.ingredientId`])}
+          >
+            <option value="">Elegí un ingrediente</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+                {!o.active ? " (inactivo)" : ""}
+              </option>
+            ))}
+          </select>
+          {err(`ingredients.${i}.ingredientId`)}
+        </div>
+        <div className={adminStyles.field}>
+          <label htmlFor={`${uid}-${line.key}-p`} className={adminStyles.label}>
+            Parte de la receta
+          </label>
+          <select
+            id={`${uid}-${line.key}-p`}
+            className={`${adminStyles.input} ${styles.select}`}
+            value={line.component}
+            onChange={(e) => updateLine(line.key, { component: e.target.value as RecipeComponent })}
+          >
+            {(line.component === "UNASSIGNED" ? [...PARTS, "UNASSIGNED" as const] : PARTS).map((c) => (
+              <option key={c} value={c}>
+                {COMPONENT_LABELS[c]}
+              </option>
+            ))}
+          </select>
+          {err(`ingredients.${i}.component`)}
+        </div>
+        <div className={styles.row}>
+          <div className={adminStyles.field}>
+            <label htmlFor={`${uid}-${line.key}-q`} className={adminStyles.label}>
+              Cantidad
+            </label>
+            <input
+              id={`${uid}-${line.key}-q`}
+              className={adminStyles.input}
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="Ej.: 300"
+              value={line.quantity}
+              onChange={(e) => {
+                updateLine(line.key, { quantity: e.target.value });
+                clearError(`ingredients.${i}.quantity`);
+              }}
+              aria-invalid={Boolean(errors[`ingredients.${i}.quantity`])}
+            />
+            {err(`ingredients.${i}.quantity`)}
+          </div>
+          <div className={adminStyles.field}>
+            <label htmlFor={`${uid}-${line.key}-u`} className={adminStyles.label}>
+              Unidad
+            </label>
+            <select
+              id={`${uid}-${line.key}-u`}
+              className={`${adminStyles.input} ${styles.select}`}
+              value={line.unit}
+              disabled={!ingredient}
+              onChange={(e) => updateLine(line.key, { unit: e.target.value as MeasureUnit })}
+            >
+              {units.map((u) => (
+                <option key={u} value={u}>
+                  {MEASURE_LABELS[u]}
+                </option>
+              ))}
+            </select>
+            {err(`ingredients.${i}.unit`)}
+          </div>
+        </div>
+        <div className={styles.lineFoot}>
+          {ingredient &&
+            (ingredient.unitCost ? (
+              <span className={styles.lineCost}>{formatUnitCost(ingredient.unitCost, ingredient.baseUnit)}</span>
+            ) : (
+              <span className={styles.warn}>⚠ Falta cargar precio</span>
+            ))}
+          {subtotal !== null && <span className={styles.lineSubtotal}>{formatMoney(subtotal)}</span>}
+          <button type="button" className={styles.linkButton} onClick={() => setLines((prev) => prev.filter((l) => l.key !== line.key))}>
+            Quitar
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <form className={adminStyles.form} onSubmit={submit} noValidate aria-busy={saving}>
@@ -330,104 +444,36 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
         </div>
       </section>
 
-      <section className={adminStyles.section}>
-        <h2 className={adminStyles.sectionTitle}>Ingredientes</h2>
-        {ingredients.length === 0 && (
-          <p className={styles.warnBox}>
-            Todavía no cargaste ingredientes. <Link href="/admin/gestion/ingredientes/nuevo">Creá el primero</Link> y volvé a esta receta.
-          </p>
-        )}
-        <div className={styles.lines}>
-          {lines.map((line, i) => {
-            const { ingredient, subtotal } = lineInfo[i];
-            const options = ingredient && !ingredient.active ? [ingredient, ...activeIngredients] : activeIngredients;
-            const units = ingredient ? RECIPE_UNITS[ingredient.baseUnit] : (["G"] as MeasureUnit[]);
-            return (
-              <div key={line.key} className={styles.line}>
-                <div className={adminStyles.field}>
-                  <label htmlFor={`${uid}-${line.key}-i`} className={adminStyles.label}>
-                    Ingrediente
-                  </label>
-                  <select
-                    id={`${uid}-${line.key}-i`}
-                    className={`${adminStyles.input} ${styles.select}`}
-                    value={line.ingredientId}
-                    onChange={(e) => {
-                      updateLine(line.key, { ingredientId: e.target.value });
-                      clearError(`ingredients.${i}.ingredientId`);
-                    }}
-                    aria-invalid={Boolean(errors[`ingredients.${i}.ingredientId`])}
-                  >
-                    <option value="">Elegí un ingrediente</option>
-                    {options.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.name}
-                        {!o.active ? " (inactivo)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                  {err(`ingredients.${i}.ingredientId`)}
-                </div>
-                <div className={styles.row}>
-                  <div className={adminStyles.field}>
-                    <label htmlFor={`${uid}-${line.key}-q`} className={adminStyles.label}>
-                      Cantidad
-                    </label>
-                    <input
-                      id={`${uid}-${line.key}-q`}
-                      className={adminStyles.input}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="Ej.: 300"
-                      value={line.quantity}
-                      onChange={(e) => {
-                        updateLine(line.key, { quantity: e.target.value });
-                        clearError(`ingredients.${i}.quantity`);
-                      }}
-                      aria-invalid={Boolean(errors[`ingredients.${i}.quantity`])}
-                    />
-                    {err(`ingredients.${i}.quantity`)}
-                  </div>
-                  <div className={adminStyles.field}>
-                    <label htmlFor={`${uid}-${line.key}-u`} className={adminStyles.label}>
-                      Unidad
-                    </label>
-                    <select
-                      id={`${uid}-${line.key}-u`}
-                      className={`${adminStyles.input} ${styles.select}`}
-                      value={line.unit}
-                      disabled={!ingredient}
-                      onChange={(e) => updateLine(line.key, { unit: e.target.value as MeasureUnit })}
-                    >
-                      {units.map((u) => (
-                        <option key={u} value={u}>
-                          {MEASURE_LABELS[u]}
-                        </option>
-                      ))}
-                    </select>
-                    {err(`ingredients.${i}.unit`)}
-                  </div>
-                </div>
-                <div className={styles.lineFoot}>
-                  {ingredient &&
-                    (ingredient.unitCost ? (
-                      <span className={styles.lineCost}>{formatUnitCost(ingredient.unitCost, ingredient.baseUnit)}</span>
-                    ) : (
-                      <span className={styles.warn}>⚠ Falta cargar precio</span>
-                    ))}
-                  {subtotal !== null && <span className={styles.lineSubtotal}>{formatMoney(subtotal)}</span>}
-                  <button type="button" className={styles.linkButton} onClick={() => setLines((prev) => prev.filter((l) => l.key !== line.key))}>
-                    Quitar
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <Button variant="secondary" className={styles.addButton} onClick={() => setLines((prev) => [...prev, { key: newKey(), ingredientId: "", quantity: "", unit: "G" }])}>
-          + Agregar ingrediente
-        </Button>
-      </section>
+      {ingredients.length === 0 && (
+        <p className={styles.warnBox}>
+          Todavía no cargaste ingredientes. <Link href="/admin/gestion/ingredientes/nuevo">Creá el primero</Link> y volvé a esta receta.
+        </p>
+      )}
+      {visibleParts.map((part) => {
+        const { cost, count } = partCost(part);
+        return (
+          <section key={part} className={adminStyles.section} aria-labelledby={`${uid}-part-${part}`}>
+            <div className={styles.partHead}>
+              <h2 id={`${uid}-part-${part}`} className={adminStyles.sectionTitle}>
+                {COMPONENT_LABELS[part]}
+              </h2>
+              {count > 0 && (cost === null ? <span className={styles.warn}>⚠ Incompleto</span> : <span className={styles.lineSubtotal}>{formatMoney(cost)}</span>)}
+            </div>
+            {part === "UNASSIGNED" && <p className={styles.warnBox}>Estos ingredientes todavía no tienen parte asignada. Elegí si son de la masa, el relleno o la terminación.</p>}
+            {count === 0 && <p className={adminStyles.help}>Sin ingredientes.</p>}
+            <div className={styles.lines}>{lines.map((line, i) => (line.component === part ? renderLine(line, i) : null))}</div>
+            {part !== "UNASSIGNED" && (
+              <Button
+                variant="secondary"
+                className={styles.addButton}
+                onClick={() => setLines((prev) => [...prev, { key: newKey(), ingredientId: "", quantity: "", unit: "G", component: part }])}
+              >
+                + Agregar ingrediente
+              </Button>
+            )}
+          </section>
+        );
+      })}
 
       <section className={adminStyles.section}>
         <h2 className={adminStyles.sectionTitle}>Gastos adicionales</h2>
@@ -522,10 +568,15 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
           </>
         ) : (
           <>
-            <div className={styles.summaryRow}>
-              <span>Costo ingredientes</span>
-              <span>{complete ? formatMoney(ingredientsCost) : "—"}</span>
-            </div>
+            {visibleParts.map((part) => {
+              const { cost } = partCost(part);
+              return (
+                <div key={part} className={styles.summaryRow}>
+                  <span>Costo de {COMPONENT_LABELS[part].toLowerCase()}</span>
+                  <span>{cost === null ? <span className={styles.warn}>⚠ Incompleto</span> : formatMoney(cost)}</span>
+                </div>
+              );
+            })}
             <div className={styles.summaryRow}>
               <span>Gastos adicionales</span>
               <span>{formatMoney(extrasCost)}</span>

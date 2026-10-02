@@ -55,7 +55,7 @@ type RecipeWithRelations = {
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
-  ingredients: { id: string; quantity: RecipeRow["lines"][number]["quantity"]; unit: RecipeRow["lines"][number]["unit"]; ingredient: { id: string; name: string; baseUnit: IngredientRow["baseUnit"]; active: boolean; prices: { unitCost: RecipeRow["lines"][number]["quantity"] }[] } }[];
+  ingredients: { id: string; quantity: RecipeRow["lines"][number]["quantity"]; unit: RecipeRow["lines"][number]["unit"]; component: RecipeRow["lines"][number]["component"]; ingredient: { id: string; name: string; baseUnit: IngredientRow["baseUnit"]; active: boolean; prices: { unitCost: RecipeRow["lines"][number]["quantity"] }[] } }[];
   extraCosts: RecipeRow["extras"];
 };
 
@@ -65,6 +65,7 @@ const toRecipeRow = (r: RecipeWithRelations): RecipeRow => ({
       id: l.id,
       quantity: l.quantity,
       unit: l.unit,
+      component: l.component,
       ingredient: { id: l.ingredient.id, name: l.ingredient.name, baseUnit: l.ingredient.baseUnit, active: l.ingredient.active, unitCost: l.ingredient.prices[0]?.unitCost ?? null },
     })),
     extras: r.extraCosts,
@@ -95,7 +96,7 @@ export function createManagementRepository(prisma: PrismaClient) {
   }
 
   const lineRows = (recipeId: string, input: RecipeInput) => ({
-    lines: input.lines.map((l, position) => ({ recipeId, ingredientId: l.ingredientId, quantity: l.quantity, unit: l.unit, position })),
+    lines: input.lines.map((l, position) => ({ recipeId, ingredientId: l.ingredientId, quantity: l.quantity, unit: l.unit, component: l.component, position })),
     extras: input.extras.map((e, position) => ({ recipeId, name: e.name, amount: e.amount, position })),
   });
 

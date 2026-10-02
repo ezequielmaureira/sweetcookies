@@ -549,3 +549,97 @@ a.item:hover {
   font-weight: 500;
   color: var(--color-terracotta);
 }
+
+/* Receta por partes (masa / relleno / terminación) */
+.partHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Simulador: partes por preparar */
+.partsFieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.partToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.partToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(58, 36, 25, 0.22);
+  border-radius: 999px;
+  background: #fffdf9;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.partToggle:has(input:checked) {
+  border-color: var(--color-chocolate);
+  background: var(--color-cream-deep);
+}
+
+.partToggle input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-chocolate);
+}
+
+.ready {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #2f6b34;
+}
+
+.partList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.partRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.partPending {
+  color: var(--color-muted);
+}
+
+.partReady {
+  color: #2f6b34;
+  font-weight: 500;
+}
+
+.pendingBox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px dashed var(--color-chocolate);
+  border-radius: var(--radius-sm);
+}
+
+.pendingValue {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--color-chocolate);
+}
