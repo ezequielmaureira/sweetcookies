@@ -39,12 +39,12 @@ export type Ingredient = {
 export type IngredientDetail = Ingredient & { prices: IngredientPrice[] };
 
 /** Parte de la receta. UNASSIGNED = "Sin clasificar" (para revisar). */
-export type RecipeComponent = "UNASSIGNED" | "DOUGH" | "FILLING" | "FINISHING";
+export type RecipeComponent = "UNASSIGNED" | "DOUGH" | "FILLING";
 
-export const COMPONENT_LABELS: Record<RecipeComponent, string> = { DOUGH: "Masa", FILLING: "Relleno", FINISHING: "Terminación", UNASSIGNED: "Sin clasificar" };
+export const COMPONENT_LABELS: Record<RecipeComponent, string> = { DOUGH: "Masa", FILLING: "Relleno", UNASSIGNED: "Sin clasificar" };
 
 /** Partes de una cookie, en orden de elaboración. */
-export const PARTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "FINISHING"];
+export const PARTS: readonly RecipeComponent[] = ["DOUGH", "FILLING"];
 
 /** Costo de una parte: cost = null si le falta algún precio (nunca 0). */
 export type PartCost = { cost: string | null; knownCost: string; missingPrices: number; lines: number };
@@ -79,7 +79,7 @@ export type Recipe = {
   summary: {
     complete: boolean;
     missingPrices: number;
-    /** Costo de masa / relleno / terminación / sin clasificar. */
+    /** Costo de masa / relleno / sin clasificar. */
     components: Record<RecipeComponent, PartCost>;
     ingredientsCost: string;
     extrasCost: string;
@@ -217,7 +217,7 @@ export type SimulationResult = {
     totalCost: string | null;
     costPerCookie: string | null;
   }[];
-  /** Ingredientes agrupados por parte + ingrediente (masa, relleno, terminación; alfabético). */
+  /** Ingredientes agrupados por parte + ingrediente (masa, relleno; alfabético). */
   ingredients: {
     ingredientId: string;
     name: string;
@@ -235,7 +235,7 @@ export type SimulationResult = {
     hasDraft: boolean;
     complete: boolean;
     missingPrices: number;
-    /** Costo de masa / relleno / terminación / sin clasificar de toda la producción. */
+    /** Costo de masa / relleno / sin clasificar de toda la producción. */
     components: Record<RecipeComponent, PartCost>;
     ingredientsCost: string;
     extrasCost: string;

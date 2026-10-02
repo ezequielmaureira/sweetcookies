@@ -317,7 +317,6 @@ enum RecipeComponent {
   UNASSIGNED
   DOUGH
   FILLING
-  FINISHING
 }
 
 model RecipeIngredient {
@@ -329,7 +328,7 @@ model RecipeIngredient {
   ingredient   Ingredient      @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
   quantity     Decimal         @db.Decimal(14, 4)
   unit         MeasureUnit
-  /// Parte de la receta (masa, relleno, terminación). UNASSIGNED = "Sin clasificar".
+  /// Parte de la receta (masa o relleno). UNASSIGNED = "Sin clasificar".
   component    RecipeComponent @default(UNASSIGNED)
   /// Orden de las líneas en la receta.
   position     Int             @default(0)

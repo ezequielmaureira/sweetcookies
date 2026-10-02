@@ -459,7 +459,7 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
               </h2>
               {count > 0 && (cost === null ? <span className={styles.warn}>⚠ Incompleto</span> : <span className={styles.lineSubtotal}>{formatMoney(cost)}</span>)}
             </div>
-            {part === "UNASSIGNED" && <p className={styles.warnBox}>Estos ingredientes todavía no tienen parte asignada. Elegí si son de la masa, el relleno o la terminación.</p>}
+            {part === "UNASSIGNED" && <p className={styles.warnBox}>Estos ingredientes todavía no tienen parte asignada. Elegí si son de la masa o del relleno.</p>}
             {count === 0 && <p className={adminStyles.help}>Sin ingredientes.</p>}
             <div className={styles.lines}>{lines.map((line, i) => (line.component === part ? renderLine(line, i) : null))}</div>
             {part !== "UNASSIGNED" && (

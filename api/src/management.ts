@@ -150,8 +150,8 @@ export function validatePriceInput(input: unknown, baseUnit: BaseUnit): Validati
  * Parte de la receta a la que pertenece cada ingrediente. UNASSIGNED = "Sin
  * clasificar" (líneas anteriores a esta separación que el admin debe revisar).
  */
-export type RecipeComponent = "UNASSIGNED" | "DOUGH" | "FILLING" | "FINISHING";
-export const RECIPE_COMPONENTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "FINISHING", "UNASSIGNED"];
+export type RecipeComponent = "UNASSIGNED" | "DOUGH" | "FILLING";
+export const RECIPE_COMPONENTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "UNASSIGNED"];
 
 export type RecipeLineInput = { ingredientId: string; quantity: Decimal; unit: MeasureUnit; component: RecipeComponent };
 export type RecipeExtraInput = { name: string; amount: Decimal };
@@ -212,7 +212,7 @@ export function validateRecipeInput(input: unknown): Validation<RecipeInput> {
     const unit = line.unit as MeasureUnit;
     // Sin parte (clientes anteriores) = "Sin clasificar".
     const component = line.component === undefined ? "UNASSIGNED" : (line.component as RecipeComponent);
-    if (!RECIPE_COMPONENTS.includes(component)) errors[`ingredients.${i}.component`] = "Elegí masa, relleno o terminación.";
+    if (!RECIPE_COMPONENTS.includes(component)) errors[`ingredients.${i}.component`] = "Elegí masa o relleno.";
     if (!ingredientId) errors[`ingredients.${i}.ingredientId`] = "Elegí un ingrediente.";
     if (!quantity || quantity.lte(0)) errors[`ingredients.${i}.quantity`] = "Ingresá la cantidad (mayor a 0).";
     if (!["G", "KG", "ML", "L", "UNIT"].includes(unit)) errors[`ingredients.${i}.unit`] = "Elegí la unidad.";
@@ -317,13 +317,12 @@ type Parts = Record<RecipeComponent, PartTotals>;
 const emptyParts = (): Parts => ({
   DOUGH: { known: new Decimal(0), missing: 0, lines: 0 },
   FILLING: { known: new Decimal(0), missing: 0, lines: 0 },
-  FINISHING: { known: new Decimal(0), missing: 0, lines: 0 },
   UNASSIGNED: { known: new Decimal(0), missing: 0, lines: 0 },
 });
 
 /**
  * Cada línea de la receta × factor: cantidad en unidad base y costo con el
- * precio actual, acumulado por parte (masa, relleno, terminación, sin clasificar).
+ * precio actual, acumulado por parte (masa, relleno, sin clasificar).
  * factor = 1 para la receta base; cookies / rendimiento en el simulador.
  */
 function costLines(r: RecipeRow, factor: Decimal) {
@@ -390,7 +389,7 @@ export function computeRecipe(r: RecipeRow) {
     summary: {
       complete,
       missingPrices: missing,
-      /** Costo de masa / relleno / terminación / sin clasificar (cost = null si falta un precio). */
+      /** Costo de masa / relleno / sin clasificar (cost = null si falta un precio). */
       components: partsJson(parts),
       /** Con faltantes: suma parcial (solo de referencia); total y por cookie = null. */
       ingredientsCost: money(ingredientsCost),
@@ -449,7 +448,7 @@ const addParts = (into: Parts, from: Parts) => {
  * computeRecipe: costLines). Escala ingredientes y gastos por el factor de cada
  * receta y suma. Sin precio → incompleto (nunca 0).
  *
- * El resultado se separa por parte (masa, relleno, terminación) y por variedad:
+ * El resultado se separa por parte (masa, relleno) y por variedad:
  * cada ingrediente (agrupado por parte) trae el total combinado y cuánto usa
  * cada receta (byRecipe), así se puede mirar "Ferrero → Relleno" o
  * "Total → Masa" sin volver a calcular. El costo total no cambia con eso.
@@ -551,7 +550,7 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
       hasDraft,
       complete,
       missingPrices,
-      /** Costo de masa / relleno / terminación / sin clasificar de toda la producción. */
+      /** Costo de masa / relleno / sin clasificar de toda la producción. */
       components: partsJson(productionParts),
       ingredientsCost: money(all.known),
       extrasCost: money(extrasCost),

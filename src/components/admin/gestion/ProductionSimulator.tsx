@@ -33,7 +33,7 @@ const MAX_COOKIES = 100000;
 
 /**
  * /admin/gestion/simulador: cuántas cookies de cada receta → ingredientes,
- * costos y promedio, separados en masa / relleno / terminación. Solo LEE recetas y precios; no guarda nada (al recargar
+ * costos y promedio, separados en masa / relleno. Solo LEE recetas y precios; no guarda nada (al recargar
  * empieza vacío). El cálculo lo hace el servidor con Decimal, con los costos
  * actuales; acá solo se muestra.
  */
@@ -348,7 +348,7 @@ export function ProductionSimulator() {
               return (
                 <div key={part} className={styles.partGroup}>
                   {view === "ALL" && <h4 className={styles.itemName}>{COMPONENT_LABELS[part]}</h4>}
-                  {part === "UNASSIGNED" && <p className={styles.warnBox}>Ingredientes sin parte asignada. Clasificalos en la receta (masa, relleno o terminación).</p>}
+                  {part === "UNASSIGNED" && <p className={styles.warnBox}>Ingredientes sin parte asignada. Clasificalos en la receta (masa o relleno).</p>}
                   {list.length === 0 ? (
                     <p className={adminStyles.help}>
                       {selected ? `${selected.name} no lleva` : "Esta producción no lleva"} ingredientes de {partLabel(part)}.
