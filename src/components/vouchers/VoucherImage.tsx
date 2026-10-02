@@ -24,7 +24,8 @@ export function VoucherImage({ art }: { art: VoucherArt }) {
         url = URL.createObjectURL(blob);
         setSrc(url);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        console.error("[voucher image] render failed", error);
         if (!cancelled) setFailed(true);
       });
     return () => {

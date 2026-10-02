@@ -61,9 +61,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return cached;
 }
 
-/** Espera la fuente (si no, el canvas dibujaría con la de respaldo). */
+/**
+ * Espera la fuente web (si no, el canvas dibujaría con la de respaldo).
+ * Solo se carga la PRIMERA familia: next/font agrega una de respaldo
+ * ("… Fallback", src: local(Times New Roman)) que no existe en muchos celulares,
+ * y document.fonts.load() rechaza todo si cualquier fuente de la lista falla.
+ * Si aun así la fuente no carga, el voucher se dibuja igual con la de respaldo.
+ */
 async function ensureFonts(family: string) {
-  await Promise.all([document.fonts.load(`400 16px ${family}`), document.fonts.load(`700 16px ${family}`)]);
+  const primary = family.split(",")[0].trim();
+  await Promise.allSettled([document.fonts.load(`400 16px ${primary}`), document.fonts.load(`700 16px ${primary}`)]);
 }
 
 function setSpacing(ctx: CanvasRenderingContext2D, value: string) {

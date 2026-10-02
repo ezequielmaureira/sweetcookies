@@ -27,7 +27,8 @@ export function VoucherCanvas({ art, stamp }: Props) {
         if (cancelled) return;
         setState("ready");
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        console.error("[voucher] render failed", error);
         if (!cancelled) setState("error");
       });
     return () => {
