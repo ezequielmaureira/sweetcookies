@@ -20,7 +20,7 @@ export const getVoucherByCode = (token: string | null, code: string) =>
   adminRequest<AdminVoucher>(`/api/admin/vouchers/by-code/${encodeURIComponent(code)}`, token);
 
 /** validUntil: "YYYY-MM-DD" (el backend lo guarda como fin de ese día, hora Argentina). */
-export const createVoucher = (token: string | null, input: { cookieQuantity: VoucherQuantity; validUntil: string }) =>
+export const createVoucher = (token: string | null, input: { cookieQuantity: VoucherQuantity; validUntil: string; description: string }) =>
   adminRequest<AdminVoucher>("/api/admin/vouchers", token, { method: "POST", body: JSON.stringify(input) });
 
 /** Resultado de canjear/anular: ok, o el estado real del voucher (ya canjeado, vencido, anulado). */

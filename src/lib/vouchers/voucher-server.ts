@@ -14,6 +14,7 @@ function parseVoucher(raw: unknown): PublicVoucher | null {
   return {
     publicId: v.publicId,
     code: v.code,
+    description: typeof v.description === "string" ? v.description : null,
     cookieQuantity: v.cookieQuantity,
     expiresAt: v.expiresAt,
     status: v.status as VoucherStatus,

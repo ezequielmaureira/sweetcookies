@@ -13,12 +13,12 @@ import styles from "./VoucherCheck.module.css";
 export function VoucherImage({ art }: { art: VoucherArt }) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const { cookieQuantity, expiresAt, code, publicId } = art;
+  const { cookieQuantity, expiresAt, code, publicId, description } = art;
 
   useEffect(() => {
     let url: string | null = null;
     let cancelled = false;
-    renderVoucherPng({ cookieQuantity, expiresAt, code, publicId }, voucherFont.style.fontFamily)
+    renderVoucherPng({ cookieQuantity, expiresAt, code, publicId, description }, voucherFont.style.fontFamily)
       .then((blob) => {
         if (cancelled) return;
         url = URL.createObjectURL(blob);
@@ -32,7 +32,7 @@ export function VoucherImage({ art }: { art: VoucherArt }) {
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [cookieQuantity, expiresAt, code, publicId]);
+  }, [cookieQuantity, expiresAt, code, publicId, description]);
 
   const alt = `Voucher Sweet Cookies: ${boxLabel(cookieQuantity)}, válido hasta ${formatVoucherDate(expiresAt)}, código ${code}`;
 

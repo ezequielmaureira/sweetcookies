@@ -43,13 +43,13 @@ export function VoucherShareActions({ voucher }: { voucher: AdminVoucher }) {
   // La imagen se prepara antes del toque: el menú de compartir tiene que abrirse
   // en el mismo gesto (Safari lo bloquea si antes se espera a generar el PNG).
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const { publicId, code, cookieQuantity, expiresAt } = voucher;
+  const { publicId, code, cookieQuantity, expiresAt, description } = voucher;
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
   useEffect(() => {
     let cancelled = false;
-    renderVoucherPng({ publicId, code, cookieQuantity, expiresAt }, voucherFont.style.fontFamily)
+    renderVoucherPng({ publicId, code, cookieQuantity, expiresAt, description }, voucherFont.style.fontFamily)
       .then((blob) => {
         if (!cancelled) setImageFile(new File([blob], voucherImageFileName(code), { type: "image/png" }));
       })
@@ -59,7 +59,7 @@ export function VoucherShareActions({ voucher }: { voucher: AdminVoucher }) {
     return () => {
       cancelled = true;
     };
-  }, [publicId, code, cookieQuantity, expiresAt]);
+  }, [publicId, code, cookieQuantity, expiresAt, description]);
 
   const flash = (text: string) => {
     setToast(text);

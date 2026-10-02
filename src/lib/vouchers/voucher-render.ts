@@ -12,14 +12,14 @@
  * Coordenadas en unidades del arte original (1536 × 511).
  */
 import QRCode from "qrcode";
-import { formatVoucherDate, voucherUrl } from "./voucher-format";
+import { formatVoucherDate, voucherDescription, voucherUrl } from "./voucher-format";
 
 export const VOUCHER_WIDTH = 1536;
 export const VOUCHER_HEIGHT = 511;
 /** 2×: 3072 × 1022 px, nítido en pantallas de alta densidad. */
 export const VOUCHER_SCALE = 2;
 
-export type VoucherArt = { cookieQuantity: number; expiresAt: string; code: string; publicId: string };
+export type VoucherArt = { cookieQuantity: number; expiresAt: string; code: string; publicId: string; description?: string | null };
 
 const BACKGROUNDS: Record<number, string> = {
   4: "/images/vouchers/voucher-caja-4.jpg",
@@ -42,6 +42,15 @@ const QR_AREA = { x: 1392, y: 374, size: 93 };
 const QR_QUIET_MODULES = 2;
 /** Código SC-XXXXXX debajo del QR, apenas corrido a la izquierda para no tocar la curva de la esquina del marco. */
 const QR_CODE = { baseline: 479, centerX: 1435.5 };
+/**
+ * Descripción: mismo lugar, tipografía y tamaño que el texto original del arte
+ * ("Premio donado por Sweet Cookies" era Libre Caslon Text 19 px, centrado en
+ * x≈765,5; se borró de los fondos y ahora se dibuja acá). La línea base difiere
+ * 1 px entre los dos fondos. Textos largos se achican o pasan a dos líneas para
+ * no tocar las curvas de la placa.
+ */
+const DESCRIPTION = { centerX: 765.5, baseline: { 4: 400, 6: 401 } as Record<number, number>, size: 19, minSize: 14, maxWidth: 440 };
+
 /** Sello de la fecha (esquina inferior izquierda, simétrico al QR). */
 const DATE_TAG = { x: 40, y: 394, w: 128, h: 84 };
 
@@ -131,6 +140,53 @@ function drawDateTag(ctx: CanvasRenderingContext2D, expiresAt: string, family: s
   setSpacing(ctx, "0px");
 }
 
+function splitInTwo(ctx: CanvasRenderingContext2D, text: string): [string, string] {
+  const words = text.split(" ");
+  let best: [string, string] = [text, ""];
+  let bestWidth = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(" ");
+    const b = words.slice(i).join(" ");
+    const width = Math.max(ctx.measureText(a).width, ctx.measureText(b).width);
+    if (width < bestWidth) {
+      bestWidth = width;
+      best = [a, b];
+    }
+  }
+  return best;
+}
+
+function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let cut = text;
+  while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) cut = cut.slice(0, -1);
+  return `${cut.trimEnd()}…`;
+}
+
+function drawDescription(ctx: CanvasRenderingContext2D, art: VoucherArt, family: string) {
+  const text = voucherDescription(art.description);
+  const { centerX, size, minSize, maxWidth } = DESCRIPTION;
+  const baseline = DESCRIPTION.baseline[art.cookieQuantity] ?? 400;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = INK;
+  setSpacing(ctx, "0px");
+
+  // Una línea: tamaño original, o un poco más chico si no entra.
+  for (let px = size; px >= minSize; px -= 0.5) {
+    ctx.font = `400 ${px}px ${family}`;
+    if (ctx.measureText(text).width <= maxWidth) {
+      ctx.fillText(text, centerX, baseline);
+      return;
+    }
+  }
+  // Dos líneas centradas en el mismo espacio.
+  ctx.font = `400 13px ${family}`;
+  const [first, second] = splitInTwo(ctx, text);
+  ctx.fillText(ellipsize(ctx, first, maxWidth), centerX, baseline - 8);
+  ctx.fillText(ellipsize(ctx, second, maxWidth), centerX, baseline + 7);
+}
+
 function drawQr(ctx: CanvasRenderingContext2D, art: VoucherArt, family: string, scale: number) {
   const { x, y, size } = QR_AREA;
   const qr = QRCode.create(voucherUrl(art.publicId), { errorCorrectionLevel: "M" });
@@ -184,6 +240,7 @@ export async function renderVoucher(canvas: HTMLCanvasElement, art: VoucherArt, 
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(image, 0, 0, VOUCHER_WIDTH, VOUCHER_HEIGHT);
 
+  drawDescription(ctx, art, fontFamily);
   drawDateTag(ctx, art.expiresAt, fontFamily);
   drawQr(ctx, art, fontFamily, scale);
 }

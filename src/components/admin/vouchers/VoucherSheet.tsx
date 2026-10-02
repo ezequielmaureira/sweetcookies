@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import buttonStyles from "@/components/ui/Button.module.css";
 import { VoucherCanvas } from "@/components/vouchers/VoucherCanvas";
 import { VoucherStatusBadge } from "@/components/vouchers/VoucherStatusBadge";
-import { boxLabel, formatVoucherDate, formatVoucherDateTime, type AdminVoucher } from "@/lib/vouchers/voucher-format";
+import { boxLabel, formatVoucherDate, formatVoucherDateTime, voucherDescription, type AdminVoucher } from "@/lib/vouchers/voucher-format";
 import { VoucherShareActions } from "./VoucherShareActions";
 import styles from "./Vouchers.module.css";
 
@@ -32,6 +32,10 @@ export function VoucherSheet({ voucher, onCancel, children }: Props) {
         <div>
           <dt>Tipo</dt>
           <dd>{boxLabel(voucher.cookieQuantity)}</dd>
+        </div>
+        <div className={styles.factWide}>
+          <dt>Descripción</dt>
+          <dd>{voucherDescription(voucher.description)}</dd>
         </div>
         <div>
           <dt>Válido hasta</dt>

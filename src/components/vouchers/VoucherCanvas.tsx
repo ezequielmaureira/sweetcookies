@@ -16,13 +16,13 @@ type Props = {
 export function VoucherCanvas({ art, stamp }: Props) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const { cookieQuantity, expiresAt, code, publicId } = art;
+  const { cookieQuantity, expiresAt, code, publicId, description } = art;
 
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     let cancelled = false;
-    renderVoucher(canvas, { cookieQuantity, expiresAt, code, publicId }, voucherFont.style.fontFamily)
+    renderVoucher(canvas, { cookieQuantity, expiresAt, code, publicId, description }, voucherFont.style.fontFamily)
       .then(() => {
         if (cancelled) return;
         setState("ready");
@@ -34,7 +34,7 @@ export function VoucherCanvas({ art, stamp }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [cookieQuantity, expiresAt, code, publicId]);
+  }, [cookieQuantity, expiresAt, code, publicId, description]);
 
   return (
     <figure className={`${styles.preview} ${voucherFont.className}`} aria-busy={state === "loading"}>

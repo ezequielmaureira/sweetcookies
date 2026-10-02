@@ -46,6 +46,7 @@ export function createVoucherRepository(prisma: PrismaClient): VoucherRepository
               code: generateVoucherCode(),
               cookieQuantity: input.cookieQuantity,
               expiresAt: input.expiresAt,
+              description: input.description,
               createdByUserId,
             },
           });

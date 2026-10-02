@@ -176,6 +176,9 @@ model Voucher {
   publicId          String        @unique @map("public_id") @db.VarChar(32)
   /// Código corto visible (ej. SC-8K4P2M).
   code              String        @unique @db.VarChar(16)
+  /// Texto que se muestra en el voucher (ej. "Premio sorteo aniversario").
+  /// null = "Premio donado por Sweet Cookies".
+  description       String?       @db.VarChar(120)
   /// 4 o 6 (CHECK en la base).
   cookieQuantity    Int           @map("cookie_quantity")
   /// Último instante válido para canjear (fin del día elegido, hora Argentina).

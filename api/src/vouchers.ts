@@ -17,6 +17,7 @@ export type VoucherRecord = {
   id: string;
   publicId: string;
   code: string;
+  description: string | null;
   cookieQuantity: number;
   expiresAt: Date;
   status: StoredVoucherStatus;
@@ -91,13 +92,18 @@ export function endOfDayInArgentina(value: string): Date | null {
 
 /* ---------- Validación ---------- */
 
-export type VoucherInput = { cookieQuantity: VoucherQuantity; expiresAt: Date };
-export type VoucherInputErrors = Partial<Record<"cookieQuantity" | "validUntil" | "body", string>>;
+export const VOUCHER_DESCRIPTION_MAX = 120;
 
-/** Body de POST /api/admin/vouchers: { cookieQuantity: 4 | 6, validUntil: "YYYY-MM-DD" }. */
+export type VoucherInput = { cookieQuantity: VoucherQuantity; expiresAt: Date; description: string | null };
+export type VoucherInputErrors = Partial<Record<"cookieQuantity" | "validUntil" | "description" | "body", string>>;
+
+/**
+ * Body de POST /api/admin/vouchers: { cookieQuantity: 4 | 6, validUntil: "YYYY-MM-DD", description?: string }.
+ * description vacía → null (el voucher muestra "Premio donado por Sweet Cookies").
+ */
 export function validateVoucherInput(body: unknown, now = new Date()): { ok: true; data: VoucherInput } | { ok: false; errors: VoucherInputErrors } {
   if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false, errors: { body: "Body inválido." } };
-  const input = body as { cookieQuantity?: unknown; validUntil?: unknown };
+  const input = body as { cookieQuantity?: unknown; validUntil?: unknown; description?: unknown };
   const errors: VoucherInputErrors = {};
 
   const quantity = input.cookieQuantity;
@@ -114,8 +120,12 @@ export function validateVoucherInput(body: unknown, now = new Date()): { ok: tru
     errors.validUntil = "Elegí una fecha dentro de los próximos 2 años.";
   }
 
+  const description = typeof input.description === "string" ? input.description.replace(/\s+/g, " ").trim() : "";
+  if (input.description !== undefined && input.description !== null && typeof input.description !== "string") errors.description = "Descripción inválida.";
+  else if (description.length > VOUCHER_DESCRIPTION_MAX) errors.description = `Máximo ${VOUCHER_DESCRIPTION_MAX} caracteres.`;
+
   if (Object.keys(errors).length > 0 || !expiresAt || !validQuantity) return { ok: false, errors };
-  return { ok: true, data: { cookieQuantity: quantity as VoucherQuantity, expiresAt } };
+  return { ok: true, data: { cookieQuantity: quantity as VoucherQuantity, expiresAt, description: description || null } };
 }
 
 /* ---------- Filtros del historial ---------- */
@@ -155,6 +165,8 @@ export function voucherWhere(filter: VoucherFilter, now = new Date()) {
 export type PublicVoucher = {
   publicId: string;
   code: string;
+  /** null = "Premio donado por Sweet Cookies" (lo resuelve la web). */
+  description: string | null;
   cookieQuantity: number;
   expiresAt: string;
   status: VoucherDisplayStatus;
@@ -176,6 +188,7 @@ export function toPublicVoucher(v: VoucherRecord, now = new Date()): PublicVouch
   return {
     publicId: v.publicId,
     code: v.code,
+    description: v.description,
     cookieQuantity: v.cookieQuantity,
     expiresAt: v.expiresAt.toISOString(),
     status: displayStatus(v, now),

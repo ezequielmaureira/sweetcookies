@@ -6,7 +6,7 @@ import { useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import { createVoucher } from "@/lib/admin/voucher-api";
-import { todayInArgentina, type AdminVoucher, type VoucherQuantity } from "@/lib/vouchers/voucher-format";
+import { DEFAULT_VOUCHER_DESCRIPTION, VOUCHER_DESCRIPTION_MAX, todayInArgentina, type AdminVoucher, type VoucherQuantity } from "@/lib/vouchers/voucher-format";
 import { VoucherSheet } from "./VoucherSheet";
 import { useCancelVoucher } from "./useCancelVoucher";
 import styles from "./Vouchers.module.css";
@@ -19,6 +19,7 @@ export function VoucherCreate() {
   const uid = useId();
   const [quantity, setQuantity] = useState<VoucherQuantity | null>(null);
   const [validUntil, setValidUntil] = useState("");
+  const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<AdminVoucher | null>(null);
@@ -31,11 +32,11 @@ export function VoucherCreate() {
     setSaving(true);
     setError(null);
     try {
-      setCreated(await createVoucher(await getToken(), { cookieQuantity: quantity, validUntil }));
+      setCreated(await createVoucher(await getToken(), { cookieQuantity: quantity, validUntil, description: description.trim() }));
       window.scrollTo({ top: 0 });
     } catch (e) {
       const fields = e instanceof AdminApiError ? e.fields : {};
-      setError(fields.validUntil ?? fields.cookieQuantity ?? adminErrorMessage(e, "No pudimos generar el voucher."));
+      setError(fields.validUntil ?? fields.cookieQuantity ?? fields.description ?? adminErrorMessage(e, "No pudimos generar el voucher."));
     } finally {
       setSaving(false);
     }
@@ -45,6 +46,7 @@ export function VoucherCreate() {
     setCreated(null);
     setQuantity(null);
     setValidUntil("");
+    setDescription("");
     setError(null);
     window.scrollTo({ top: 0 });
   };
@@ -106,6 +108,26 @@ export function VoucherCreate() {
         />
         <p id={`${uid}-date-help`} className={styles.help}>
           Fecha límite para canjearlo (incluye todo ese día).
+        </p>
+      </div>
+
+      <div className={styles.field}>
+        <label htmlFor={`${uid}-description`} className={styles.legend}>
+          Descripción
+        </label>
+        <input
+          id={`${uid}-description`}
+          type="text"
+          className={styles.textInput}
+          maxLength={VOUCHER_DESCRIPTION_MAX}
+          value={description}
+          placeholder={DEFAULT_VOUCHER_DESCRIPTION}
+          onChange={(e) => setDescription(e.target.value)}
+          aria-describedby={`${uid}-description-help`}
+        />
+        <p id={`${uid}-description-help`} className={styles.help}>
+          Ej.: Premio sorteo aniversario, Voucher cortesía, Regalo especial. Si lo dejás vacío dice “{DEFAULT_VOUCHER_DESCRIPTION}”. ({description.length}/
+          {VOUCHER_DESCRIPTION_MAX})
         </p>
       </div>
 

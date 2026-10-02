@@ -11,6 +11,8 @@ export type VoucherQuantity = 4 | 6;
 export type PublicVoucher = {
   publicId: string;
   code: string;
+  /** null o vacía → DEFAULT_VOUCHER_DESCRIPTION. */
+  description: string | null;
   cookieQuantity: number;
   expiresAt: string;
   status: VoucherStatus;
@@ -45,6 +47,12 @@ export const VOUCHER_FILTER_LABELS: Record<VoucherFilter, string> = {
 };
 
 export const boxLabel = (quantity: number) => `Caja de ${quantity} cookies`;
+
+/** Texto del voucher cuando no se cargó descripción (y en los vouchers anteriores al campo). */
+export const DEFAULT_VOUCHER_DESCRIPTION = "Premio donado por Sweet Cookies";
+export const VOUCHER_DESCRIPTION_MAX = 120;
+
+export const voucherDescription = (description: string | null | undefined) => description?.trim() || DEFAULT_VOUCHER_DESCRIPTION;
 
 const TIME_ZONE = "America/Argentina/Buenos_Aires";
 const dateFormat = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: TIME_ZONE });

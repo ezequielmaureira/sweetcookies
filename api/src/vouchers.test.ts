@@ -91,6 +91,7 @@ function memoryVouchers() {
         id: `v${rows.length + 1}`,
         publicId: generatePublicId(),
         code: generateVoucherCode(),
+        description: input.description,
         cookieQuantity: input.cookieQuantity,
         expiresAt: input.expiresAt,
         status: "ACTIVE",
