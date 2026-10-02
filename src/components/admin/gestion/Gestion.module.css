@@ -692,3 +692,12 @@ a.item:hover {
   font-weight: 600;
   color: var(--color-chocolate);
 }
+
+.fixedUnit {
+  display: flex;
+  align-items: center;
+  min-height: 56px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-ink);
+}

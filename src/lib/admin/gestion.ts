@@ -187,6 +187,17 @@ export function formatQuantity(value: string | number, unit: MeasureUnit) {
   return `${quantityFormat.format(n)} ${label}`;
 }
 
+/**
+ * Una compra tal como se cargó (la conversión a g/ml es interna):
+ * "2,5 kg", "1.000 g", "0,75 litros", "1 litro", "30 unidades".
+ */
+export function formatPurchase(p: { purchaseQuantity: string; purchaseUnit: MeasureUnit; unitsPerPackage: string | null }) {
+  const n = Number(p.purchaseQuantity);
+  if (p.purchaseUnit === "L") return `${quantityFormat.format(n)} ${n === 1 ? "litro" : "litros"}`;
+  if (p.purchaseUnit === "PACKAGE" && p.unitsPerPackage) return `${formatQuantity(n, "PACKAGE")} × ${formatQuantity(p.unitsPerPackage, "UNIT")}`;
+  return formatQuantity(n, p.purchaseUnit);
+}
+
 export const formatBaseQuantity = (value: string | number, baseUnit: BaseUnit) =>
   formatQuantity(value, baseUnit === "GRAM" ? "G" : baseUnit === "MILLILITER" ? "ML" : "UNIT");
 
