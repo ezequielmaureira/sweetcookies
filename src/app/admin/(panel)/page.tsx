@@ -6,6 +6,7 @@ const SECTIONS = [
   { href: "/admin/productos", title: "Productos", text: "Catálogo, precios, costos, stock y destacados." },
   { href: "/admin/pedidos", title: "Pedidos", text: "Pedidos, facturación y ganancia, con filtros." },
   { href: "/admin/vouchers", title: "Vouchers", text: "Vouchers de regalo con QR: crear, descargar y canjear." },
+  { href: "/admin/gestion", title: "Gestión", text: "Ingredientes, precios y recetas: el costo real de cada cookie." },
   { href: "/admin/configuracion", title: "Configuración", text: "Teléfono de pedidos, Instagram, mensaje de pausa y textos del sitio." },
 ];
 

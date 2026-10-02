@@ -68,6 +68,8 @@ model Product {
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
   orderItems OrderItem[]
+  /// Receta vinculada (Gestión). Todavía sin uso: preparado para costo/margen por producto.
+  recipe     Recipe?
 
   @@index([status, featured, sortOrder])
   @@map("products")
@@ -216,4 +218,118 @@ model SiteContent {
   updatedByUserId String?  @map("updated_by_user_id") @db.VarChar(64)
 
   @@map("site_content")
+}
+
+/* ---------- Gestión: ingredientes, precios y recetas (solo admin) ---------- */
+
+/// Unidad en la que se calcula cada ingrediente (todo se convierte a esta).
+enum IngredientBaseUnit {
+  GRAM
+  MILLILITER
+  UNIT
+}
+
+/// Unidad en la que se carga una compra o una cantidad de receta.
+/// G/KG → GRAM · ML/L → MILLILITER · UNIT/PACKAGE → UNIT (PACKAGE solo en compras).
+enum MeasureUnit {
+  G
+  KG
+  ML
+  L
+  UNIT
+  PACKAGE
+}
+
+model Ingredient {
+  id        String             @id @default(cuid()) @db.VarChar(40)
+  name      String             @db.VarChar(80)
+  baseUnit  IngredientBaseUnit @map("base_unit")
+  /// Inactivo: sigue en las recetas que ya lo usan, pero no se ofrece para recetas nuevas.
+  active    Boolean            @default(true)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  /// Historial de compras: nunca se sobrescribe. Costo actual = compra más reciente.
+  prices      IngredientPrice[]
+  recipeLines RecipeIngredient[]
+
+  @@index([name])
+  @@map("ingredients")
+}
+
+/// Una compra: lo que se compró, cuánto y cuánto se pagó. El costo por unidad
+/// base se calcula al guardar (y queda fijo para ese registro).
+model IngredientPrice {
+  id               String      @id @default(cuid()) @db.VarChar(40)
+  ingredientId     String      @map("ingredient_id") @db.VarChar(40)
+  ingredient       Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  purchaseQuantity Decimal     @map("purchase_quantity") @db.Decimal(14, 4)
+  purchaseUnit     MeasureUnit @map("purchase_unit")
+  /// Solo para PACKAGE: unidades por paquete.
+  unitsPerPackage  Decimal?    @map("units_per_package") @db.Decimal(14, 4)
+  /// Cantidad comprada en la unidad base del ingrediente (g, ml o unidades).
+  baseQuantity     Decimal     @map("base_quantity") @db.Decimal(18, 4)
+  totalPrice       Decimal     @map("total_price") @db.Decimal(14, 2)
+  /// totalPrice / baseQuantity, con precisión alta (ej. 29,3213333333 $/g).
+  unitCost         Decimal     @map("unit_cost") @db.Decimal(20, 10)
+  supplierName     String?     @map("supplier_name") @db.VarChar(80)
+  purchasedAt      DateTime    @map("purchased_at") @db.Date
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  @@index([ingredientId, purchasedAt(sort: Desc), createdAt(sort: Desc)])
+  @@map("ingredient_prices")
+}
+
+/// Receta: el costo NO se guarda, se calcula siempre con los precios actuales.
+model Recipe {
+  id            String   @id @default(cuid()) @db.VarChar(40)
+  name          String   @db.VarChar(80)
+  /// Cantidad de cookies que produce.
+  yieldQuantity Int      @map("yield_quantity")
+  active        Boolean  @default(true)
+  /// Producto vinculado (futuro: costo y margen por producto). Hoy sin uso.
+  productId     String?  @unique @map("product_id") @db.VarChar(40)
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  ingredients RecipeIngredient[]
+  extraCosts  RecipeExtraCost[]
+
+  @@index([name])
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id           String      @id @default(cuid()) @db.VarChar(40)
+  recipeId     String      @map("recipe_id") @db.VarChar(40)
+  recipe       Recipe      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  /// Restrict: un ingrediente usado en recetas no se puede borrar (se marca inactivo).
+  ingredientId String      @map("ingredient_id") @db.VarChar(40)
+  ingredient   Ingredient  @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity     Decimal     @db.Decimal(14, 4)
+  unit         MeasureUnit
+  /// Orden de las líneas en la receta.
+  position     Int         @default(0)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@index([recipeId])
+  @@index([ingredientId])
+  @@map("recipe_ingredients")
+}
+
+/// Gasto adicional libre de la receta (gas, packaging, sticker…).
+model RecipeExtraCost {
+  id        String   @id @default(cuid()) @db.VarChar(40)
+  recipeId  String   @map("recipe_id") @db.VarChar(40)
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(80)
+  amount    Decimal  @db.Decimal(14, 2)
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([recipeId])
+  @@map("recipe_extra_costs")
 }

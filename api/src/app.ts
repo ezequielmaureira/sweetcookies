@@ -11,6 +11,8 @@ import { OrderError, parseOrderListQuery, validateOrderRequest } from "./orders.
 import { toAdminProduct, toPublicProduct, validateProductInput } from "./products.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { SettingsRepository } from "./repository.ts";
+import type { ManagementRepository } from "./management-repository.ts";
+import { registerManagementRoutes } from "./management-routes.ts";
 import type { SiteContentRepository } from "./site-content-repository.ts";
 import { registerSiteContentRoutes } from "./site-content-routes.ts";
 import { validateOrdersPatch, validateSettingsInput, type PublicSettings } from "./settings.ts";
@@ -26,6 +28,8 @@ type Deps = {
   vouchers?: VoucherRepository;
   /** Textos del sitio editables (opcional: sin él, las rutas /content no existen). */
   content?: SiteContentRepository;
+  /** Gestión de costos: ingredientes, precios y recetas (opcional: sin él, esas rutas no existen). */
+  management?: ManagementRepository;
   auth: AuthService;
   allowedOrigins: string[];
   /** Límite de pedidos por IP (por defecto 8 cada 10 minutos). */
@@ -58,6 +62,7 @@ export function createApp({
   images,
   vouchers,
   content,
+  management,
   auth,
   allowedOrigins,
   orderLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60 * 1000 }),
@@ -276,6 +281,9 @@ export function createApp({
 
   // Textos del sitio (público: lectura · admin: Configuración → Textos del sitio).
   if (content) registerSiteContentRoutes(app, { content, log });
+
+  // Gestión de costos (solo admin: ingredientes, precios y recetas).
+  if (management) registerManagementRoutes(app, { management, log });
 
   return app;
 }
