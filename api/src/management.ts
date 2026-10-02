@@ -152,8 +152,6 @@ export function validatePriceInput(input: unknown, baseUnit: BaseUnit): Validati
  */
 export type RecipeComponent = "UNASSIGNED" | "DOUGH" | "FILLING" | "FINISHING";
 export const RECIPE_COMPONENTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "FINISHING", "UNASSIGNED"];
-/** Las partes que se pueden marcar como "ya preparada" en el simulador. */
-export const PREPARABLE_COMPONENTS: readonly RecipeComponent[] = ["DOUGH", "FILLING", "FINISHING"];
 
 export type RecipeLineInput = { ingredientId: string; quantity: Decimal; unit: MeasureUnit; component: RecipeComponent };
 export type RecipeExtraInput = { name: string; amount: Decimal };
@@ -407,17 +405,13 @@ export function computeRecipe(r: RecipeRow) {
 
 /* ---------- Simulador de producción (solo cálculo: no guarda nada) ---------- */
 
-/**
- * requiredComponents = partes que FALTA preparar (por defecto las tres). Una
- * parte ya preparada sigue en el costo TOTAL REAL; solo sale de lo PENDIENTE.
- */
-export type SimulationItem = { recipeId: string; cookies: number; requiredComponents: RecipeComponent[] };
+export type SimulationItem = { recipeId: string; cookies: number };
 
 export const SIMULATION_MAX_ITEMS = 50;
 
 const validCookies = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 100000;
 
-/** Pedido del simulador: { items: [{ recipeId, cookies, requiredComponents? }] }, cookies entero ≥ 1, sin recetas repetidas. */
+/** Pedido del simulador: { items: [{ recipeId, cookies }] }, cookies entero ≥ 1, sin recetas repetidas. */
 export function validateSimulationInput(input: unknown): Validation<SimulationItem[]> {
   const raw = obj(input).items;
   if (!Array.isArray(raw) || raw.length > SIMULATION_MAX_ITEMS) return { ok: false, errors: { items: `Entre 0 y ${SIMULATION_MAX_ITEMS} recetas.` } };
@@ -430,13 +424,10 @@ export function validateSimulationInput(input: unknown): Validation<SimulationIt
     // "quantity" se acepta como sinónimo de "cookies".
     const rawCookies = item.cookies ?? item.quantity;
     const cookies = typeof rawCookies === "string" ? Number(rawCookies) : rawCookies;
-    const required = item.requiredComponents === undefined ? [...PREPARABLE_COMPONENTS] : item.requiredComponents;
-    const validRequired = Array.isArray(required) && required.every((c) => PREPARABLE_COMPONENTS.includes(c as RecipeComponent));
     if (!recipeId) errors[`items.${i}.recipeId`] = "Elegí una receta.";
     else if (seen.has(recipeId)) errors[`items.${i}.recipeId`] = "Esa receta ya está en la simulación.";
     else if (!validCookies(cookies)) errors[`items.${i}.cookies`] = "Cantidad de cookies inválida.";
-    else if (!validRequired) errors[`items.${i}.requiredComponents`] = "Partes inválidas (masa, relleno o terminación).";
-    else items.push({ recipeId, cookies, requiredComponents: [...new Set(required as RecipeComponent[])] });
+    else items.push({ recipeId, cookies });
     seen.add(recipeId);
   });
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, data: items };
@@ -445,57 +436,61 @@ export function validateSimulationInput(input: unknown): Validation<SimulationIt
 /** Cuántas veces hay que hacer la receta: cookies pedidas / rendimiento (sin redondear: 15 / 10 = 1,5). */
 export const recipeScaleFactor = (cookies: number, yieldQuantity: number) => new Decimal(cookies).div(yieldQuantity);
 
+const addParts = (into: Parts, from: Parts) => {
+  for (const c of RECIPE_COMPONENTS) {
+    into[c].known = into[c].known.add(from[c].known);
+    into[c].missing += from[c].missing;
+    into[c].lines += from[c].lines;
+  }
+};
+
 /**
  * Simulación TEÓRICA de producción con los costos ACTUALES (mismo motor que
  * computeRecipe: costLines). Escala ingredientes y gastos por el factor de cada
- * receta, agrupa ingredientes iguales y suma. Sin precio → incompleto (nunca 0).
+ * receta y suma. Sin precio → incompleto (nunca 0).
  *
- * Dos miradas:
- *   - TOTAL REAL: todas las partes + gastos (lo que cuestan las cookies).
- *   - PENDIENTE: solo las partes que falta preparar (requiredComponents).
- *     Las líneas "Sin clasificar" se cuentan siempre como pendientes.
- *     Los gastos adicionales van en el total real, no en el pendiente.
+ * El resultado se separa por parte (masa, relleno, terminación): costo de cada
+ * parte e ingredientes agrupados por parte. Es solo para mirar el detalle: el
+ * costo total es siempre el de toda la producción.
  *
- * Etapa 2: cada ingrediente sale con su id y cantidades (total y pendiente) en
- * unidad base, listo para cruzar con stock (faltante = pendiente − stock) y con
- * preparaciones semielaboradas por parte (ej. masa Ferrero lista para 20 cookies).
+ * Etapa 2: cada ingrediente sale con su id, parte y cantidad en unidad base,
+ * listo para cruzar con stock y armar la lista de compras.
  */
 export function simulateProduction(recipes: Map<string, RecipeRow>, items: SimulationItem[]) {
-  type Total = { id: string; name: string; baseUnit: BaseUnit; unitCost: Decimal | null; quantity: Decimal; pendingQuantity: Decimal; usedIn: string[] };
+  type Total = { id: string; name: string; baseUnit: BaseUnit; component: RecipeComponent; unitCost: Decimal | null; quantity: Decimal; usedIn: string[] };
   const totals = new Map<string, Total>();
+  const productionParts = emptyParts();
   let totalCookies = 0;
   let extrasCost = new Decimal(0);
   let hasDraft = false;
-  let hasUnassigned = false;
 
-  const detail = items.map(({ recipeId, cookies, requiredComponents }) => {
+  const detail = items.map(({ recipeId, cookies }) => {
     const r = recipes.get(recipeId)!;
     const factor = recipeScaleFactor(cookies, r.yieldQuantity!);
-    const pendingParts: RecipeComponent[] = [...requiredComponents, "UNASSIGNED"];
     const { lines, parts } = costLines(r, factor);
     for (const { line, baseQuantity, unitCost } of lines) {
-      const t: Total = totals.get(line.ingredient.id) ?? {
+      // Un mismo ingrediente puede estar en partes distintas: se agrupa por parte + ingrediente.
+      const key = `${line.component}:${line.ingredient.id}`;
+      const t: Total = totals.get(key) ?? {
         id: line.ingredient.id,
         name: line.ingredient.name,
         baseUnit: line.ingredient.baseUnit,
+        component: line.component,
         unitCost,
         quantity: new Decimal(0),
-        pendingQuantity: new Decimal(0),
         usedIn: [],
       };
       t.quantity = t.quantity.add(baseQuantity);
-      if (pendingParts.includes(line.component)) t.pendingQuantity = t.pendingQuantity.add(baseQuantity);
       if (!t.usedIn.includes(r.name)) t.usedIn.push(r.name);
-      totals.set(line.ingredient.id, t);
+      totals.set(key, t);
     }
+    addParts(productionParts, parts);
     const all = sumParts(parts, RECIPE_COMPONENTS);
-    const pending = sumParts(parts, pendingParts);
     const recipeExtras = r.extras.reduce((sum, e) => sum.add(e.amount), new Decimal(0)).mul(factor);
     const total = all.known.add(recipeExtras);
     totalCookies += cookies;
     extrasCost = extrasCost.add(recipeExtras);
     if (r.status === "DRAFT") hasDraft = true;
-    if (parts.UNASSIGNED.lines > 0) hasUnassigned = true;
     return {
       recipeId,
       name: r.name,
@@ -504,53 +499,41 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
       yieldQuantity: r.yieldQuantity,
       /** Equivalencia en recetas (20 / 10 = 2; 15 / 10 = 1,5). */
       factor: factor.toDecimalPlaces(4).toString(),
-      requiredComponents,
       /** Costo de UNA receta base (null si le faltan precios). */
       baseCost: computeRecipe(r).summary.totalCost,
-      /** Costo de cada parte para estas cookies, y si falta prepararla. */
-      components: Object.fromEntries(RECIPE_COMPONENTS.map((c) => [c, { ...partJson(parts[c]), pending: pendingParts.includes(c) }])),
+      /** Costo de cada parte para estas cookies. */
+      components: partsJson(parts),
       missingPrices: all.missing,
       ingredientsCost: money(all.known),
       extrasCost: money(recipeExtras),
       knownCost: money(total),
-      /** TOTAL REAL: todas las partes + gastos (null si falta algún precio). */
       totalCost: all.missing ? null : money(total),
       costPerCookie: all.missing ? null : money(total.div(cookies)),
-      /** PENDIENTE: solo ingredientes de las partes por preparar (null si falta algún precio ahí). */
-      pendingKnownCost: money(pending.known),
-      pendingCost: pending.missing ? null : money(pending.known),
     };
   });
 
-  let ingredientsCost = new Decimal(0);
-  let pendingIngredientsCost = new Decimal(0);
-  let pendingMissing = 0;
+  const order = (c: RecipeComponent) => RECIPE_COMPONENTS.indexOf(c);
   const ingredients = [...totals.values()]
-    .sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }))
+    .sort((a, b) => order(a.component) - order(b.component) || a.name.localeCompare(b.name, "es", { sensitivity: "base" }))
     .map((t) => {
       const cost = t.unitCost ? t.quantity.mul(t.unitCost) : null;
-      const pendingCost = t.unitCost ? t.pendingQuantity.mul(t.unitCost) : null;
-      if (cost) ingredientsCost = ingredientsCost.add(cost);
-      if (pendingCost) pendingIngredientsCost = pendingIngredientsCost.add(pendingCost);
-      else if (t.pendingQuantity.gt(0)) pendingMissing++;
       return {
         ingredientId: t.id,
         name: t.name,
         baseUnit: t.baseUnit,
-        /** Cantidad necesaria en unidad base (g, ml o unidades), todas las partes. */
+        component: t.component,
+        /** Cantidad necesaria en unidad base (g, ml o unidades). */
         quantity: t.quantity.toDecimalPlaces(4).toString(),
-        /** Solo de las partes que falta preparar (0 = ya está todo preparado). */
-        pendingQuantity: t.pendingQuantity.toDecimalPlaces(4).toString(),
         unitCost: t.unitCost?.toString() ?? null,
         cost: cost ? money(cost) : null,
-        pendingCost: pendingCost ? money(pendingCost) : null,
         usedIn: t.usedIn,
       };
     });
 
-  const missingPrices = ingredients.filter((i) => !i.unitCost).length;
-  const complete = missingPrices === 0;
-  const total = ingredientsCost.add(extrasCost);
+  const all = sumParts(productionParts, RECIPE_COMPONENTS);
+  const missingPrices = new Set(ingredients.filter((i) => !i.unitCost).map((i) => i.ingredientId)).size;
+  const complete = all.missing === 0;
+  const total = all.known.add(extrasCost);
   return {
     recipes: detail,
     ingredients,
@@ -558,20 +541,15 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
       totalCookies,
       /** Incluye recetas en borrador: la simulación puede no tener todos los ingredientes. */
       hasDraft,
-      /** Hay líneas "Sin clasificar": se cuentan siempre como pendientes. */
-      hasUnassigned,
       complete,
       missingPrices,
-      ingredientsCost: money(ingredientsCost),
+      /** Costo de masa / relleno / terminación / sin clasificar de toda la producción. */
+      components: partsJson(productionParts),
+      ingredientsCost: money(all.known),
       extrasCost: money(extrasCost),
       knownCost: money(total),
-      /** COSTO TOTAL REAL (todas las partes + gastos). */
       totalCost: complete ? money(total) : null,
       averagePerCookie: complete && totalCookies > 0 ? money(total.div(totalCookies)) : null,
-      /** COSTO PENDIENTE DE PRODUCCIÓN (ingredientes de las partes por preparar). */
-      pendingComplete: pendingMissing === 0,
-      pendingKnownCost: money(pendingIngredientsCost),
-      pendingCost: pendingMissing === 0 ? money(pendingIngredientsCost) : null,
     },
   };
 }

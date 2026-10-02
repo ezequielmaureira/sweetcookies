@@ -207,53 +207,44 @@ export type SimulationResult = {
     yieldQuantity: number;
     /** Equivalencia en recetas ("2", "1.5"). */
     factor: string;
-    /** Partes que falta preparar. */
-    requiredComponents: RecipeComponent[];
     baseCost: string | null;
-    /** Costo de cada parte para estas cookies y si está pendiente. */
-    components: Record<RecipeComponent, PartCost & { pending: boolean }>;
+    /** Costo de cada parte para estas cookies. */
+    components: Record<RecipeComponent, PartCost>;
     missingPrices: number;
     ingredientsCost: string;
     extrasCost: string;
     knownCost: string;
     totalCost: string | null;
     costPerCookie: string | null;
-    /** Solo las partes por preparar (sin gastos). */
-    pendingKnownCost: string;
-    pendingCost: string | null;
   }[];
-  /** Ingredientes agrupados (orden alfabético). Etapa 2: cruzar con stock por ingredientId. */
+  /** Ingredientes agrupados por parte + ingrediente (masa, relleno, terminación; alfabético). */
   ingredients: {
     ingredientId: string;
     name: string;
     baseUnit: BaseUnit;
-    /** Cantidad necesaria en unidad base (g, ml o unidades), todas las partes. */
+    component: RecipeComponent;
+    /** Cantidad necesaria en unidad base (g, ml o unidades). */
     quantity: string;
-    /** Solo de las partes que falta preparar. */
-    pendingQuantity: string;
     unitCost: string | null;
     cost: string | null;
-    pendingCost: string | null;
     usedIn: string[];
   }[];
   summary: {
     totalCookies: number;
     hasDraft: boolean;
-    hasUnassigned: boolean;
     complete: boolean;
     missingPrices: number;
+    /** Costo de masa / relleno / terminación / sin clasificar de toda la producción. */
+    components: Record<RecipeComponent, PartCost>;
     ingredientsCost: string;
     extrasCost: string;
     knownCost: string;
     totalCost: string | null;
     averagePerCookie: string | null;
-    pendingComplete: boolean;
-    pendingKnownCost: string;
-    pendingCost: string | null;
   };
 };
 
-export const simulateProduction = (token: string | null, items: { recipeId: string; cookies: number; requiredComponents: RecipeComponent[] }[]) =>
+export const simulateProduction = (token: string | null, items: { recipeId: string; cookies: number }[]) =>
   adminRequest<SimulationResult>("/api/admin/production/simulate", token, { method: "POST", body: JSON.stringify({ items }) });
 
 const factorFormat = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
