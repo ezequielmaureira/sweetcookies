@@ -1,6 +1,7 @@
 /**
- * Dibuja el voucher digital en un <canvas> (el voucher es 100 % online: no
- * se descarga ni se imprime; se comparte el link a /v/<publicId>).
+ * Dibuja el voucher en un <canvas>. Es la ÚNICA fuente del diseño: la vista
+ * online, la imagen PNG (/v/<publicId>/image) y el archivo que se comparte
+ * salen de esta misma función, con el mismo QR y el mismo código.
  *
  * Base: el arte original del voucher (marco vintage, cookies, títulos y la
  * franja "CAJA DE 4/6 COOKIES"), recortado de la referencia en
@@ -186,4 +187,15 @@ export async function renderVoucher(canvas: HTMLCanvasElement, art: VoucherArt, 
 
   drawDateTag(ctx, art.expiresAt, fontFamily);
   drawQrCard(ctx, art, fontFamily, scale);
+}
+
+export const voucherImageFileName = (code: string) => `voucher-${code}.png`;
+
+/** PNG del voucher (3072 × 1022 px) con exactamente el mismo dibujo que la vista. */
+export async function renderVoucherPng(art: VoucherArt, fontFamily: string, scale = VOUCHER_SCALE): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  await renderVoucher(canvas, art, fontFamily, scale);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("No se pudo generar la imagen"))), "image/png");
+  });
 }

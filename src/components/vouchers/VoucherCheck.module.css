@@ -218,3 +218,54 @@
   font-size: 0.875rem;
   color: var(--color-muted);
 }
+
+/* ---------- Imagen del voucher (/v/<publicId>/image) ---------- */
+.imagePage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 16px;
+  background: #2a1d15;
+}
+
+.image {
+  width: min(1200px, 100%);
+  margin: 0;
+}
+
+.image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.6);
+}
+
+.imageNote {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1536 / 511;
+  border-radius: 6px;
+  background: #f1e1cb;
+  color: var(--color-muted);
+}
+
+.imageStatus {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #fbe4dc;
+  font-weight: 600;
+  color: #8f3b27;
+}
+
+.imageLink {
+  font-size: 0.9375rem;
+  color: #f3ebdf;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

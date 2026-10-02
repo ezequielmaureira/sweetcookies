@@ -18,8 +18,8 @@ type Props = {
 
 /**
  * Voucher 100 % online: preview + datos + acciones según el estado.
- * ACTIVO: ver, compartir, WhatsApp, email, copiar link, anular.
- * CANJEADO / VENCIDO / ANULADO: solo ver (no se comparte un voucher que no sirve).
+ * ACTIVO: ver voucher, ver imagen, compartir, WhatsApp, email, copiar link, anular.
+ * CANJEADO / VENCIDO: ver voucher e imagen · ANULADO: solo ver voucher.
  */
 export function VoucherSheet({ voucher, onCancel, children }: Props) {
   const { status } = voucher;
@@ -75,6 +75,11 @@ export function VoucherSheet({ voucher, onCancel, children }: Props) {
         <a href={`/v/${encodeURIComponent(voucher.publicId)}`} target="_blank" rel="noopener" className={`${buttonStyles.button} ${buttonStyles.primary}`}>
           Ver voucher
         </a>
+        {status !== "CANCELLED" && (
+          <a href={`/v/${encodeURIComponent(voucher.publicId)}/image`} target="_blank" rel="noopener" className={`${buttonStyles.button} ${buttonStyles.secondary}`}>
+            Ver imagen
+          </a>
+        )}
         {status === "ACTIVE" && <VoucherShareActions voucher={voucher} />}
         {status === "ACTIVE" && onCancel && (
           <Button variant="secondary" className={styles.cancelButton} onClick={onCancel}>

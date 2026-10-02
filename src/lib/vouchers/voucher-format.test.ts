@@ -45,7 +45,7 @@ describe("voucher-format", () => {
     assert.ok(mail.startsWith("mailto:?subject="));
     const params = new URLSearchParams(mail.slice("mailto:?".length));
     assert.equal(params.get("subject"), "Tenés un voucher de Sweet Cookies 🍪");
-    assert.equal(params.get("body"), `Tenés un voucher de Sweet Cookies.\n\nCaja de 4 cookies\nVálido hasta 15/10/2026\n\nAbrí tu voucher:\n${url}`);
+    assert.equal(params.get("body"), `Tenés un voucher de Sweet Cookies.\n\nCaja de 4 cookies\nVálido hasta 15/10/2026\n\nVoucher:\n${url}\n\nImagen del voucher:\n${url}/image`);
   });
 
   it("copiar link: la URL del voucher según el entorno", () => {

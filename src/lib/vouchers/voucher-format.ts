@@ -80,6 +80,9 @@ export const VOUCHER_BASE_URL = (process.env.NEXT_PUBLIC_VOUCHER_BASE_URL ?? "")
 
 export const voucherUrl = (publicId: string, base = VOUCHER_BASE_URL) => `${base}/v/${encodeURIComponent(publicId)}`;
 
+/** Imagen PNG del voucher (misma pieza visual, mismo QR). El link principal sigue siendo voucherUrl. */
+export const voucherImageUrl = (publicId: string, base = VOUCHER_BASE_URL) => `${voucherUrl(publicId, base)}/image`;
+
 /* ---------- Compartir (el voucher es 100 % online: se comparte el LINK) ---------- */
 
 type ShareableVoucher = Pick<PublicVoucher, "publicId" | "cookieQuantity" | "expiresAt">;
@@ -100,7 +103,7 @@ export function voucherWhatsAppUrl(v: ShareableVoucher, url = voucherUrl(v.publi
 }
 
 /** Sin proveedor de email en el proyecto: abre el correo del dispositivo (mailto). */
-export function voucherMailtoUrl(v: ShareableVoucher, url = voucherUrl(v.publicId)): string {
-  const body = `Tenés un voucher de Sweet Cookies.\n\n${voucherSummary(v)}\n\nAbrí tu voucher:\n${url}`;
+export function voucherMailtoUrl(v: ShareableVoucher, url = voucherUrl(v.publicId), imageUrl = `${url}/image`): string {
+  const body = `Tenés un voucher de Sweet Cookies.\n\n${voucherSummary(v)}\n\nVoucher:\n${url}\n\nImagen del voucher:\n${imageUrl}`;
   return `mailto:?subject=${encodeURIComponent(SHARE_TITLE)}&body=${encodeURIComponent(body)}`;
 }
