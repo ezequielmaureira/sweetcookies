@@ -2,112 +2,103 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import buttonStyles from "@/components/ui/Button.module.css";
 import { voucherFont } from "@/components/vouchers/voucher-font";
-import { voucherImageUrl, voucherMailtoUrl, voucherShareText, voucherUrl, voucherWhatsAppUrl, type AdminVoucher } from "@/lib/vouchers/voucher-format";
+import { type AdminVoucher } from "@/lib/vouchers/voucher-format";
 import { renderVoucherPng, voucherImageFileName } from "@/lib/vouchers/voucher-render";
 import styles from "./Vouchers.module.css";
 
-/** Copia al portapapeles (con respaldo para navegadores sin Clipboard API). */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.setAttribute("readonly", "");
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.append(area);
-    area.select();
-    const ok = document.execCommand("copy");
-    area.remove();
-    return ok;
-  }
-}
-
 /**
- * Compartir un voucher ACTIVO: siempre el LINK (/v/<publicId>), nunca una imagen.
- * Compartir (menú nativo con la IMAGEN + el link si el dispositivo comparte archivos;
- * si no, solo el texto con el link; sin menú nativo, copia el link) · WhatsApp ·
- * Email (mailto) · Copiar link.
- * Solo admin: la vista del cliente (/v/...) no tiene estas acciones.
+ * Lo que recibe el cliente es la IMAGEN del voucher (PNG final con QR y código),
+ * nunca un link. Acciones (solo admin, voucher ACTIVO):
+ * Ver imagen · Compartir imagen (menú del sistema con el archivo) ·
+ * Guardar imagen (descarga) · WhatsApp / Compartir (mismo menú con el PNG:
+ * el admin elige WhatsApp; desde el navegador no hay forma confiable de
+ * adjuntar un archivo directo a WhatsApp).
  */
-const secondaryLink = `${buttonStyles.button} ${buttonStyles.secondary}`;
-
 export function VoucherShareActions({ voucher }: { voucher: AdminVoucher }) {
-  const url = voucherUrl(voucher.publicId);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   // La imagen se prepara antes del toque: el menú de compartir tiene que abrirse
   // en el mismo gesto (Safari lo bloquea si antes se espera a generar el PNG).
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [image, setImage] = useState<{ file: File; url: string } | null>(null);
+  const [failed, setFailed] = useState(false);
   const { publicId, code, cookieQuantity, expiresAt, description } = voucher;
 
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
   useEffect(() => {
     let cancelled = false;
+    let url: string | null = null;
     renderVoucherPng({ publicId, code, cookieQuantity, expiresAt, description }, voucherFont.style.fontFamily)
       .then((blob) => {
-        if (!cancelled) setImageFile(new File([blob], voucherImageFileName(code), { type: "image/png" }));
+        if (cancelled) return;
+        const file = new File([blob], voucherImageFileName(code), { type: "image/png" });
+        url = URL.createObjectURL(file);
+        setImage({ file, url });
       })
-      .catch(() => {
-        // Sin imagen: Compartir sigue funcionando con el link.
+      .catch((error: unknown) => {
+        console.error("[voucher image] render failed", error);
+        if (!cancelled) setFailed(true);
       });
     return () => {
       cancelled = true;
+      if (url) URL.revokeObjectURL(url);
     };
   }, [publicId, code, cookieQuantity, expiresAt, description]);
 
   const flash = (text: string) => {
     setToast(text);
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(null), 2200);
+    toastTimer.current = window.setTimeout(() => setToast(null), 3500);
   };
 
-  const copyLink = async () => flash((await copyText(url)) ? "Link copiado ✓" : `No se pudo copiar. Link: ${url}`);
+  const notReady = () => flash(failed ? "No pudimos generar la imagen. Recargá la página." : "Generando imagen…");
 
-  const share = async () => {
-    const text = voucherShareText(voucher, url);
-    // A) El dispositivo comparte archivos: imagen del voucher + texto con el link.
-    if (imageFile && typeof navigator.canShare === "function" && navigator.canShare({ files: [imageFile] })) {
+  const save = () => {
+    if (!image) return notReady();
+    const link = document.createElement("a");
+    link.href = image.url;
+    link.download = image.file.name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    flash("Imagen guardada ✓");
+  };
+
+  const view = () => {
+    if (!image) return notReady();
+    window.open(image.url, "_blank", "noopener");
+  };
+
+  /** Comparte SOLO el archivo PNG con el menú del sistema (WhatsApp, mail, etc.). */
+  const share = async (target?: string) => {
+    if (!image) return notReady();
+    const data: ShareData = { files: [image.file], title: `Voucher Sweet Cookies ${code}` };
+    if (typeof navigator.canShare === "function" && navigator.canShare(data)) {
       try {
-        await navigator.share({ files: [imageFile], title: "Voucher Sweet Cookies", text });
+        await navigator.share(data);
         return;
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        // Si falla con archivo, se sigue con el comportamiento de solo link.
-      }
-    }
-    // B) Solo texto con el link (comportamiento anterior).
-    if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({ title: "Voucher Sweet Cookies", text });
-      } catch (error) {
         // El usuario cerró el menú de compartir: no es un error.
-        if (!(error instanceof DOMException && error.name === "AbortError")) await copyLink();
+        if (error instanceof DOMException && error.name === "AbortError") return;
       }
-      return;
     }
-    // Sin Web Share API (ej. escritorio): se ofrece el link copiado.
-    flash((await copyText(url)) ? "Tu navegador no permite compartir: link copiado ✓" : `Link: ${url}`);
+    // El dispositivo no comparte archivos (ej. escritorio): se guarda el PNG para adjuntarlo a mano.
+    save();
+    flash(`Este dispositivo no permite compartir archivos: imagen guardada, adjuntala en ${target ?? "el chat o mail"}.`);
   };
 
   return (
     <>
-      <Button variant="secondary" onClick={() => void share()}>
-        Compartir
+      <Button onClick={() => void share()}>Compartir imagen</Button>
+      <Button variant="secondary" onClick={save}>
+        Guardar imagen
       </Button>
-      <a href={voucherWhatsAppUrl(voucher, url)} target="_blank" rel="noopener noreferrer" className={secondaryLink}>
-        WhatsApp
-      </a>
-      <a href={voucherMailtoUrl(voucher, url, voucherImageUrl(voucher.publicId))} className={secondaryLink}>
-        Email
-      </a>
-      <Button variant="secondary" onClick={() => void copyLink()}>
-        Copiar link
+      <Button variant="secondary" onClick={() => void share("WhatsApp")}>
+        WhatsApp / Compartir
+      </Button>
+      <Button variant="secondary" onClick={view}>
+        Ver imagen
       </Button>
       <span className={styles.toast} role="status" aria-live="polite">
         {toast}
