@@ -7,6 +7,7 @@ import styles from "./Admin.module.css";
 const LINKS = [
   { href: "/admin/productos", label: "Productos" },
   { href: "/admin/pedidos", label: "Pedidos" },
+  { href: "/admin/vouchers", label: "Vouchers" },
   { href: "/admin/configuracion", label: "Configuración" },
 ];
 

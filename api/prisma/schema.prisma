@@ -158,3 +158,40 @@ model ProductImage {
 
   @@map("product_images")
 }
+
+/// Estado guardado del voucher. "Vencido" NO se guarda: es ACTIVE con
+/// expiresAt < ahora (se calcula al leer).
+enum VoucherStatus {
+  ACTIVE
+  REDEEMED
+  CANCELLED
+}
+
+/// Voucher de regalo (caja de 4 o 6 cookies) con QR único.
+/// El QR apunta a /v/<publicId>; el canje es un UPDATE condicional atómico
+/// (nunca se puede canjear dos veces). Los registros no se borran.
+model Voucher {
+  id                String        @id @default(cuid()) @db.VarChar(40)
+  /// Identificador público del QR (aleatorio, no adivinable).
+  publicId          String        @unique @map("public_id") @db.VarChar(32)
+  /// Código corto visible (ej. SC-8K4P2M).
+  code              String        @unique @db.VarChar(16)
+  /// 4 o 6 (CHECK en la base).
+  cookieQuantity    Int           @map("cookie_quantity")
+  /// Último instante válido para canjear (fin del día elegido, hora Argentina).
+  expiresAt         DateTime      @map("expires_at")
+  status            VoucherStatus @default(ACTIVE)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  /// Id de Clerk del admin que lo creó.
+  createdByUserId   String?       @map("created_by_user_id") @db.VarChar(64)
+  redeemedAt        DateTime?     @map("redeemed_at")
+  /// Id de Clerk del admin que lo canjeó.
+  redeemedByUserId  String?       @map("redeemed_by_user_id") @db.VarChar(64)
+  cancelledAt       DateTime?     @map("cancelled_at")
+  /// Id de Clerk del admin que lo anuló.
+  cancelledByUserId String?       @map("cancelled_by_user_id") @db.VarChar(64)
+
+  @@index([createdAt])
+  @@index([status, expiresAt])
+  @@map("vouchers")
+}

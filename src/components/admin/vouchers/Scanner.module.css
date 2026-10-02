@@ -1,0 +1,287 @@
+/* Escáner: pensado para usar con una mano desde el celular. */
+.scanner {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 520px;
+}
+
+.cameraBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+  background: #1f150f;
+  overflow: hidden;
+  box-shadow: 0 0 0 3px transparent;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.viewportDetected {
+  box-shadow: 0 0 0 5px #3f9a46;
+}
+
+.video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Guía de encuadre */
+.frame {
+  position: absolute;
+  inset: 16%;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.viewportDetected .frame {
+  border-color: #6fd277;
+}
+
+.overlay {
+  position: absolute;
+  inset: auto 12px 12px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(31, 21, 15, 0.82);
+  color: #fff;
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+.overlayOk {
+  background: #2f6b34;
+  font-weight: 600;
+}
+
+.live {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.cameraActions {
+  display: flex;
+  justify-content: center;
+}
+
+.cameraActions > * {
+  min-height: 52px;
+  width: 100%;
+}
+
+/* ---------- Resultado ---------- */
+.result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 20px 22px;
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.good {
+  background: #eaf4e6;
+  box-shadow: inset 0 0 0 2px #9ccc98;
+}
+
+.bad {
+  background: #fbebe5;
+  box-shadow: inset 0 0 0 2px #e6b3a3;
+}
+
+.icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.good .icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #2f6b34;
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.resultTitle {
+  margin-top: 12px;
+  font-size: clamp(1.5rem, 7vw, 2rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.good .resultTitle {
+  color: #2f6b34;
+}
+
+.bad .resultTitle {
+  color: #9a3f29;
+}
+
+/* "Este QR no pertenece a Sweet Cookies." es una frase: sin mayúsculas. */
+.sentence {
+  font-size: clamp(1.25rem, 5.5vw, 1.5rem);
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+.box {
+  margin: 14px 0 0;
+  padding: 6px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-chocolate);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 32px;
+  margin: 18px 0 0;
+}
+
+.facts div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.facts dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.facts dd {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-chocolate);
+}
+
+.code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 1.25rem !important;
+  letter-spacing: 0.06em;
+}
+
+.notice {
+  margin: 16px 0 0;
+  font-weight: 600;
+  color: #8f3b27;
+}
+
+.resultActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 22px;
+}
+
+.bigButton {
+  width: 100%;
+  min-height: 56px;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.confirmBox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--color-cream-deep);
+  font-size: 1.0625rem;
+  color: var(--color-chocolate);
+}
+
+.confirmBox strong {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- Código manual ---------- */
+.manual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-line);
+}
+
+.manual > button {
+  min-height: 52px;
+}
+
+.manualTitle {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.manualForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.manualLabel {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.manualRow {
+  display: flex;
+  gap: 10px;
+}
+
+.manualInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1.5px solid rgba(58, 36, 25, 0.25);
+  border-radius: var(--radius-sm);
+  background: #fffdf9;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 1.25rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+}
+
+.manualInput:focus-visible {
+  outline: 2px solid var(--color-terracotta);
+  outline-offset: 2px;
+}

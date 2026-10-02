@@ -1,0 +1,189 @@
+/**
+ * Dibuja el voucher digital en un <canvas> (el voucher es 100 % online: no
+ * se descarga ni se imprime; se comparte el link a /v/<publicId>).
+ *
+ * Base: el arte original del voucher (marco vintage, cookies, títulos y la
+ * franja "CAJA DE 4/6 COOKIES"), recortado de la referencia en
+ * public/images/vouchers. Encima se dibuja solo lo dinámico, en los dos
+ * espacios libres de las esquinas inferiores:
+ *   - izquierda: sello "Válido hasta DD/MM/AAAA"
+ *   - derecha: QR (con su zona de silencio) + código.
+ * Coordenadas en unidades del arte original (1536 × 511).
+ */
+import QRCode from "qrcode";
+import { formatVoucherDate, voucherUrl } from "./voucher-format";
+
+export const VOUCHER_WIDTH = 1536;
+export const VOUCHER_HEIGHT = 511;
+/** 2×: 3072 × 1022 px, nítido en pantallas de alta densidad. */
+export const VOUCHER_SCALE = 2;
+
+export type VoucherArt = { cookieQuantity: number; expiresAt: string; code: string; publicId: string };
+
+const BACKGROUNDS: Record<number, string> = {
+  4: "/images/vouchers/voucher-caja-4.jpg",
+  6: "/images/vouchers/voucher-caja-6.jpg",
+};
+
+/* Paleta tomada del arte: tinta marrón y papel crema. */
+const INK = "#3b291e";
+const INK_SOFT = "#5b4535";
+const PAPER = "#fbf5ea";
+const QR_DARK = "#1f150f";
+const QR_LIGHT = "#ffffff";
+
+/** Tarjeta del QR (esquina inferior derecha, debajo de la cookie con dulce de leche). */
+const QR_CARD = { x: 1362, y: 321, w: 136, h: 157 };
+/** Lado del QR incluida la zona de silencio (4 módulos por lado). */
+const QR_BOX = 124;
+const QR_QUIET_MODULES = 4;
+/** Sello de la fecha (esquina inferior izquierda, simétrico al QR). */
+const DATE_TAG = { x: 40, y: 394, w: 128, h: 84 };
+
+const imageCache = new Map<string, Promise<HTMLImageElement>>();
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  let cached = imageCache.get(src);
+  if (!cached) {
+    cached = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => resolve(img);
+      img.onerror = () => {
+        imageCache.delete(src);
+        reject(new Error(`No se pudo cargar ${src}`));
+      };
+      img.src = src;
+    });
+    imageCache.set(src, cached);
+  }
+  return cached;
+}
+
+/** Espera la fuente (si no, el canvas dibujaría con la de respaldo). */
+async function ensureFonts(family: string) {
+  await Promise.all([document.fonts.load(`400 16px ${family}`), document.fonts.load(`700 16px ${family}`)]);
+}
+
+function setSpacing(ctx: CanvasRenderingContext2D, value: string) {
+  // letterSpacing no existe en navegadores viejos: sin él, el texto queda igual de legible.
+  if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = value;
+}
+
+/** Doble filete como el marco del voucher. */
+function vintageFrame(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radius: number) {
+  ctx.save();
+  ctx.shadowColor = "rgba(58, 36, 25, 0.22)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = PAPER;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, radius);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.roundRect(x + 0.7, y + 0.7, w - 1.4, h - 1.4, radius);
+  ctx.stroke();
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.roundRect(x + 4, y + 4, w - 8, h - 8, Math.max(0, radius - 3));
+  ctx.stroke();
+}
+
+/** Adorno "— • ● • —" igual al del pie del voucher. */
+function ornament(ctx: CanvasRenderingContext2D, cx: number, cy: number, half: number) {
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = INK;
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(cx - half, cy);
+  ctx.lineTo(cx - 9, cy);
+  ctx.moveTo(cx + 9, cy);
+  ctx.lineTo(cx + half, cy);
+  ctx.stroke();
+  for (const [dx, r] of [[-5.5, 1.3], [0, 2.1], [5.5, 1.3]] as const) {
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawDateTag(ctx: CanvasRenderingContext2D, expiresAt: string, family: string) {
+  const { x, y, w, h } = DATE_TAG;
+  vintageFrame(ctx, x, y, w, h, 10);
+  const cx = x + w / 2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = INK_SOFT;
+  ctx.font = `700 11.5px ${family}`;
+  setSpacing(ctx, "1.6px");
+  ctx.fillText("VÁLIDO HASTA", cx + 0.8, y + 27);
+  ornament(ctx, cx, y + 39, 40);
+  ctx.fillStyle = INK;
+  ctx.font = `700 20px ${family}`;
+  setSpacing(ctx, "0.4px");
+  ctx.fillText(formatVoucherDate(expiresAt), cx, y + 66);
+  setSpacing(ctx, "0px");
+}
+
+function drawQrCard(ctx: CanvasRenderingContext2D, art: VoucherArt, family: string, scale: number) {
+  const { x, y, w, h } = QR_CARD;
+  vintageFrame(ctx, x, y, w, h, 10);
+
+  const qr = QRCode.create(voucherUrl(art.publicId), { errorCorrectionLevel: "M" });
+  const count = qr.modules.size;
+  const total = count + QR_QUIET_MODULES * 2;
+  // Módulos de un número ENTERO de píxeles reales: bordes nítidos y lectura confiable.
+  const cell = Math.max(1, Math.floor((QR_BOX * scale) / total));
+  const boxPx = cell * total;
+  const left = Math.round((x + (w - boxPx / scale) / 2) * scale);
+  const top = Math.round((y + 8) * scale);
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = QR_LIGHT;
+  ctx.fillRect(left, top, boxPx, boxPx);
+  ctx.fillStyle = QR_DARK;
+  const origin = QR_QUIET_MODULES * cell;
+  for (let row = 0; row < count; row++) {
+    for (let col = 0; col < count; col++) {
+      if (qr.modules.get(row, col)) ctx.fillRect(left + origin + col * cell, top + origin + row * cell, cell, cell);
+    }
+  }
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = INK;
+  ctx.font = `700 15px ${family}`;
+  setSpacing(ctx, "1.2px");
+  ctx.fillText(art.code, x + w / 2 + 0.6, y + h - 13);
+  setSpacing(ctx, "0px");
+}
+
+/**
+ * Dibuja el voucher completo. El canvas queda en VOUCHER_WIDTH·scale × VOUCHER_HEIGHT·scale
+ * píxeles; en pantalla se muestra reducido con CSS (misma proporción).
+ */
+export async function renderVoucher(canvas: HTMLCanvasElement, art: VoucherArt, fontFamily: string, scale = VOUCHER_SCALE) {
+  const background = BACKGROUNDS[art.cookieQuantity];
+  if (!background) throw new Error("Tipo de voucher desconocido");
+  const [image] = await Promise.all([loadImage(background), ensureFonts(fontFamily)]);
+
+  canvas.width = VOUCHER_WIDTH * scale;
+  canvas.height = VOUCHER_HEIGHT * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas no disponible");
+
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(image, 0, 0, VOUCHER_WIDTH, VOUCHER_HEIGHT);
+
+  drawDateTag(ctx, art.expiresAt, fontFamily);
+  drawQrCard(ctx, art, fontFamily, scale);
+}

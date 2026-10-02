@@ -12,12 +12,16 @@ import { toAdminProduct, toPublicProduct, validateProductInput } from "./product
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { SettingsRepository } from "./repository.ts";
 import { validateOrdersPatch, validateSettingsInput, type PublicSettings } from "./settings.ts";
+import type { VoucherRepository } from "./voucher-repository.ts";
+import { registerVoucherRoutes } from "./voucher-routes.ts";
 
 type Deps = {
   repo: SettingsRepository;
   products: ProductRepository;
   orders: OrderRepository;
   images: ImageRepository;
+  /** Módulo de vouchers (opcional: sin él, las rutas /vouchers no existen). */
+  vouchers?: VoucherRepository;
   auth: AuthService;
   allowedOrigins: string[];
   /** Límite de pedidos por IP (por defecto 8 cada 10 minutos). */
@@ -48,6 +52,7 @@ export function createApp({
   products,
   orders,
   images,
+  vouchers,
   auth,
   allowedOrigins,
   orderLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60 * 1000 }),
@@ -260,6 +265,9 @@ export function createApp({
     const order = await orders.get((c.req.param("id") ?? ""));
     return order ? c.json(order) : c.json({ error: "not_found" }, 404);
   });
+
+  // Vouchers (público: estado del QR · admin: crear, listar, canjear, anular).
+  if (vouchers) registerVoucherRoutes(app, { vouchers, auth, log });
 
   return app;
 }

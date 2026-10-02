@@ -7,6 +7,8 @@ export type AuthService = {
   authenticate(request: Request): Promise<AuthResult>;
   /** Autorización server-side: algún email verificado del usuario está en ADMIN_EMAILS. */
   isAdmin(userId: string): Promise<boolean>;
+  /** Email principal del usuario, para mostrar quién canjeó un voucher (opcional). */
+  describeUser?(userId: string): Promise<string | null>;
 };
 
 /** ADMIN_EMAILS → set normalizado (trim + lowercase, sin vacíos). Vacío = nadie es admin. */
@@ -19,8 +21,8 @@ export function parseAdminEmails(raw: string | undefined | null): ReadonlySet<st
   );
 }
 
-type ClerkEmail = { emailAddress: string; verification: { status: string } | null };
-type ClerkUserLike = { emailAddresses: readonly ClerkEmail[] };
+type ClerkEmail = { id?: string; emailAddress: string; verification: { status: string } | null };
+type ClerkUserLike = { emailAddresses: readonly ClerkEmail[]; primaryEmailAddressId?: string | null };
 
 /** Coincidencia exacta de un email VERIFICADO con la allowlist. publicMetadata no cuenta. */
 export function isAllowedAdmin(user: ClerkUserLike, allowlist: ReadonlySet<string>): boolean {
@@ -71,6 +73,16 @@ export function createClerkAuth(options: {
       const admin = isAllowedAdmin(await getUser(userId), options.adminEmails);
       cache.set(userId, { admin, expires: Date.now() + ADMIN_CACHE_MS });
       return admin;
+    },
+
+    async describeUser(userId) {
+      try {
+        const user = await getUser(userId);
+        const primary = user.emailAddresses.find((e) => e.id && e.id === user.primaryEmailAddressId) ?? user.emailAddresses[0];
+        return primary?.emailAddress ?? null;
+      } catch {
+        return null;
+      }
     },
   };
 }
