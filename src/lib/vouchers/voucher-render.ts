@@ -8,7 +8,7 @@
  * public/images/vouchers. Encima se dibuja solo lo dinámico, en los dos
  * espacios libres de las esquinas inferiores:
  *   - izquierda: sello "Válido hasta DD/MM/AAAA"
- *   - derecha: QR (con su zona de silencio) + código.
+ *   - derecha: QR (cuadrado blanco mínimo) + código, sin tapar cookies.
  * Coordenadas en unidades del arte original (1536 × 511).
  */
 import QRCode from "qrcode";
@@ -26,18 +26,22 @@ const BACKGROUNDS: Record<number, string> = {
   6: "/images/vouchers/voucher-caja-6.jpg",
 };
 
-/* Paleta tomada del arte: tinta marrón y papel crema. */
+/* Paleta tomada del arte: tinta marrón. Sin fondos propios: todo va impreso sobre el beige. */
 const INK = "#3b291e";
 const INK_SOFT = "#5b4535";
-const PAPER = "#fbf5ea";
 const QR_DARK = "#1f150f";
 const QR_LIGHT = "#ffffff";
 
-/** Tarjeta del QR (esquina inferior derecha, debajo de la cookie con dulce de leche). */
-const QR_CARD = { x: 1362, y: 321, w: 136, h: 157 };
-/** Lado del QR incluida la zona de silencio (4 módulos por lado). */
-const QR_BOX = 124;
-const QR_QUIET_MODULES = 4;
+/**
+ * QR en el hueco libre de la esquina inferior derecha: entre la cookie de chips
+ * (termina en x≈1381), la de dulce de leche (termina en y≈368) y el marco (x≈1501).
+ * Solo el cuadrado blanco mínimo (QR + 2 módulos); el beige claro alrededor
+ * completa la zona de silencio sin tapar ninguna cookie.
+ */
+const QR_AREA = { x: 1392, y: 374, size: 93 };
+const QR_QUIET_MODULES = 2;
+/** Código SC-XXXXXX debajo del QR, apenas corrido a la izquierda para no tocar la curva de la esquina del marco. */
+const QR_CODE = { baseline: 479, centerX: 1435.5 };
 /** Sello de la fecha (esquina inferior izquierda, simétrico al QR). */
 const DATE_TAG = { x: 40, y: 394, w: 128, h: 84 };
 
@@ -78,18 +82,8 @@ function setSpacing(ctx: CanvasRenderingContext2D, value: string) {
   if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = value;
 }
 
-/** Doble filete como el marco del voucher. */
+/** Doble filete como el marco del voucher, sin relleno: se ve el beige original. */
 function vintageFrame(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, radius: number) {
-  ctx.save();
-  ctx.shadowColor = "rgba(58, 36, 25, 0.22)";
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 3;
-  ctx.fillStyle = PAPER;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, radius);
-  ctx.fill();
-  ctx.restore();
-
   ctx.strokeStyle = INK;
   ctx.lineWidth = 1.4;
   ctx.beginPath();
@@ -137,18 +131,16 @@ function drawDateTag(ctx: CanvasRenderingContext2D, expiresAt: string, family: s
   setSpacing(ctx, "0px");
 }
 
-function drawQrCard(ctx: CanvasRenderingContext2D, art: VoucherArt, family: string, scale: number) {
-  const { x, y, w, h } = QR_CARD;
-  vintageFrame(ctx, x, y, w, h, 10);
-
+function drawQr(ctx: CanvasRenderingContext2D, art: VoucherArt, family: string, scale: number) {
+  const { x, y, size } = QR_AREA;
   const qr = QRCode.create(voucherUrl(art.publicId), { errorCorrectionLevel: "M" });
   const count = qr.modules.size;
   const total = count + QR_QUIET_MODULES * 2;
   // Módulos de un número ENTERO de píxeles reales: bordes nítidos y lectura confiable.
-  const cell = Math.max(1, Math.floor((QR_BOX * scale) / total));
+  const cell = Math.max(1, Math.floor((size * scale) / total));
   const boxPx = cell * total;
-  const left = Math.round((x + (w - boxPx / scale) / 2) * scale);
-  const top = Math.round((y + 8) * scale);
+  const left = Math.round((x + (size - boxPx / scale) / 2) * scale);
+  const top = Math.round(y * scale);
 
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -167,9 +159,9 @@ function drawQrCard(ctx: CanvasRenderingContext2D, art: VoucherArt, family: stri
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = INK;
-  ctx.font = `700 15px ${family}`;
-  setSpacing(ctx, "1.2px");
-  ctx.fillText(art.code, x + w / 2 + 0.6, y + h - 13);
+  ctx.font = `700 11.5px ${family}`;
+  setSpacing(ctx, "0.6px");
+  ctx.fillText(art.code, QR_CODE.centerX, QR_CODE.baseline);
   setSpacing(ctx, "0px");
 }
 
@@ -193,7 +185,7 @@ export async function renderVoucher(canvas: HTMLCanvasElement, art: VoucherArt, 
   ctx.drawImage(image, 0, 0, VOUCHER_WIDTH, VOUCHER_HEIGHT);
 
   drawDateTag(ctx, art.expiresAt, fontFamily);
-  drawQrCard(ctx, art, fontFamily, scale);
+  drawQr(ctx, art, fontFamily, scale);
 }
 
 export const voucherImageFileName = (code: string) => `voucher-${code}.png`;
