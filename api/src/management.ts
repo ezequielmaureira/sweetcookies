@@ -449,15 +449,16 @@ const addParts = (into: Parts, from: Parts) => {
  * computeRecipe: costLines). Escala ingredientes y gastos por el factor de cada
  * receta y suma. Sin precio → incompleto (nunca 0).
  *
- * El resultado se separa por parte (masa, relleno, terminación): costo de cada
- * parte e ingredientes agrupados por parte. Es solo para mirar el detalle: el
- * costo total es siempre el de toda la producción.
+ * El resultado se separa por parte (masa, relleno, terminación) y por variedad:
+ * cada ingrediente (agrupado por parte) trae el total combinado y cuánto usa
+ * cada receta (byRecipe), así se puede mirar "Ferrero → Relleno" o
+ * "Total → Masa" sin volver a calcular. El costo total no cambia con eso.
  *
  * Etapa 2: cada ingrediente sale con su id, parte y cantidad en unidad base,
  * listo para cruzar con stock y armar la lista de compras.
  */
 export function simulateProduction(recipes: Map<string, RecipeRow>, items: SimulationItem[]) {
-  type Total = { id: string; name: string; baseUnit: BaseUnit; component: RecipeComponent; unitCost: Decimal | null; quantity: Decimal; usedIn: string[] };
+  type Total = { id: string; name: string; baseUnit: BaseUnit; component: RecipeComponent; unitCost: Decimal | null; quantity: Decimal; byRecipe: Map<string, Decimal> };
   const totals = new Map<string, Total>();
   const productionParts = emptyParts();
   let totalCookies = 0;
@@ -478,10 +479,11 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
         component: line.component,
         unitCost,
         quantity: new Decimal(0),
-        usedIn: [],
+        byRecipe: new Map(),
       };
       t.quantity = t.quantity.add(baseQuantity);
-      if (!t.usedIn.includes(r.name)) t.usedIn.push(r.name);
+      // Desglose antes de agrupar: cuánto de este ingrediente (en esta parte) usa cada receta.
+      t.byRecipe.set(recipeId, (t.byRecipe.get(recipeId) ?? new Decimal(0)).add(baseQuantity));
       totals.set(key, t);
     }
     addParts(productionParts, parts);
@@ -526,7 +528,13 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
         quantity: t.quantity.toDecimalPlaces(4).toString(),
         unitCost: t.unitCost?.toString() ?? null,
         cost: cost ? money(cost) : null,
-        usedIn: t.usedIn,
+        /** Por variedad: cantidad y costo de este ingrediente para cada receta (en el orden de la simulación). */
+        byRecipe: items
+          .filter((item) => t.byRecipe.has(item.recipeId))
+          .map((item) => {
+            const quantity = t.byRecipe.get(item.recipeId)!;
+            return { recipeId: item.recipeId, quantity: quantity.toDecimalPlaces(4).toString(), cost: t.unitCost ? money(quantity.mul(t.unitCost)) : null };
+          }),
       };
     });
 

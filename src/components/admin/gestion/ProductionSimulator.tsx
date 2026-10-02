@@ -23,8 +23,9 @@ import adminStyles from "../Admin.module.css";
 import styles from "./Gestion.module.css";
 
 type Line = { key: string; recipeId: string; cookies: number };
-/** Qué parte del detalle de ingredientes se mira. No cambia ningún costo. */
+/** Qué se mira en ingredientes: una variedad (o el total) y una parte (o todo). No cambia ningún costo. */
 type View = "ALL" | RecipeComponent;
+type Variety = "TOTAL" | string;
 
 let seq = 0;
 const newKey = () => `s${++seq}`;
@@ -46,6 +47,7 @@ export function ProductionSimulator() {
   const [simError, setSimError] = useState<{ key: string; text: string } | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [view, setView] = useState<View>("ALL");
+  const [variety, setVariety] = useState<Variety>("TOTAL");
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -111,6 +113,20 @@ export function ProductionSimulator() {
   // Partes con ingredientes en esta producción ("Sin clasificar" solo si existe).
   const parts: RecipeComponent[] = summary && summary.components.UNASSIGNED.lines > 0 ? [...PARTS, "UNASSIGNED"] : [...PARTS];
   const visibleParts = view === "ALL" ? parts : parts.filter((p) => p === view);
+  // Si la variedad elegida ya no está en la simulación, se vuelve al total.
+  const selected = variety === "TOTAL" ? null : (detailById.get(variety) ?? null);
+  const partLabel = (part: RecipeComponent) => COMPONENT_LABELS[part].toLowerCase();
+  /** Ingredientes de una parte para la variedad elegida (o el total), con su cantidad y costo. */
+  const rowsFor = (part: RecipeComponent) =>
+    (shown?.data.ingredients ?? [])
+      .filter((i) => i.component === part)
+      .flatMap((i) => {
+        if (!selected) return [{ ...i, quantity: i.quantity, cost: i.cost }];
+        const own = i.byRecipe.find((b) => b.recipeId === selected.recipeId);
+        return own ? [{ ...i, quantity: own.quantity, cost: own.cost }] : [];
+      });
+  /** Subtotal de una parte: de la variedad elegida o de toda la producción (calculado en el servidor). */
+  const partSubtotal = (part: RecipeComponent) => (selected ? selected.components[part] : summary!.components[part]);
 
   return (
     <div className={adminStyles.form}>
@@ -235,44 +251,6 @@ export function ProductionSimulator() {
 
       {shown && summary && (
         <div className={styles.lines} aria-busy={updating} style={updating ? { opacity: 0.6 } : undefined}>
-          <section className={adminStyles.section}>
-            <h2 className={adminStyles.sectionTitle}>Detalle por receta</h2>
-            <ul className={styles.list}>
-              {shown.data.recipes.map((d) => (
-                <li key={d.recipeId} className={styles.item}>
-                  <span className={styles.itemHead}>
-                    <span className={styles.itemName}>{d.name}</span>
-                    {d.status === "DRAFT" && <span className={styles.chipWarn}>⚠ Borrador</span>}
-                  </span>
-                  <span className={styles.itemMeta}>
-                    {d.cookies} cookies · Receta base: {d.yieldQuantity} cookies · Equivale a {formatFactor(d.factor)}
-                  </span>
-                  <span className={styles.itemMeta}>Costo receta base: {d.baseCost ? formatMoney(d.baseCost) : "⚠ incompleto"}</span>
-                  <span className={styles.partList}>
-                    {(Object.keys(COMPONENT_LABELS) as RecipeComponent[])
-                      .filter((c) => d.components[c].lines > 0)
-                      .map((c) => (
-                        <span key={c} className={styles.partRow}>
-                          <span>{COMPONENT_LABELS[c]}</span>
-                          <span>{d.components[c].cost ? formatMoney(d.components[c].cost!) : <span className={styles.warn}>⚠ Incompleto</span>}</span>
-                        </span>
-                      ))}
-                  </span>
-                  {d.totalCost ? (
-                    <span className={styles.cost}>
-                      {formatMoney(d.totalCost)} · {formatMoney(d.costPerCookie!)} por cookie
-                    </span>
-                  ) : (
-                    <span className={styles.warn}>
-                      ⚠ Costo parcial {formatMoney(d.knownCost)} (faltan {d.missingPrices} {d.missingPrices === 1 ? "precio" : "precios"})
-                    </span>
-                  )}
-                  {Number(d.extrasCost) > 0 && <span className={styles.itemMeta}>Incluye gastos adicionales: {formatMoney(d.extrasCost)}</span>}
-                </li>
-              ))}
-            </ul>
-          </section>
-
           <section className={styles.summary} aria-label="Resumen de producción">
             <h2 className={adminStyles.sectionTitle}>Resumen de producción</h2>
             {summary.hasDraft && (
@@ -289,50 +267,92 @@ export function ProductionSimulator() {
                 Faltan precios para calcular el costo total ({summary.missingPrices} {summary.missingPrices === 1 ? "ingrediente" : "ingredientes"}).
               </p>
             )}
-            <div className={styles.summaryRow}>
+            <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
               <span>Cookies totales</span>
               <span>{summary.totalCookies}</span>
             </div>
-            {parts.map((part) => (
-              <div key={part} className={styles.summaryRow}>
-                <span>Costo {COMPONENT_LABELS[part].toLowerCase()}</span>
-                <span>{summary.components[part].cost ? formatMoney(summary.components[part].cost!) : <span className={styles.warn}>⚠ Incompleto</span>}</span>
+
+            {shown.data.recipes.map((d) => (
+              <div key={d.recipeId} className={styles.varietyCard}>
+                <span className={styles.itemHead}>
+                  <span className={styles.itemName}>{d.name}</span>
+                  {d.status === "DRAFT" && <span className={styles.chipWarn}>⚠ Borrador</span>}
+                </span>
+                <span className={styles.itemMeta}>
+                  {d.cookies} {d.cookies === 1 ? "cookie" : "cookies"} · Receta base: {d.yieldQuantity} · Equivale a {formatFactor(d.factor)}
+                </span>
+                {parts.map((part) => (
+                  <div key={part} className={styles.partRow}>
+                    <span>{COMPONENT_LABELS[part]}</span>
+                    <span>{d.components[part].cost ? formatMoney(d.components[part].cost!) : <span className={styles.warn}>⚠ Incompleto</span>}</span>
+                  </div>
+                ))}
+                {Number(d.extrasCost) > 0 && (
+                  <div className={styles.partRow}>
+                    <span>Gastos adicionales</span>
+                    <span>{formatMoney(d.extrasCost)}</span>
+                  </div>
+                )}
+                <div className={`${styles.partRow} ${styles.varietyTotal}`}>
+                  <span>Total {d.name}</span>
+                  <span>{d.totalCost ? formatMoney(d.totalCost) : `⚠ ${formatMoney(d.knownCost)} parcial`}</span>
+                </div>
+                <div className={`${styles.partRow} ${styles.varietyPerCookie}`}>
+                  <span>Costo por cookie</span>
+                  <span>{d.costPerCookie ? formatMoney(d.costPerCookie) : "—"}</span>
+                </div>
               </div>
             ))}
-            <div className={styles.summaryRow}>
-              <span>Gastos adicionales</span>
-              <span>{formatMoney(summary.extrasCost)}</span>
-            </div>
-            <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
-              <span>{summary.complete ? (summary.hasDraft ? "Total producción (parcial)" : "Total producción") : "Costo parcial conocido"}</span>
-              <span>{formatMoney(summary.complete ? summary.totalCost! : summary.knownCost)}</span>
-            </div>
+
             <div className={styles.perCookie}>
-              <span className={styles.perCookieLabel}>Costo promedio por cookie{summary.hasDraft && summary.complete ? " (parcial)" : ""}</span>
-              <span className={styles.perCookieValue}>{summary.averagePerCookie ? formatMoney(summary.averagePerCookie) : "—"}</span>
+              <span className={styles.perCookieLabel}>Total producción{summary.complete && summary.hasDraft ? " (parcial)" : ""}</span>
+              <span className={styles.perCookieValue}>{summary.totalCost ? formatMoney(summary.totalCost) : "—"}</span>
+              {!summary.complete && <span className={styles.heroMeta}>Costo parcial conocido: {formatMoney(summary.knownCost)}</span>}
             </div>
-            <p className={adminStyles.help}>Promedio general de toda la producción. Cada sabor tiene su propio costo en el detalle por receta.</p>
-            <p className={adminStyles.help}>El filtro de ingredientes solo cambia lo que mirás: el total de la producción es siempre el mismo.</p>
           </section>
 
           <section className={adminStyles.section}>
             <h2 className={adminStyles.sectionTitle}>Ingredientes necesarios</h2>
-            <div className={styles.filters} role="group" aria-label="Ver ingredientes de">
-              {(["ALL", ...parts] as View[]).map((v) => (
-                <button key={v} type="button" className={styles.filter} aria-pressed={view === v} onClick={() => setView(v)}>
-                  {v === "ALL" ? "Todo" : COMPONENT_LABELS[v]}
+            <div className={styles.filterBlock}>
+              <span className={styles.filterLabel}>Variedad</span>
+              <div className={styles.filters} role="group" aria-label="Variedad">
+                <button type="button" className={styles.filter} aria-pressed={!selected} onClick={() => setVariety("TOTAL")}>
+                  Total
                 </button>
-              ))}
+                {shown.data.recipes.map((d) => (
+                  <button key={d.recipeId} type="button" className={styles.filter} aria-pressed={selected?.recipeId === d.recipeId} onClick={() => setVariety(d.recipeId)}>
+                    {d.name}
+                  </button>
+                ))}
+              </div>
             </div>
+            <div className={styles.filterBlock}>
+              <span className={styles.filterLabel}>Parte</span>
+              <div className={styles.filters} role="group" aria-label="Parte">
+                {(["ALL", ...parts] as View[]).map((v) => (
+                  <button key={v} type="button" className={styles.filter} aria-pressed={view === v} onClick={() => setView(v)}>
+                    {v === "ALL" ? "Todo" : COMPONENT_LABELS[v]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <h3 className={styles.listTitle}>
+              Ingredientes — {selected ? `${selected.name} (${selected.cookies} ${selected.cookies === 1 ? "cookie" : "cookies"})` : "Total"} — {view === "ALL" ? "Todo" : COMPONENT_LABELS[view]}
+            </h3>
+
             {visibleParts.map((part) => {
-              const list = shown.data.ingredients.filter((i) => i.component === part);
-              const subtotal = summary.components[part];
+              const list = rowsFor(part);
+              const subtotal = partSubtotal(part);
+              if (view === "ALL" && list.length === 0) return null;
               return (
                 <div key={part} className={styles.partGroup}>
-                  <h3 className={styles.itemName}>{COMPONENT_LABELS[part]}</h3>
+                  {view === "ALL" && <h4 className={styles.itemName}>{COMPONENT_LABELS[part]}</h4>}
                   {part === "UNASSIGNED" && <p className={styles.warnBox}>Ingredientes sin parte asignada. Clasificalos en la receta (masa, relleno o terminación).</p>}
                   {list.length === 0 ? (
-                    <p className={adminStyles.help}>Esta producción no lleva ingredientes de {COMPONENT_LABELS[part].toLowerCase()}.</p>
+                    <p className={adminStyles.help}>
+                      {selected ? `${selected.name} no lleva` : "Esta producción no lleva"} ingredientes de {partLabel(part)}.
+                    </p>
                   ) : (
                     <ul className={styles.list}>
                       {list.map((i) => (
@@ -349,20 +369,35 @@ export function ProductionSimulator() {
                               Cargar precio →
                             </Link>
                           )}
-                          {shown.data.recipes.length > 1 && <span className={styles.itemMeta}>Para: {i.usedIn.join(", ")}</span>}
                         </li>
                       ))}
                     </ul>
                   )}
                   {list.length > 0 && (
                     <p className={styles.partSubtotal}>
-                      <span>{view === "ALL" ? "Subtotal" : "Costo"} {COMPONENT_LABELS[part].toLowerCase()}</span>
+                      <span>
+                        {selected ? `Costo ${partLabel(part)} ${selected.name}` : view === "ALL" ? `Subtotal ${partLabel(part)}` : `Costo total de ${partLabel(part)}`}
+                      </span>
                       <span>{subtotal.cost ? formatMoney(subtotal.cost) : <span className={styles.warn}>⚠ Incompleto</span>}</span>
                     </p>
                   )}
                 </div>
               );
             })}
+
+            {view === "ALL" && (
+              <p className={`${styles.partSubtotal} ${styles.grandSubtotal}`}>
+                <span>{selected ? `Ingredientes ${selected.name}` : "Total ingredientes"}</span>
+                <span>
+                  {(selected ? selected.missingPrices === 0 : summary.complete) ? (
+                    formatMoney(selected ? selected.ingredientsCost : summary.ingredientsCost)
+                  ) : (
+                    <span className={styles.warn}>⚠ Incompleto</span>
+                  )}
+                </span>
+              </p>
+            )}
+            <p className={adminStyles.help}>Los filtros solo cambian lo que mirás: el total de la producción es siempre el mismo.</p>
           </section>
         </div>
       )}

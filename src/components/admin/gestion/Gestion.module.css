@@ -595,3 +595,57 @@ a.item:hover {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* Simulador por variedad */
+.varietyCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream);
+}
+
+.varietyTotal {
+  padding-top: 8px;
+  border-top: 1px solid var(--color-line);
+  font-weight: 600;
+}
+
+.varietyPerCookie {
+  font-weight: 600;
+  color: var(--color-chocolate);
+}
+
+.filterBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filterBlock .filters {
+  margin-bottom: 4px;
+}
+
+.filterLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.listTitle {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.grandSubtotal {
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}

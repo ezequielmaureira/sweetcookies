@@ -227,7 +227,8 @@ export type SimulationResult = {
     quantity: string;
     unitCost: string | null;
     cost: string | null;
-    usedIn: string[];
+    /** Por variedad: cantidad y costo de este ingrediente para cada receta. */
+    byRecipe: { recipeId: string; quantity: string; cost: string | null }[];
   }[];
   summary: {
     totalCookies: number;
