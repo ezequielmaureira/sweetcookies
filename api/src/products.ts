@@ -191,13 +191,20 @@ export function validateProductInput(body: unknown, partial: boolean): ProductVa
     else errors.category = `Máximo ${PRODUCT_LIMITS.category} caracteres.`;
   } else if (!partial) data.category = null;
 
-  for (const field of ["price", "cost"] as const) {
-    if (has(field) || !partial) {
-      const cents = parseMoney(input[field]);
-      if (cents === null) errors[field] = "Ingresá un importe válido (ej. 5000 o 5000.50).";
-      else data[field === "price" ? "priceCents" : "costCents"] = cents;
-    }
+  if (has("price") || !partial) {
+    const cents = parseMoney(input.price);
+    if (cents === null) errors.price = "Ingresá un importe válido (ej. 5000 o 5000.50).";
+    else data.priceCents = cents;
   }
+
+  // El costo ya no se carga en el Admin (el costo real sale de Gestión → Recetas).
+  // La columna sigue por compatibilidad: si viene se valida; al editar sin costo no
+  // se toca; un producto nuevo sin costo queda en 0 (la columna no admite vacío).
+  if (has("cost")) {
+    const cents = parseMoney(input.cost);
+    if (cents === null) errors.cost = "Ingresá un importe válido (ej. 5000 o 5000.50).";
+    else data.costCents = cents;
+  } else if (!partial) data.costCents = 0;
 
   if (has("stock") || !partial) {
     const stock = input.stock;

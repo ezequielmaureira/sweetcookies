@@ -239,17 +239,6 @@
   color: var(--color-terracotta);
 }
 
-.margin {
-  margin-top: -8px;
-  font-size: 0.875rem;
-  color: var(--color-chocolate-soft);
-  font-variant-numeric: tabular-nums;
-}
-
-.marginWarn {
-  color: var(--color-terracotta);
-}
-
 .segmented {
   display: flex;
   gap: 6px;

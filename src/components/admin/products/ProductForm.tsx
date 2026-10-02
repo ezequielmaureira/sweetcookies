@@ -19,7 +19,6 @@ import {
 } from "@/lib/admin/admin-api";
 import { moneyToInput, normalizeMoneyInput } from "@/lib/admin/money-input";
 import { uploadProductImage, type UploadKind } from "@/lib/admin/product-upload";
-import { formatCents, toCents } from "@/lib/catalog";
 import { BoxViewEditor } from "./BoxViewEditor";
 import styles from "./Products.module.css";
 
@@ -28,7 +27,6 @@ type FormValues = BoxViewInput & {
   category: string;
   description: string;
   price: string;
-  cost: string;
   stock: string;
   imageUrl: string;
   status: ProductStatus;
@@ -39,7 +37,7 @@ type FormErrors = Partial<Record<keyof FormValues | "form", string>>;
 
 const DEFAULT_BOX: BoxViewInput = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 };
 
-const EMPTY: FormValues = { name: "", category: "Cookies", description: "", price: "", cost: "", stock: "0", imageUrl: "", status: "ACTIVE", featured: false, ...DEFAULT_BOX };
+const EMPTY: FormValues = { name: "", category: "Cookies", description: "", price: "", stock: "0", imageUrl: "", status: "ACTIVE", featured: false, ...DEFAULT_BOX };
 
 function fromProduct(p: AdminProduct): FormValues {
   return {
@@ -47,7 +45,6 @@ function fromProduct(p: AdminProduct): FormValues {
     category: p.category ?? "",
     description: p.description ?? "",
     price: moneyToInput(p.price),
-    cost: moneyToInput(p.cost),
     stock: String(p.stock),
     imageUrl: p.imageUrl ?? "",
     status: p.status,
@@ -64,22 +61,19 @@ function fromProduct(p: AdminProduct): FormValues {
 function toInput(values: FormValues): { input: ProductInput } | { errors: FormErrors } {
   const errors: FormErrors = {};
   const price = normalizeMoneyInput(values.price);
-  const cost = normalizeMoneyInput(values.cost);
   const stock = Number(values.stock);
   if (!values.name.trim()) errors.name = "Ingresá un nombre.";
   if (price === null) errors.price = "Importe inválido (ej. 5000 o 5.000,50).";
-  if (cost === null) errors.cost = "Importe inválido (ej. 2500 o 2.500,50).";
   if (!/^\d+$/.test(values.stock.trim()) || !Number.isInteger(stock)) errors.stock = "Número entero, 0 o más.";
   const image = values.imageUrl.trim();
   if (image && !image.startsWith("/") && !image.startsWith("https://")) errors.imageUrl = "Usá una ruta /images/... o una URL https.";
-  if (Object.keys(errors).length || price === null || cost === null) return { errors };
+  if (Object.keys(errors).length || price === null) return { errors };
   return {
     input: {
       name: values.name.trim(),
       category: values.category.trim(),
       description: values.description.trim(),
       price,
-      cost,
       stock,
       imageUrl: image,
       status: values.status,
@@ -209,9 +203,6 @@ export function ProductForm({ productId }: { productId: string | null }) {
     );
   }
 
-  const priceCents = toCents(normalizeMoneyInput(values.price) ?? "");
-  const costCents = toCents(normalizeMoneyInput(values.cost) ?? "");
-  const margin = priceCents > 0 && normalizeMoneyInput(values.cost) !== null ? priceCents - costCents : null;
   const previewSrc = values.imageUrl.trim().startsWith("/") || values.imageUrl.trim().startsWith("https://") ? values.imageUrl.trim() : null;
 
   const field = (name: keyof FormValues, label: string, input: React.ReactNode, help?: string) => (
@@ -270,12 +261,7 @@ export function ProductForm({ productId }: { productId: string | null }) {
             <legend className={styles.groupTitle}>Precio y stock</legend>
             <div className={styles.fieldRow}>
               {field("price", "Precio de venta ($)", <input {...inputProps("price")} type="text" inputMode="decimal" placeholder="5000" value={values.price} onChange={(e) => update("price", e.target.value)} />)}
-              {field("cost", "Costo ($)", <input {...inputProps("cost")} type="text" inputMode="decimal" placeholder="2500" value={values.cost} onChange={(e) => update("cost", e.target.value)} />)}
             </div>
-            <p className={styles.margin} aria-live="polite">
-              {margin === null ? "Ganancia por unidad: —" : `Ganancia por unidad: ${formatCents(margin)}`}
-              {margin !== null && margin < 0 && <span className={styles.marginWarn}> · el costo supera al precio</span>}
-            </p>
             <div className={styles.fieldRow}>
               {field("stock", "Stock", <input {...inputProps("stock")} type="number" inputMode="numeric" min={0} step={1} value={values.stock} onChange={(e) => update("stock", e.target.value)} />, "Con 0 queda “Sin stock” y no se puede comprar.")}
               <div className={styles.field}>

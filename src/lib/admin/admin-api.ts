@@ -85,7 +85,8 @@ export type ProductInput = BoxViewInput & {
   name: string;
   description: string;
   price: string;
-  cost: string;
+  /** Ya no se carga desde el Admin (el costo real sale de Gestión). Opcional por compatibilidad. */
+  cost?: string;
   stock: number;
   imageUrl: string;
   category: string;
