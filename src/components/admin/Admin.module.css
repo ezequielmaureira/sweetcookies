@@ -525,3 +525,12 @@ a.card:hover {
   font-weight: 600;
   vertical-align: 1px;
 }
+
+/* Páginas tipo planilla (más anchas y con encabezado compacto) */
+.narrowWide {
+  max-width: 1040px;
+}
+
+.pageHeaderCompact {
+  margin-bottom: 20px;
+}

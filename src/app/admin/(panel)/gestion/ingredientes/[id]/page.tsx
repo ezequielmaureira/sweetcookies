@@ -1,16 +1,8 @@
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
-import { IngredientDetail } from "@/components/admin/gestion/IngredientDetail";
-import styles from "@/components/admin/Admin.module.css";
+import { notFound, redirect } from "next/navigation";
 
+/** Ya no hay ficha por ingrediente: se abre su fila en la planilla (con "+ Precio"). */
 export default async function IngredientePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[a-z0-9]{10,40}$/.test(id)) notFound();
-  return (
-    <div className={styles.narrow}>
-      <Suspense>
-        <IngredientDetail id={id} />
-      </Suspense>
-    </div>
-  );
+  redirect(`/admin/gestion/ingredientes?abrir=${id}`);
 }

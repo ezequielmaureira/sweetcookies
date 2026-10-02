@@ -446,7 +446,7 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
 
       {ingredients.length === 0 && (
         <p className={styles.warnBox}>
-          Todavía no cargaste ingredientes. <Link href="/admin/gestion/ingredientes/nuevo">Creá el primero</Link> y volvé a esta receta.
+          Todavía no cargaste ingredientes. <Link href="/admin/gestion/ingredientes?nuevo=1">Creá el primero</Link> y volvé a esta receta.
         </p>
       )}
       {visibleParts.map((part) => {

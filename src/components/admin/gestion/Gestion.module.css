@@ -701,3 +701,239 @@ a.item:hover {
   font-weight: 600;
   color: var(--color-ink);
 }
+
+/* ---------- Ingredientes tipo planilla ---------- */
+.sheet {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: #fffdf9;
+  overflow: hidden;
+}
+
+.sheetBlock + .sheetBlock,
+.sheetBlock + .sheetEditing,
+.sheetEditing + .sheetBlock {
+  border-top: 1px solid var(--color-line);
+}
+
+/* Celular: cada fila compacta en 2-3 renglones, sin scroll horizontal. */
+.sheetRow {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  grid-template-areas:
+    "name name name name"
+    "price qty unit cost"
+    "actions actions actions actions";
+  align-items: center;
+  gap: 2px 8px;
+  padding: 10px 12px;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.cName { grid-area: name; }
+.cPrice { grid-area: price; }
+.cQty { grid-area: qty; }
+.cUnit { grid-area: unit; }
+.cCost { grid-area: cost; }
+.cActions { grid-area: actions; }
+
+.sheetHead {
+  display: none;
+}
+
+.sheetName {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.sheetCost {
+  font-weight: 600;
+  color: var(--color-chocolate);
+  justify-self: end;
+}
+
+.sheetNoPrice {
+  grid-area: price-start / price-start / cost-end / cost-end;
+}
+
+.sheetActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 2px;
+  margin-left: -10px;
+}
+
+.sheetActions .linkButton {
+  min-height: 34px;
+  padding: 0 8px;
+}
+
+.dangerLink {
+  color: var(--color-terracotta);
+}
+
+/* Fila en edición */
+.sheetEditing {
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas:
+    "name name"
+    "price qty"
+    "unit cost"
+    "actions actions";
+  gap: 8px 10px;
+  background: var(--color-cream);
+}
+
+.sheetEditing .sheetCost {
+  justify-self: start;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheetEditing .sheetActions {
+  margin-left: 0;
+  gap: 8px;
+}
+
+.sheetMessage {
+  grid-column: 1 / -1;
+}
+
+.cellLabel {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-muted);
+}
+
+.cellInput {
+  min-height: 42px;
+  padding: 8px 10px;
+  font-size: 1rem;
+}
+
+/* Paneles debajo de la fila: + Precio, Historial, ⋮ */
+.sheetPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px dashed var(--color-line);
+  background: var(--color-cream);
+}
+
+.sheetPanel .sheetActions {
+  margin-left: 0;
+  gap: 8px;
+}
+
+.panelTitle {
+  font-size: 0.9375rem;
+  color: var(--color-chocolate);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.plainFieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.historyCompact {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.historyCompact li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.historyCompact li:last-child {
+  border-bottom: 0;
+}
+
+.historyCompact li > button {
+  margin-left: auto;
+}
+
+/* Escritorio: tabla de verdad */
+@media (min-width: 760px) {
+  .sheetRow {
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.6fr) minmax(0, 1.2fr) auto;
+    grid-template-areas: "name price qty unit cost actions";
+    gap: 0 12px;
+    padding: 8px 14px;
+  }
+
+  .sheetHead {
+    display: grid;
+    background: var(--color-cream-deep);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .sheetNum {
+    text-align: right;
+    justify-self: end;
+  }
+
+  .sheetCost {
+    justify-self: end;
+  }
+
+  .sheetActionsHead {
+    text-align: right;
+  }
+
+  .sheetActions {
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+
+  .sheetEditing {
+    grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.2fr) auto;
+    grid-template-areas: "name price qty unit cost actions";
+    align-items: end;
+  }
+
+  .sheetEditing .sheetCost {
+    justify-self: end;
+    align-items: flex-end;
+    padding-bottom: 10px;
+  }
+
+  .panelGrid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    align-items: end;
+  }
+}

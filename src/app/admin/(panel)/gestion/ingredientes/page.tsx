@@ -1,18 +1,21 @@
 import Link from "next/link";
-import { IngredientsList } from "@/components/admin/gestion/IngredientsList";
+import { Suspense } from "react";
+import { IngredientsSheet } from "@/components/admin/gestion/IngredientsSheet";
 import styles from "@/components/admin/Admin.module.css";
 
+/** /admin/gestion/ingredientes: planilla de ingredientes (se edita en la misma fila). */
 export default function IngredientesPage() {
   return (
-    <div className={styles.narrow}>
-      <header className={styles.pageHeader}>
+    <div className={styles.narrowWide}>
+      <header className={styles.pageHeaderCompact}>
         <Link href="/admin/gestion" className={styles.back}>
           ← Gestión
         </Link>
         <h1 className={styles.title}>Ingredientes</h1>
-        <p className={styles.lead}>El costo actual de cada ingrediente es el de su compra más reciente.</p>
       </header>
-      <IngredientsList />
+      <Suspense>
+        <IngredientsSheet />
+      </Suspense>
     </div>
   );
 }

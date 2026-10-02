@@ -365,7 +365,7 @@ export function ProductionSimulator() {
                           {i.unitCost ? (
                             <span className={styles.itemMeta}>Costo actual: {formatUnitCost(i.unitCost, i.baseUnit)}</span>
                           ) : (
-                            <Link href={`/admin/gestion/ingredientes/${i.ingredientId}`} className={styles.inlineLink}>
+                            <Link href={`/admin/gestion/ingredientes?abrir=${i.ingredientId}`} className={styles.inlineLink}>
                               Cargar precio →
                             </Link>
                           )}

@@ -30,6 +30,8 @@ export type Ingredient = {
   /** Costo actual por unidad base (precisión completa) o null = sin precio. */
   unitCost: string | null;
   lastPriceDate: string | null;
+  /** Compra vigente (precio pagado, cantidad y unidad tal como se cargó). */
+  currentPrice: IngredientPrice | null;
   recipeCount: number;
   priceCount: number;
   createdAt: string;

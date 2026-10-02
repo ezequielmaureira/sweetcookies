@@ -292,6 +292,8 @@ export const toIngredientJson = (i: IngredientRow) => ({
   /** Costo actual por unidad base (string con precisión completa) o null = sin precio. */
   unitCost: i.currentPrice?.unitCost.toString() ?? null,
   lastPriceDate: i.currentPrice ? dateOnly(i.currentPrice.purchasedAt) : null,
+  /** Compra vigente (precio pagado, cantidad y unidad tal como se cargó), para la vista tipo planilla. */
+  currentPrice: i.currentPrice ? toPriceJson(i.currentPrice) : null,
   recipeCount: i.recipeCount,
   priceCount: i.priceCount,
 });
