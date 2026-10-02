@@ -1,9 +1,11 @@
 import { CartProvider } from "@/components/cart/CartProvider";
 import { SiteEntryGate } from "@/components/entry/SiteEntryGate";
+import { SiteTextsProvider } from "@/components/site-content/SiteTextsProvider";
 import { brandImages } from "@/data/cookies";
 import { getPublicCatalog } from "@/lib/catalog-server";
 import { getHeroCookie } from "@/lib/hero-cookie";
 import { resolveImage } from "@/lib/images";
+import { getSiteTexts } from "@/lib/site-content-server";
 
 /**
  * Web pública (Home, Armá tu caja): la cubre la entrada "Probala para entrar."
@@ -14,12 +16,14 @@ import { resolveImage } from "@/lib/images";
  * primer contenido: el navegador lo refresca contra la API (ver useLiveCatalog).
  */
 export default async function SiteLayout({ children }: { children: React.ReactNode }) {
-  const catalog = await getPublicCatalog();
+  const [catalog, texts] = await Promise.all([getPublicCatalog(), getSiteTexts()]);
   return (
-    <CartProvider initialProducts={catalog.products} catalogOk={catalog.status === "ok"}>
-      <SiteEntryGate logoSrc={resolveImage(brandImages.logo)} cookie={getHeroCookie()}>
-        {children}
-      </SiteEntryGate>
-    </CartProvider>
+    <SiteTextsProvider texts={texts}>
+      <CartProvider initialProducts={catalog.products} catalogOk={catalog.status === "ok"}>
+        <SiteEntryGate logoSrc={resolveImage(brandImages.logo)} cookie={getHeroCookie()}>
+          {children}
+        </SiteEntryGate>
+      </CartProvider>
+    </SiteTextsProvider>
   );
 }

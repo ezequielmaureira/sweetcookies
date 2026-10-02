@@ -405,3 +405,59 @@ a.card:hover {
   border-radius: 0;
   background: none;
 }
+
+/* Textos del sitio */
+.linkCard {
+  min-height: 0;
+  margin-bottom: 28px;
+}
+
+.fieldHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.restore {
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-terracotta);
+  font: inherit;
+  font-size: 0.8125rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.fieldFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.counter {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+/* Botón general siempre a mano en un formulario largo. */
+.stickyActions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 14px 0 calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-line);
+  background: var(--color-cream, #fbf6ee);
+}

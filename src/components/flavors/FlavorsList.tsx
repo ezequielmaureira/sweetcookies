@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
+import { useSiteTexts } from "@/components/site-content/SiteTextsProvider";
 import type { Product } from "@/lib/catalog";
 import { CookieCard } from "./CookieCard";
 import styles from "./FlavorsSection.module.css";
@@ -10,6 +11,7 @@ import styles from "./FlavorsSection.module.css";
 export function FlavorsList() {
   const { products, catalogStatus, refreshCatalog } = useCart();
   const [announcement, setAnnouncement] = useState("");
+  const texts = useSiteTexts();
 
   const handleAdded = (product: Product) => {
     // Un carácter invisible distinto fuerza a repetir el anuncio si se agrega el mismo sabor.
@@ -28,7 +30,7 @@ export function FlavorsList() {
           </div>
         ) : (
           <p className={styles.empty} role="status">
-            {catalogStatus === "loading" ? "Cargando sabores…" : "Estamos horneando: muy pronto vas a ver nuestros sabores acá."}
+            {catalogStatus === "loading" ? "Cargando sabores…" : texts.FLAVORS_EMPTY}
           </p>
         )}
       </div>

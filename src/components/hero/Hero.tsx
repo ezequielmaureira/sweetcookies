@@ -1,7 +1,9 @@
+import { Fragment } from "react";
 import { BiteableCookie } from "@/components/cookie/BiteableCookie";
 import { ButtonLink } from "@/components/ui/Button";
 import { Parallax } from "@/components/ui/Parallax";
 import { routes, sectionIds } from "@/data/site";
+import { textLines, type SiteTexts } from "@/lib/site-content";
 import styles from "./Hero.module.css";
 
 type HeroProps = {
@@ -9,31 +11,36 @@ type HeroProps = {
   cookieSrc: string | null;
   isCutout: boolean;
   imageAlt: string;
+  /** Textos editables desde el panel (Configuración → Textos del sitio). */
+  texts: SiteTexts;
 };
 
-export function Hero({ cookieSrc, isCutout, imageAlt }: HeroProps) {
+export function Hero({ cookieSrc, isCutout, imageAlt, texts }: HeroProps) {
   return (
     <section id={sectionIds.home} className={styles.hero} aria-labelledby="hero-title">
       <div className={`container ${styles.grid}`}>
         <div className={styles.copy}>
           <p className={`kicker ${styles.enter}`} style={{ "--d": "80ms" } as React.CSSProperties}>
-            Cookies artesanales
+            {texts.HOME_EYEBROW}
           </p>
           <h1 id="hero-title" className={styles.title}>
-            <span className={styles.enter} style={{ "--d": "160ms" } as React.CSSProperties}>
-              Cookies hechas
-            </span>{" "}
-            <span className={styles.enter} style={{ "--d": "260ms" } as React.CSSProperties}>
-              para darte un gusto.
-            </span>
+            {/* Cada renglón del título es una línea, con la misma entrada escalonada (160 ms, 260 ms…). */}
+            {textLines(texts.HOME_TITLE).map((line, i) => (
+              <Fragment key={i}>
+                {i > 0 && " "}
+                <span className={styles.enter} style={{ "--d": `${160 + i * 100}ms` } as React.CSSProperties}>
+                  {line}
+                </span>
+              </Fragment>
+            ))}
           </h1>
           <p className={`${styles.lead} ${styles.enter}`} style={{ "--d": "380ms" } as React.CSSProperties}>
-            Cookies artesanales, combinaciones únicas y mucho sabor.
+            {texts.HOME_DESCRIPTION}
           </p>
           <div className={`${styles.actions} ${styles.enter}`} style={{ "--d": "480ms" } as React.CSSProperties}>
-            <ButtonLink href={`#${sectionIds.flavors}`}>Ver sabores</ButtonLink>
+            <ButtonLink href={`#${sectionIds.flavors}`}>{texts.HOME_PRIMARY_CTA}</ButtonLink>
             <ButtonLink href={routes.buildBox} variant="secondary" arrow>
-              Armá tu caja
+              {texts.HOME_SECONDARY_CTA}
             </ButtonLink>
           </div>
         </div>
@@ -46,7 +53,9 @@ export function Hero({ cookieSrc, isCutout, imageAlt }: HeroProps) {
                 src={cookieSrc}
                 isCutout={isCutout}
                 alt={imageAlt}
-                resetLabel="¿Otra?"
+                hint={texts.HOME_COOKIE_LABEL}
+                messages={[texts.HOME_COOKIE_BITE_ONE, texts.HOME_COOKIE_BITE_TWO, texts.HOME_COOKIE_BITE_THREE, texts.HOME_COOKIE_FINAL]}
+                resetLabel={texts.HOME_COOKIE_RESET}
                 priority
                 sizes="(min-width: 1024px) 540px, 86vw"
               />

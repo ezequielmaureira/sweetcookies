@@ -11,6 +11,8 @@ import { OrderError, parseOrderListQuery, validateOrderRequest } from "./orders.
 import { toAdminProduct, toPublicProduct, validateProductInput } from "./products.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { SettingsRepository } from "./repository.ts";
+import type { SiteContentRepository } from "./site-content-repository.ts";
+import { registerSiteContentRoutes } from "./site-content-routes.ts";
 import { validateOrdersPatch, validateSettingsInput, type PublicSettings } from "./settings.ts";
 import type { VoucherRepository } from "./voucher-repository.ts";
 import { registerVoucherRoutes } from "./voucher-routes.ts";
@@ -22,6 +24,8 @@ type Deps = {
   images: ImageRepository;
   /** Módulo de vouchers (opcional: sin él, las rutas /vouchers no existen). */
   vouchers?: VoucherRepository;
+  /** Textos del sitio editables (opcional: sin él, las rutas /content no existen). */
+  content?: SiteContentRepository;
   auth: AuthService;
   allowedOrigins: string[];
   /** Límite de pedidos por IP (por defecto 8 cada 10 minutos). */
@@ -53,6 +57,7 @@ export function createApp({
   orders,
   images,
   vouchers,
+  content,
   auth,
   allowedOrigins,
   orderLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60 * 1000 }),
@@ -268,6 +273,9 @@ export function createApp({
 
   // Vouchers (público: estado del QR · admin: crear, listar, canjear, anular).
   if (vouchers) registerVoucherRoutes(app, { vouchers, auth, log });
+
+  // Textos del sitio (público: lectura · admin: Configuración → Textos del sitio).
+  if (content) registerSiteContentRoutes(app, { content, log });
 
   return app;
 }

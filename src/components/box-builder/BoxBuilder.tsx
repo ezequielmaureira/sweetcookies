@@ -10,6 +10,7 @@ import { FlavorSelector } from "./FlavorSelector";
 import { MobileBoxBar } from "./MobileBoxBar";
 import { OrderSummary } from "./OrderSummary";
 import { OrdersPausedNotice } from "./OrdersPausedNotice";
+import { useSiteTexts } from "@/components/site-content/SiteTextsProvider";
 import styles from "./BoxBuilder.module.css";
 
 const SECTION = {
@@ -25,6 +26,7 @@ const SECTION = {
  */
 export function BoxBuilder() {
   const { items, lines, totalCount, totalCents, productsById, incrementItem, decrementItem, removeItem, clearCart } = useCart();
+  const texts = useSiteTexts();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [announcement, setAnnouncement] = useState("");
@@ -94,11 +96,11 @@ export function BoxBuilder() {
   return (
     <div className={styles.builder}>
       <header className={`container ${styles.intro}`}>
-        <p className="kicker">Armá tu caja</p>
+        <p className="kicker">{texts.BUILDER_EYEBROW}</p>
         <h1 className={styles.title}>
-          Creá tu combinación perfecta.
+          {texts.BUILDER_TITLE}
         </h1>
-        <p className={styles.lead}>Elegí tus cookies favoritas y armá tu pedido.</p>
+        <p className={styles.lead}>{texts.BUILDER_DESCRIPTION}</p>
 
         <ol className={styles.steps} aria-label="Pasos del pedido">
           {[

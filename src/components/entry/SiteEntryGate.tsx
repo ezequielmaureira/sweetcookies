@@ -3,13 +3,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Brand } from "@/components/brand/Brand";
 import { BiteableCookie } from "@/components/cookie/BiteableCookie";
+import { useSiteTexts } from "@/components/site-content/SiteTextsProvider";
 import { ENTRY_ATTRIBUTE, hasEntered, markEntered } from "@/lib/entry-gate";
 import styles from "./SiteEntryGate.module.css";
 
 const FADE_MS = 650;
 const FADE_REDUCED_MS = 150;
-
-const ENTRY_MESSAGES = ["Mmm...", "Una más.", "Ya casi.", "Bueno... ahora sí."] as const;
 
 // Estado "ya entró" leído de sessionStorage. En el servidor (y al hidratar) es
 // false; el script de <head> ya ocultó la entrada por CSS si correspondía.
@@ -35,6 +34,7 @@ type SiteEntryGateProps = {
 export function SiteEntryGate({ logoSrc, cookie, children }: SiteEntryGateProps) {
   const entered = useSyncExternalStore(subscribe, getEntered, getServerEntered);
   const [leaving, setLeaving] = useState(false);
+  const texts = useSiteTexts();
   const timer = useRef<number | undefined>(undefined);
 
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -75,8 +75,8 @@ export function SiteEntryGate({ logoSrc, cookie, children }: SiteEntryGateProps)
               src={cookie.src}
               isCutout={cookie.isCutout}
               alt={cookie.alt}
-              hint="Probala para entrar."
-              messages={ENTRY_MESSAGES}
+              hint={texts.ENTRY_INITIAL}
+              messages={[texts.ENTRY_BITE_ONE, texts.ENTRY_BITE_TWO, texts.ENTRY_ALMOST_DONE, texts.ENTRY_FINAL]}
               priority
               sizes="(min-width: 1024px) 560px, 86vw"
               onComplete={handleComplete}

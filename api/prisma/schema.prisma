@@ -198,3 +198,22 @@ model Voucher {
   @@index([status, expiresAt])
   @@map("vouchers")
 }
+
+/// Textos públicos editables desde el panel (Configuración → Textos del sitio).
+/// Genérico: una fila por texto, identificada por `key` (ej. HOME_TITLE).
+/// Sin fila = la web muestra el texto original (fallback en el código).
+model SiteContent {
+  id              String   @id @default(cuid()) @db.VarChar(40)
+  /// Clave interna (nunca se muestra al admin).
+  key             String   @unique @db.VarChar(60)
+  value           String   @db.VarChar(400)
+  /// Grupo en el panel (ej. "home") y nombre visible del campo (ej. "Título principal").
+  section         String   @db.VarChar(40)
+  label           String   @db.VarChar(80)
+  description     String?  @db.VarChar(200)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  /// Id de Clerk del admin que lo cambió.
+  updatedByUserId String?  @map("updated_by_user_id") @db.VarChar(64)
+
+  @@map("site_content")
+}
