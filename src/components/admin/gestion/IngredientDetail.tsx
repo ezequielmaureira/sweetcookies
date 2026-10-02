@@ -133,7 +133,9 @@ export function IngredientDetail({ id }: { id: string }) {
       <div className={styles.hero}>
         <span className={styles.heroLabel}>Costo actual</span>
         <span className={styles.heroValue}>{ingredient.unitCost ? formatUnitCost(ingredient.unitCost, ingredient.baseUnit) : "⚠ Sin precio"}</span>
-        <span className={styles.heroMeta}>{ingredient.lastPriceDate ? `Último precio: ${formatDate(ingredient.lastPriceDate)}` : "Cargá un precio para calcular el costo."}</span>
+        <span className={styles.heroMeta}>{ingredient.lastPriceDate
+            ? `Último precio: ${formatDate(ingredient.lastPriceDate)}${current?.supplierName ? ` · ${current.supplierName}` : ""}`
+            : "Cargá un precio para calcular el costo."}</span>
       </div>
 
       {showPriceForm ? (

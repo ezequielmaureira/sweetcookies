@@ -151,7 +151,7 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
     if (saving) return;
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = "Escribí un nombre.";
-    if (!validYield) e.yieldQuantity = "Ingresá cuántas cookies rinde (número entero).";
+    if (!validYield) e.yieldQuantity = "Ingresá cuántas cookies salen (número entero mayor a 0).";
     lines.forEach((l, i) => {
       if (!l.ingredientId) e[`ingredients.${i}.ingredientId`] = "Elegí un ingrediente.";
       const q = parseAmount(l.quantity);
@@ -248,22 +248,33 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
         </div>
         <div className={adminStyles.field}>
           <label htmlFor={`${uid}-yield`} className={adminStyles.label}>
-            Rendimiento
+            Rendimiento de la receta
           </label>
-          <input
-            id={`${uid}-yield`}
-            className={adminStyles.input}
-            inputMode="numeric"
-            placeholder="Ej.: 10"
-            autoComplete="off"
-            value={yieldText}
-            onChange={(e) => {
-              setYieldText(e.target.value);
-              clearError("yieldQuantity");
-            }}
-            aria-invalid={Boolean(errors.yieldQuantity)}
-          />
-          <p className={adminStyles.help}>Cantidad de cookies que produce esta receta.</p>
+          <p id={`${uid}-yield-q`} className={adminStyles.help}>
+            ¿Cuántas cookies salen con estas cantidades?
+          </p>
+          {/* Cambiar el rendimiento NO cambia los ingredientes: solo divide el costo total entre más o menos cookies. */}
+          <div className={styles.withSuffix}>
+            <input
+              id={`${uid}-yield`}
+              className={adminStyles.input}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              placeholder="Ej.: 8"
+              autoComplete="off"
+              value={yieldText}
+              onChange={(e) => {
+                setYieldText(e.target.value);
+                clearError("yieldQuantity");
+              }}
+              aria-invalid={Boolean(errors.yieldQuantity)}
+              aria-describedby={`${uid}-yield-q ${uid}-yield-help`}
+            />
+            <span className={styles.suffix}>cookies</span>
+          </div>
+          <p id={`${uid}-yield-help`} className={adminStyles.help}>
+            Usamos este número para calcular el costo de una cookie. Cambiarlo no modifica los ingredientes.
+          </p>
           {err("yieldQuantity")}
         </div>
       </section>
@@ -437,7 +448,7 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
           </p>
         )}
         <div className={styles.summaryRow}>
-          <span>Ingredientes</span>
+          <span>Costo ingredientes</span>
           <span>{complete ? formatMoney(ingredientsCost) : "—"}</span>
         </div>
         <div className={styles.summaryRow}>
@@ -449,11 +460,11 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
           <span>{complete ? formatMoney(total) : "—"}</span>
         </div>
         <div className={styles.summaryRow}>
-          <span>Rendimiento</span>
+          <span>Rendimiento de la receta</span>
           <span>{validYield ? `${yieldQuantity} ${yieldQuantity === 1 ? "cookie" : "cookies"}` : "—"}</span>
         </div>
         <div className={styles.perCookie}>
-          <span className={styles.perCookieLabel}>Costo por cookie</span>
+          <span className={styles.perCookieLabel}>Costo por 1 cookie</span>
           <span className={styles.perCookieValue}>{complete && validYield ? formatMoney(total / yieldQuantity) : "—"}</span>
         </div>
       </section>

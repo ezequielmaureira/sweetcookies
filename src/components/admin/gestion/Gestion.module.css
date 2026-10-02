@@ -421,3 +421,19 @@ a.item:hover {
   height: 22px;
   accent-color: var(--color-chocolate);
 }
+
+/* Campo con unidad al lado ("[ 8 ] cookies") */
+.withSuffix {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.withSuffix input {
+  max-width: 140px;
+}
+
+.suffix {
+  font-weight: 500;
+  color: var(--color-ink);
+}

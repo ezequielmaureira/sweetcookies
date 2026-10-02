@@ -69,10 +69,10 @@ export function RecipesList() {
             <Link href={`/admin/gestion/recetas/${r.id}`} className={styles.item}>
               <span className={styles.itemHead}>
                 <span className={styles.itemName}>{r.name}</span>
-                <span className={styles.itemMeta}>Rinde {r.yieldQuantity}</span>
+                <span className={styles.itemMeta}>Rinde {r.yieldQuantity} {r.yieldQuantity === 1 ? "cookie" : "cookies"}</span>
               </span>
               {r.summary.costPerCookie ? (
-                <span className={styles.cost}>{formatMoney(r.summary.costPerCookie)} por cookie</span>
+                <span className={styles.cost}>{formatMoney(r.summary.costPerCookie)} por 1 cookie</span>
               ) : (
                 <span className={styles.warn}>⚠ Costo incompleto</span>
               )}
