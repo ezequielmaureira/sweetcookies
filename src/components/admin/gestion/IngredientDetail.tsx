@@ -9,14 +9,14 @@ import { ConfirmDialog } from "@/components/vouchers/ConfirmDialog";
 import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import {
   PURCHASE_UNITS,
-  MEASURE_LABELS,
+  PURCHASE_UNIT_OPTION,
   addIngredientPrice,
   deleteIngredient,
   deleteIngredientPrice,
   formatBaseQuantity,
   formatDate,
   formatMoney,
-  formatQuantity,
+  formatPurchase,
   formatUnitCost,
   getIngredient,
   parseAmount,
@@ -24,6 +24,7 @@ import {
   toBase,
   todayAR,
   updateIngredient,
+  updateIngredientPrice,
   type BaseUnit,
   type IngredientDetail as Detail,
   type IngredientPrice,
@@ -45,6 +46,8 @@ export function IngredientDetail({ id }: { id: string }) {
   const [showPriceForm, setShowPriceForm] = useState(justCreated);
   const [notice, setNotice] = useState<Notice>(justCreated ? { kind: "ok", text: "Ingrediente creado ✓ Ahora cargá su precio." } : null);
   const [priceToDelete, setPriceToDelete] = useState<IngredientPrice | null>(null);
+  /** Compra que se está corrigiendo (Editar). Una compra nueva nunca pisa otra. */
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -69,7 +72,7 @@ export function IngredientDetail({ id }: { id: string }) {
     setBusy(true);
     try {
       setIngredient(await deleteIngredientPrice(await getToken(), id, priceToDelete.id));
-      setNotice({ kind: "ok", text: "Precio eliminado ✓ El costo actual pasó al precio anterior." });
+      setNotice({ kind: "ok", text: "Compra eliminada ✓ El costo actual pasa a la compra más reciente que queda." });
       setPriceToDelete(null);
     } catch (e) {
       setNotice({ kind: "error", text: adminErrorMessage(e, "No pudimos eliminar el precio.") });
@@ -131,11 +134,11 @@ export function IngredientDetail({ id }: { id: string }) {
       )}
 
       <div className={styles.hero}>
-        <span className={styles.heroLabel}>Costo actual</span>
+        <span className={styles.heroLabel}>Precio actual</span>
         <span className={styles.heroValue}>{ingredient.unitCost ? formatUnitCost(ingredient.unitCost, ingredient.baseUnit) : "⚠ Sin precio"}</span>
-        <span className={styles.heroMeta}>{ingredient.lastPriceDate
-            ? `Último precio: ${formatDate(ingredient.lastPriceDate)}${current?.supplierName ? ` · ${current.supplierName}` : ""}`
-            : "Cargá un precio para calcular el costo."}</span>
+        <span className={styles.heroMeta}>{current
+            ? `Última compra: ${formatPurchase(current)} por ${formatMoney(current.totalPrice)} · ${formatDate(current.purchasedAt)}${current.supplierName ? ` · ${current.supplierName}` : ""}`
+            : "Cargá una compra para calcular el costo."}</span>
       </div>
 
       {showPriceForm ? (
@@ -145,7 +148,7 @@ export function IngredientDetail({ id }: { id: string }) {
           onSaved={(updated) => {
             setIngredient(updated);
             setShowPriceForm(false);
-            setNotice({ kind: "ok", text: "Precio guardado ✓" });
+            setNotice({ kind: "ok", text: "Compra guardada ✓" });
           }}
         />
       ) : (
@@ -155,7 +158,7 @@ export function IngredientDetail({ id }: { id: string }) {
             setNotice(null);
           }}
         >
-          + Cargar precio
+          + Cargar compra / precio
         </Button>
       )}
 
@@ -165,25 +168,50 @@ export function IngredientDetail({ id }: { id: string }) {
           <p className={adminStyles.help}>Todavía no hay precios cargados.</p>
         ) : (
           <ul className={styles.history}>
-            {ingredient.prices.map((p) => (
-              <li key={p.id} className={`${styles.historyItem} ${p.id === current?.id ? styles.historyCurrent : ""}`}>
-                <span>
-                  <strong>{formatDate(p.purchasedAt)}</strong>
-                  {p.id === current?.id && " · actual"}
-                </span>
-                <button type="button" className={styles.linkButton} onClick={() => setPriceToDelete(p)}>
-                  Eliminar
-                </button>
-                <span>
-                  {formatQuantity(p.purchaseQuantity, p.purchaseUnit)}
-                  {p.purchaseUnit === "PACKAGE" && p.unitsPerPackage && ` × ${formatQuantity(p.unitsPerPackage, "UNIT")}`} · {formatMoney(p.totalPrice)}
-                </span>
-                <span />
-                <strong>{formatUnitCost(p.unitCost, ingredient.baseUnit)}</strong>
-                <span />
-                {p.supplierName && <span className={adminStyles.help}>{p.supplierName}</span>}
-              </li>
-            ))}
+            {ingredient.prices.map((p) =>
+              editingPriceId === p.id ? (
+                <li key={p.id}>
+                  <PriceForm
+                    ingredient={ingredient}
+                    price={p}
+                    onCancel={() => setEditingPriceId(null)}
+                    onSaved={(updated) => {
+                      setIngredient(updated);
+                      setEditingPriceId(null);
+                      setNotice({ kind: "ok", text: "Compra corregida ✓ El costo se recalculó." });
+                    }}
+                  />
+                </li>
+              ) : (
+                <li key={p.id} className={`${styles.historyItem} ${p.id === current?.id ? styles.historyCurrent : ""}`}>
+                  <span>
+                    <strong>{formatDate(p.purchasedAt)}</strong>
+                    {p.id === current?.id && " · actual"}
+                  </span>
+                  <span className={styles.historyActions}>
+                    <button
+                      type="button"
+                      className={styles.linkButton}
+                      onClick={() => {
+                        setEditingPriceId(p.id);
+                        setShowPriceForm(false);
+                        setNotice(null);
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button type="button" className={styles.linkButton} onClick={() => setPriceToDelete(p)}>
+                      Eliminar
+                    </button>
+                  </span>
+                  <strong className={styles.historyPurchase}>
+                    {formatPurchase(p)} · {formatMoney(p.totalPrice)}
+                  </strong>
+                  <span className={styles.itemMeta}>Costo equivalente: {formatUnitCost(p.unitCost, ingredient.baseUnit)}</span>
+                  {p.supplierName && <span className={styles.itemMeta}>Proveedor: {p.supplierName}</span>}
+                </li>
+              ),
+            )}
           </ul>
         )}
       </section>
@@ -212,8 +240,8 @@ export function IngredientDetail({ id }: { id: string }) {
 
       <ConfirmDialog
         open={priceToDelete !== null}
-        title="¿Eliminar este precio?"
-        confirmLabel="Eliminar precio"
+        title="¿Eliminar esta compra?"
+        confirmLabel="Eliminar compra"
         danger
         busy={busy}
         onConfirm={() => void removePrice()}
@@ -221,8 +249,8 @@ export function IngredientDetail({ id }: { id: string }) {
       >
         {priceToDelete && (
           <p>
-            {formatDate(priceToDelete.purchasedAt)} · {formatQuantity(priceToDelete.purchaseQuantity, priceToDelete.purchaseUnit)} · {formatMoney(priceToDelete.totalPrice)}. El costo
-            actual pasa al último precio anterior.
+            {formatDate(priceToDelete.purchasedAt)} · {formatPurchase(priceToDelete)} · {formatMoney(priceToDelete.totalPrice)}. El costo actual pasa a la
+            compra más reciente que quede.
           </p>
         )}
       </ConfirmDialog>
@@ -244,16 +272,20 @@ export function IngredientDetail({ id }: { id: string }) {
 
 /* ---------- Cargar precio ---------- */
 
-function PriceForm({ ingredient, onSaved, onCancel }: { ingredient: Detail; onSaved: (d: Detail) => void; onCancel: () => void }) {
+/** "1.25" (API) → "1,25" (como se escribe en Argentina). */
+const toInput = (value: string) => value.replace(".", ",");
+
+/** Nueva compra (POST) o corrección de una existente (PUT, con `price`). */
+function PriceForm({ ingredient, price, onSaved, onCancel }: { ingredient: Detail; price?: IngredientPrice; onSaved: (d: Detail) => void; onCancel: () => void }) {
   const { getToken } = useAuth();
   const uid = useId();
   const units = PURCHASE_UNITS[ingredient.baseUnit];
-  const [quantity, setQuantity] = useState("");
-  const [unit, setUnit] = useState<MeasureUnit>(units[0]);
-  const [perPackage, setPerPackage] = useState("");
-  const [total, setTotal] = useState("");
-  const [date, setDate] = useState(todayAR());
-  const [supplier, setSupplier] = useState("");
+  const [quantity, setQuantity] = useState(price ? toInput(price.purchaseQuantity) : "");
+  const [unit, setUnit] = useState<MeasureUnit>(price?.purchaseUnit ?? units[0]);
+  const [perPackage, setPerPackage] = useState(price?.unitsPerPackage ? toInput(price.unitsPerPackage) : "");
+  const [total, setTotal] = useState(price ? toInput(price.totalPrice) : "");
+  const [date, setDate] = useState(price?.purchasedAt ?? todayAR());
+  const [supplier, setSupplier] = useState(price?.supplierName ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -277,14 +309,16 @@ function PriceForm({ ingredient, onSaved, onCancel }: { ingredient: Detail; onSa
     setSaving(true);
     setMessage(null);
     try {
-      const saved = await addIngredientPrice(await getToken(), ingredient.id, {
+      const input = {
         quantity: toApiNumber(q, 4),
         unit,
         ...(unit === "PACKAGE" && pp ? { unitsPerPackage: toApiNumber(pp, 4) } : {}),
         totalPrice: toApiNumber(t, 2),
         purchasedAt: date,
         supplierName: supplier.trim() || undefined,
-      });
+      };
+      const token = await getToken();
+      const saved = price ? await updateIngredientPrice(token, ingredient.id, price.id, input) : await addIngredientPrice(token, ingredient.id, input);
       onSaved(saved);
     } catch (err) {
       if (err instanceof AdminApiError && err.status === 422) setErrors(err.fields);
@@ -297,8 +331,11 @@ function PriceForm({ ingredient, onSaved, onCancel }: { ingredient: Detail; onSa
 
   return (
     <form className={adminStyles.section} onSubmit={submit} noValidate>
-      <h2 className={adminStyles.sectionTitle}>Cargar precio</h2>
-      <p className={adminStyles.sectionLead}>Cargá lo que compraste y cuánto pagaste: el costo por {ingredient.baseUnit === "UNIT" ? "unidad" : ingredient.baseUnit === "GRAM" ? "gramo" : "ml"} se calcula solo.</p>
+      <h2 className={adminStyles.sectionTitle}>{price ? "Editar compra" : "Cargar compra / precio"}</h2>
+      <p className={adminStyles.sectionLead}>
+        {price ? "Corregí los datos de esta compra: el costo se recalcula y no se crea otra." : "Cargá la compra como la hiciste (ej. 2,5 kg por $ 120.000):"} el costo por{" "}
+        {ingredient.baseUnit === "UNIT" ? "unidad" : ingredient.baseUnit === "GRAM" ? "gramo" : "ml"} se calcula solo.
+      </p>
 
       <div className={styles.row}>
         <div className={adminStyles.field}>
@@ -310,12 +347,12 @@ function PriceForm({ ingredient, onSaved, onCancel }: { ingredient: Detail; onSa
         </div>
         <div className={adminStyles.field}>
           <label htmlFor={`${uid}-u`} className={adminStyles.label}>
-            Unidad de compra
+            Unidad
           </label>
           <select id={`${uid}-u`} className={`${adminStyles.input} ${styles.select}`} value={unit} onChange={(e) => setUnit(e.target.value as MeasureUnit)}>
             {units.map((u) => (
               <option key={u} value={u}>
-                {MEASURE_LABELS[u]}
+                {PURCHASE_UNIT_OPTION[u]}
               </option>
             ))}
           </select>
@@ -343,11 +380,11 @@ function PriceForm({ ingredient, onSaved, onCancel }: { ingredient: Detail; onSa
 
       {base !== null && (
         <p className={styles.preview} aria-live="polite">
-          Total: {formatBaseQuantity(base, ingredient.baseUnit)}
+          Equivale a {formatBaseQuantity(base, ingredient.baseUnit)}
           {unitCost !== null && (
             <>
               {" "}
-              · Costo: <strong>{formatUnitCost(unitCost, ingredient.baseUnit)}</strong>
+              · Costo equivalente: <strong>{formatUnitCost(unitCost, ingredient.baseUnit)}</strong>
             </>
           )}
         </p>
@@ -372,7 +409,7 @@ function PriceForm({ ingredient, onSaved, onCancel }: { ingredient: Detail; onSa
 
       <div className={adminStyles.actions}>
         <Button type="submit" disabled={saving}>
-          {saving ? "Guardando…" : "Guardar precio"}
+          {saving ? "Guardando…" : price ? "Guardar cambios" : "Guardar compra"}
         </Button>
         <Button variant="secondary" onClick={onCancel} disabled={saving}>
           Cancelar

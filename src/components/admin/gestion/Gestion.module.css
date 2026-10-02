@@ -649,3 +649,19 @@ a.item:hover {
   background: var(--color-chocolate);
   color: var(--color-cream);
 }
+
+/* Historial de compras */
+.historyActions {
+  display: inline-flex;
+  gap: 4px;
+  justify-self: end;
+}
+
+.historyPurchase {
+  grid-column: 1 / -1;
+  font-size: 1.0625rem;
+}
+
+.historyItem .itemMeta {
+  grid-column: 1 / -1;
+}

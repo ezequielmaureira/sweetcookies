@@ -148,6 +148,15 @@ export function createManagementRepository(prisma: PrismaClient) {
       await prisma.ingredientPrice.create({ data: { ingredientId, ...data } });
     },
 
+    /**
+     * Corrige una compra mal cargada (no crea otra): cantidad, unidad, precio,
+     * proveedor y fecha, con la cantidad base y el costo recalculados.
+     */
+    async updatePrice(ingredientId: string, priceId: string, data: PriceData) {
+      const { count } = await prisma.ingredientPrice.updateMany({ where: { id: priceId, ingredientId }, data });
+      return count === 1;
+    },
+
     /** Al borrar una compra, el costo actual pasa solo a la anterior (siempre se lee la más reciente). */
     async deletePrice(ingredientId: string, priceId: string) {
       const { count } = await prisma.ingredientPrice.deleteMany({ where: { id: priceId, ingredientId } });

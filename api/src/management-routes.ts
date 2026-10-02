@@ -91,6 +91,22 @@ export function registerManagementRoutes(app: Hono<{ Variables: Variables }>, { 
     return c.json(await management.getIngredient(id), 201);
   });
 
+  // Corregir una compra existente (una compra NUEVA siempre es un POST: no se pisa el historial).
+  app.put("/api/admin/ingredients/:id/prices/:priceId", bodyLimit({ maxSize: 4 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const id = c.req.param("id") ?? "";
+    const priceId = c.req.param("priceId") ?? "";
+    if (!ID.test(id) || !ID.test(priceId)) return notFound(c);
+    const baseUnit = await management.getIngredientBaseUnit(id);
+    if (!baseUnit) return notFound(c);
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const result = validatePriceInput(parsed.body, baseUnit);
+    if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
+    if (!(await management.updatePrice(id, priceId, result.data))) return notFound(c);
+    log(`[admin] ingredient ${id} price ${priceId} updated by ${c.get("userId")}`);
+    return c.json(await management.getIngredient(id));
+  });
+
   app.delete("/api/admin/ingredients/:id/prices/:priceId", async (c: AppContext) => {
     const id = c.req.param("id") ?? "";
     const priceId = c.req.param("priceId") ?? "";
