@@ -1,7 +1,7 @@
 import type { Context, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { ManagementRepository, Result } from "./management-repository.ts";
-import { validateIngredientInput, validatePriceInput, validateRecipeInput } from "./management.ts";
+import { validateIngredientInput, validatePriceInput, validateRecipeInput, validateSimulationInput } from "./management.ts";
 
 type Variables = { userId: string };
 type AppContext = Context<{ Variables: Variables }>;
@@ -134,6 +134,17 @@ export function registerManagementRoutes(app: Hono<{ Variables: Variables }>, { 
     if (!updated.ok) return fail(c, updated);
     log(`[admin] recipe ${id} updated by ${c.get("userId")}`);
     return c.json(await management.getRecipe(id));
+  });
+
+  /* ---------- Simulador de producción (solo calcula: no guarda nada) ---------- */
+
+  app.post("/api/admin/production/simulate", bodyLimit({ maxSize: 16 * 1024, onError: tooLarge }), async (c) => {
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const result = validateSimulationInput(parsed.body);
+    if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
+    const simulation = await management.simulate(result.data);
+    return simulation.ok ? c.json(simulation.data) : fail(c, simulation);
   });
 
   app.delete("/api/admin/recipes/:id", async (c: AppContext) => {

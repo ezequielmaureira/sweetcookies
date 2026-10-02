@@ -29,6 +29,13 @@ export default function GestionHomePage() {
             Ver recetas
           </ButtonLink>
         </section>
+        <section className={gestionStyles.homeCard}>
+          <h2>Simulador</h2>
+          <p>Calculá ingredientes y costos para una producción.</p>
+          <ButtonLink href="/admin/gestion/simulador" arrow>
+            Abrir simulador
+          </ButtonLink>
+        </section>
       </div>
     </div>
   );

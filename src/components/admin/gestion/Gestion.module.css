@@ -495,3 +495,57 @@ a.item:hover {
   resize: vertical;
   line-height: 1.4;
 }
+
+/* Simulador: cantidad con botones − / + grandes */
+.stepperRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepButton {
+  width: 50px;
+  height: 50px;
+  border: 1px solid rgba(58, 36, 25, 0.22);
+  border-radius: 50%;
+  background: #fffdf9;
+  color: var(--color-chocolate);
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stepInput {
+  width: 96px;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.neededQty {
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+}
+
+.inlineLink {
+  align-self: flex-start;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--color-terracotta);
+}

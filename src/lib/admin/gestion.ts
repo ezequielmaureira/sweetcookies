@@ -181,3 +181,73 @@ export const formatDate = (iso: string) => {
 
 /** Hoy en Argentina (YYYY-MM-DD), para la fecha de compra por defecto. */
 export const todayAR = () => new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+/* ---------- Simulador de producción (solo calcula en el servidor, con Decimal; no guarda) ---------- */
+
+export type SimulationResult = {
+  recipes: {
+    recipeId: string;
+    name: string;
+    status: RecipeStatus;
+    cookies: number;
+    yieldQuantity: number;
+    /** Equivalencia en recetas ("2", "1.5"). */
+    factor: string;
+    baseCost: string | null;
+    missingPrices: number;
+    ingredientsCost: string;
+    extrasCost: string;
+    knownCost: string;
+    totalCost: string | null;
+    costPerCookie: string | null;
+  }[];
+  /** Ingredientes agrupados (orden alfabético). Etapa 2: cruzar con stock por ingredientId. */
+  ingredients: {
+    ingredientId: string;
+    name: string;
+    baseUnit: BaseUnit;
+    /** Cantidad necesaria en unidad base (g, ml o unidades). */
+    quantity: string;
+    unitCost: string | null;
+    cost: string | null;
+    usedIn: string[];
+  }[];
+  summary: {
+    totalCookies: number;
+    hasDraft: boolean;
+    complete: boolean;
+    missingPrices: number;
+    ingredientsCost: string;
+    extrasCost: string;
+    knownCost: string;
+    totalCost: string | null;
+    averagePerCookie: string | null;
+  };
+};
+
+export const simulateProduction = (token: string | null, items: { recipeId: string; cookies: number }[]) =>
+  adminRequest<SimulationResult>("/api/admin/production/simulate", token, { method: "POST", body: JSON.stringify({ items }) });
+
+const factorFormat = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
+
+/** "2 recetas" · "1,5 recetas" · "1 receta" · "≈ 1,33 recetas". */
+export function formatFactor(factor: string) {
+  const n = Number(factor);
+  const shown = factorFormat.format(n);
+  const approx = Number(shown.replace(/\./g, "").replace(",", ".")) !== n ? "≈ " : "";
+  return `${approx}${shown} ${n === 1 ? "receta" : "recetas"}`;
+}
+
+const bigFormat = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 3 });
+
+/**
+ * Cantidad cómoda: desde 1000 g / 1000 ml se muestra en kg / l con el detalle:
+ * "1,18 kg (1.180 g)" · "1,5 l (1.500 ml)" · "8 unidades".
+ */
+export function formatNeeded(quantity: string, baseUnit: BaseUnit) {
+  const n = Number(quantity);
+  const base = formatBaseQuantity(quantity, baseUnit);
+  if (baseUnit === "GRAM" && n >= 1000) return `${bigFormat.format(n / 1000)} kg (${base})`;
+  if (baseUnit === "MILLILITER" && n >= 1000) return `${bigFormat.format(n / 1000)} l (${base})`;
+  return base;
+}

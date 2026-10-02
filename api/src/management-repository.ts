@@ -2,6 +2,7 @@ import type { PrismaClient } from "./generated/prisma/client.ts";
 import {
   computeRecipe,
   isRecipeUnitFor,
+  simulateProduction,
   toIngredientJson,
   toPriceJson,
   type IngredientInput,
@@ -9,6 +10,7 @@ import {
   type PriceData,
   type RecipeInput,
   type RecipeRow,
+  type SimulationItem,
 } from "./management.ts";
 
 type Fail = { ok: false; status: 404 | 409 | 422; error: string; fields?: Record<string, string>; recipeCount?: number };
@@ -57,8 +59,7 @@ type RecipeWithRelations = {
   extraCosts: RecipeRow["extras"];
 };
 
-const recipeJson = (r: RecipeWithRelations) =>
-  computeRecipe({
+const toRecipeRow = (r: RecipeWithRelations): RecipeRow => ({
     ...r,
     lines: r.ingredients.map((l) => ({
       id: l.id,
@@ -68,6 +69,8 @@ const recipeJson = (r: RecipeWithRelations) =>
     })),
     extras: r.extraCosts,
   });
+
+const recipeJson = (r: RecipeWithRelations) => computeRecipe(toRecipeRow(r));
 
 const search = (q?: string) => (q ? { name: { contains: q, mode: "insensitive" as const } } : {});
 
@@ -204,6 +207,23 @@ export function createManagementRepository(prisma: PrismaClient) {
         if (extras.length) await tx.recipeExtraCost.createMany({ data: extras });
       });
       return { ok: true, data: { id } };
+    },
+
+    /**
+     * Simulador: lee las recetas (con el costo actual de cada ingrediente) y calcula.
+     * No escribe nada. Una receta sin rendimiento no se puede simular (422).
+     */
+    async simulate(items: SimulationItem[]): Promise<Result<ReturnType<typeof simulateProduction>>> {
+      const rows = await prisma.recipe.findMany({ where: { id: { in: items.map((i) => i.recipeId) } }, include: recipeInclude });
+      const recipes = new Map(rows.map((r) => [r.id, toRecipeRow(r)]));
+      const fields: Record<string, string> = {};
+      items.forEach((item, i) => {
+        const recipe = recipes.get(item.recipeId);
+        if (!recipe) fields[`items.${i}.recipeId`] = "Esa receta ya no existe.";
+        else if (!recipe.yieldQuantity) fields[`items.${i}.recipeId`] = "Definí primero el rendimiento de esta receta para poder simularla.";
+      });
+      if (Object.keys(fields).length) return { ok: false, status: 422, error: "validation_error", fields };
+      return { ok: true, data: simulateProduction(recipes, items) };
     },
 
     async deleteRecipe(id: string) {
