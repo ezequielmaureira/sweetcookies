@@ -25,10 +25,15 @@ export type IngredientPrice = {
 export type Ingredient = {
   id: string;
   name: string;
+  /** Unidad habitual (se propone por defecto). No limita: se compra y se usa en cualquier unidad. */
   baseUnit: BaseUnit;
   active: boolean;
-  /** Costo actual por unidad base (precisión completa) o null = sin precio. */
+  /** "1 unidad = X g" / "1 unidad = X ml" (null = sin equivalencia). */
+  gramsPerUnit: string | null;
+  mlPerUnit: string | null;
+  /** Costo actual (precisión completa) por g / ml / unidad según costUnit, o null = sin precio. */
   unitCost: string | null;
+  costUnit: BaseUnit | null;
   lastPriceDate: string | null;
   /** Compra vigente (precio pagado, cantidad y unidad tal como se cargó). */
   currentPrice: IngredientPrice | null;
@@ -51,9 +56,13 @@ export const PARTS: readonly RecipeComponent[] = ["DOUGH", "FILLING"];
 /** Costo de una parte: cost = null si le falta algún precio (nunca 0). */
 export type PartCost = { cost: string | null; knownCost: string; missingPrices: number; lines: number };
 
+/** Por qué no hay costo: sin precio, o falta la equivalencia para convertir. */
+export type MissingReason = "NO_PRICE" | "NO_EQUIVALENCE";
+
 export type RecipeLine = {
   id: string;
   component: RecipeComponent;
+  missing: MissingReason | null;
   ingredientId: string;
   ingredientName: string;
   ingredientActive: boolean;
@@ -111,7 +120,11 @@ export const listIngredients = (token: string | null) => adminRequest<{ ingredie
 export const getIngredient = (token: string | null, id: string) => adminRequest<IngredientDetail>(`/api/admin/ingredients/${encodeURIComponent(id)}`, token);
 export const createIngredient = (token: string | null, input: { name: string; baseUnit: BaseUnit }) =>
   adminRequest<IngredientDetail>("/api/admin/ingredients", token, { method: "POST", body: JSON.stringify(input) });
-export const updateIngredient = (token: string | null, id: string, input: { name?: string; active?: boolean; baseUnit?: BaseUnit }) =>
+export const updateIngredient = (
+  token: string | null,
+  id: string,
+  input: { name?: string; active?: boolean; baseUnit?: BaseUnit; gramsPerUnit?: string | null; mlPerUnit?: string | null },
+) =>
   adminRequest<IngredientDetail>(`/api/admin/ingredients/${encodeURIComponent(id)}`, token, { method: "PATCH", body: JSON.stringify(input) });
 export const deleteIngredient = (token: string | null, id: string) =>
   adminRequest<void>(`/api/admin/ingredients/${encodeURIComponent(id)}`, token, { method: "DELETE" });
@@ -138,6 +151,43 @@ export const BASE_UNIT_LABELS: Record<BaseUnit, string> = { GRAM: "Gramos", MILL
 
 /** Sufijo del costo: "$ 29,32 / g". */
 export const BASE_UNIT_SHORT: Record<BaseUnit, string> = { GRAM: "g", MILLILITER: "ml", UNIT: "unidad" };
+
+/** Unidades para compras y recetas, en cualquier ingrediente. */
+export const ALL_UNITS: readonly MeasureUnit[] = ["G", "KG", "ML", "L", "UNIT"];
+export const UNIT_OPTION: Record<MeasureUnit, string> = { G: "g", KG: "kg", ML: "ml", L: "litro", UNIT: "unidad", PACKAGE: "paquete" };
+/** Unidad que se propone según cómo se mide habitualmente el ingrediente. */
+export const DEFAULT_UNIT: Record<BaseUnit, MeasureUnit> = { GRAM: "G", MILLILITER: "ML", UNIT: "UNIT" };
+
+/** Dimensión de una unidad: peso (g), volumen (ml) o cantidad (unidades). */
+export const dimensionOf = (unit: MeasureUnit): BaseUnit => (unit === "G" || unit === "KG" ? "GRAM" : unit === "ML" || unit === "L" ? "MILLILITER" : "UNIT");
+
+/**
+ * Costo del ingrediente por g / ml / unidad de `dimension`, con las mismas
+ * reglas que el servidor: kg↔g y l↔ml siempre; unidad↔g/ml solo con la
+ * equivalencia del ingrediente; g↔ml nunca. null = no se puede (o sin precio).
+ * Solo para mostrar mientras se edita.
+ */
+export function costIn(ingredient: Pick<Ingredient, "unitCost" | "costUnit" | "gramsPerUnit" | "mlPerUnit">, dimension: BaseUnit): number | null {
+  if (!ingredient.unitCost || !ingredient.costUnit) return null;
+  const cost = Number(ingredient.unitCost);
+  const from = ingredient.costUnit;
+  if (from === dimension) return cost;
+  const g = ingredient.gramsPerUnit ? Number(ingredient.gramsPerUnit) : null;
+  const ml = ingredient.mlPerUnit ? Number(ingredient.mlPerUnit) : null;
+  if (from === "UNIT" && dimension === "GRAM") return g ? cost / g : null;
+  if (from === "GRAM" && dimension === "UNIT") return g ? cost * g : null;
+  if (from === "UNIT" && dimension === "MILLILITER") return ml ? cost / ml : null;
+  if (from === "MILLILITER" && dimension === "UNIT") return ml ? cost * ml : null;
+  return null;
+}
+
+/** "1 u = 22 g" (o null si no tiene equivalencia). */
+export function equivalenceLabel(ingredient: Pick<Ingredient, "gramsPerUnit" | "mlPerUnit">) {
+  const parts = [ingredient.gramsPerUnit && `${quantityLabel(ingredient.gramsPerUnit)} g`, ingredient.mlPerUnit && `${quantityLabel(ingredient.mlPerUnit)} ml`].filter(Boolean);
+  return parts.length ? `1 u = ${parts.join(" · ")}` : null;
+}
+
+const quantityLabel = (value: string) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 4 }).format(Number(value));
 
 export const MEASURE_LABELS: Record<MeasureUnit, string> = { G: "g", KG: "kg", ML: "ml", L: "litros", UNIT: "unidades", PACKAGE: "paquetes" };
 
@@ -239,7 +289,8 @@ export type SimulationResult = {
     name: string;
     baseUnit: BaseUnit;
     component: RecipeComponent;
-    /** Cantidad necesaria en unidad base (g, ml o unidades). */
+    missing: MissingReason | null;
+    /** Cantidad necesaria en g, ml o unidades (según baseUnit). */
     quantity: string;
     unitCost: string | null;
     cost: string | null;

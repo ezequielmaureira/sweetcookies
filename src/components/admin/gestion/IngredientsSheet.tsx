@@ -7,10 +7,15 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/vouchers/ConfirmDialog";
 import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import {
+  ALL_UNITS,
+  DEFAULT_UNIT,
+  UNIT_OPTION,
   addIngredientPrice,
   createIngredient,
   deleteIngredient,
   deleteIngredientPrice,
+  dimensionOf,
+  equivalenceLabel,
   formatDate,
   formatMoney,
   formatPurchase,
@@ -33,9 +38,12 @@ import adminStyles from "../Admin.module.css";
 import { BaseUnitChoices } from "./BaseUnitChoices";
 import styles from "./Gestion.module.css";
 
-/** Unidad de CADA COMPRA según cómo se mide el ingrediente (el costo se calcula en g / ml / unidad). */
-const PURCHASE_UNITS: Record<BaseUnit, MeasureUnit[]> = { GRAM: ["G", "KG"], MILLILITER: ["ML", "L"], UNIT: ["UNIT"] };
-const UNIT_LABEL: Partial<Record<MeasureUnit, string>> = { G: "g", KG: "kg", ML: "ml", L: "litro", UNIT: "un" };
+/**
+ * Cada COMPRA puede ser en cualquier unidad (g, kg, ml, litro, unidad); su costo
+ * queda por g / ml / unidad según esa compra. Las recetas convierten con la
+ * equivalencia del ingrediente ("1 unidad = 22 g") cuando hace falta.
+ */
+const UNIT_LABEL = UNIT_OPTION;
 
 const numberFormat = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 4 });
 /** "45418.00" → "45418"; "2.5" → "2,5" (como se escribe acá). */
@@ -61,8 +69,10 @@ export function IngredientsSheet() {
   const [ingredients, setIngredients] = useState<Ingredient[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  // ?abrir=<id> (desde el simulador) abre "+ Precio"; ?nuevo=1 abre "Nuevo ingrediente".
-  const [panel, setPanel] = useState<Panel>(() => (params.get("abrir") ? { id: params.get("abrir")!, kind: "price" } : null));
+  // ?abrir=<id> abre "+ Precio"; ?equiv=<id> abre la equivalencia (⋮); ?nuevo=1 abre "Nuevo ingrediente".
+  const [panel, setPanel] = useState<Panel>(() =>
+    params.get("equiv") ? { id: params.get("equiv")!, kind: "menu" } : params.get("abrir") ? { id: params.get("abrir")!, kind: "price" } : null,
+  );
   const [creating, setCreating] = useState(params.get("nuevo") === "1");
   const [notice, setNotice] = useState<Notice>(null);
   const [toDelete, setToDelete] = useState<Ingredient | null>(null);
@@ -174,6 +184,7 @@ export function IngredientsSheet() {
                 <div className={styles.sheetRow} role="row">
                   <span role="cell" className={`${styles.cName} ${styles.sheetName}`}>
                     {i.name}
+                    {equivalenceLabel(i) && <small className={styles.equivTag}>{equivalenceLabel(i)}</small>}
                   </span>
                   {i.currentPrice ? (
                     <>
@@ -185,7 +196,7 @@ export function IngredientsSheet() {
                       </span>
                       <span role="cell" className={styles.cUnit}>{UNIT_LABEL[shownUnit(i.currentPrice)]}</span>
                       <span role="cell" className={`${styles.cCost} ${styles.sheetNum} ${styles.sheetCost}`}>
-                        {formatUnitCost(i.currentPrice.unitCost, i.baseUnit)}
+                        {formatUnitCost(i.currentPrice.unitCost, dimensionOf(i.currentPrice.purchaseUnit))}
                       </span>
                     </>
                   ) : (
@@ -215,6 +226,7 @@ export function IngredientsSheet() {
                 {panel?.id === i.id && panel.kind === "history" && <History ingredient={i} onClose={() => setPanel(null)} onChanged={reload} />}
                 {panel?.id === i.id && panel.kind === "menu" && (
                   <div className={styles.sheetPanel}>
+                    <Equivalence ingredient={i} onSaved={() => done(`Equivalencia de ${i.name} guardada ✓`)} />
                     {i.recipeCount > 0 ? (
                       <p className={adminStyles.help}>Este ingrediente se usa en {i.recipeCount === 1 ? "una receta" : `${i.recipeCount} recetas`} y no se puede eliminar.</p>
                     ) : (
@@ -251,11 +263,11 @@ function EditRow({ ingredient, onSaved, onCancel }: { ingredient: Ingredient; on
   const { getToken } = useAuth();
   const uid = useId();
   const cp = ingredient.currentPrice;
-  const units = PURCHASE_UNITS[ingredient.baseUnit];
+  const units = ALL_UNITS;
   const [name, setName] = useState(ingredient.name);
   const [total, setTotal] = useState(cp ? toInput(cp.totalPrice) : "");
   const [amount, setAmount] = useState(cp ? toInput(shownQuantity(cp)) : "");
-  const [unit, setUnit] = useState<MeasureUnit>(cp && units.includes(shownUnit(cp)) ? shownUnit(cp) : units[0]);
+  const [unit, setUnit] = useState<MeasureUnit>(cp ? shownUnit(cp) : DEFAULT_UNIT[ingredient.baseUnit]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -316,7 +328,7 @@ function EditRow({ ingredient, onSaved, onCancel }: { ingredient: Ingredient; on
       </span>
       <span role="cell" className={`${styles.cCost} ${styles.sheetNum} ${styles.sheetCost}`}>
         <span className={styles.cellLabel}>Costo</span>
-        {cost !== null ? formatUnitCost(cost, ingredient.baseUnit) : "—"}
+        {cost !== null ? formatUnitCost(cost, dimensionOf(unit)) : "—"}
       </span>
       <span role="cell" className={`${styles.cActions} ${styles.sheetActions}`}>
         <Button type="submit" disabled={saving}>
@@ -326,6 +338,7 @@ function EditRow({ ingredient, onSaved, onCancel }: { ingredient: Ingredient; on
           Cancelar
         </button>
       </span>
+      <EquivalenceHint ingredient={ingredient} unit={unit} />
       {message && (
         <p className={`${adminStyles.statusError} ${styles.sheetMessage}`} role="alert">
           {message}
@@ -335,14 +348,7 @@ function EditRow({ ingredient, onSaved, onCancel }: { ingredient: Ingredient; on
   );
 }
 
-function UnitSelect({ id, units, value, onChange }: { id: string; units: MeasureUnit[]; value: MeasureUnit; onChange: (u: MeasureUnit) => void }) {
-  if (units.length === 1) {
-    return (
-      <span id={id} className={styles.fixedUnit}>
-        unidades
-      </span>
-    );
-  }
+function UnitSelect({ id, units, value, onChange }: { id: string; units: readonly MeasureUnit[]; value: MeasureUnit; onChange: (u: MeasureUnit) => void }) {
   return (
     <select id={id} className={`${adminStyles.input} ${styles.select} ${styles.cellInput}`} value={value} onChange={(e) => onChange(e.target.value as MeasureUnit)}>
       {units.map((u) => (
@@ -359,10 +365,10 @@ function UnitSelect({ id, units, value, onChange }: { id: string; units: Measure
 function PriceForm({ ingredient, title, onSaved, onCancel }: { ingredient: Ingredient; title: string; onSaved: () => void; onCancel: () => void }) {
   const { getToken } = useAuth();
   const uid = useId();
-  const units = PURCHASE_UNITS[ingredient.baseUnit];
+  const units = ALL_UNITS;
   const [total, setTotal] = useState("");
   const [amount, setAmount] = useState("");
-  const [unit, setUnit] = useState<MeasureUnit>(units[0]);
+  const [unit, setUnit] = useState<MeasureUnit>(DEFAULT_UNIT[ingredient.baseUnit]);
   const [date, setDate] = useState(todayAR());
   const [supplier, setSupplier] = useState("");
   const [saving, setSaving] = useState(false);
@@ -417,7 +423,7 @@ function PriceForm({ ingredient, title, onSaved, onCancel }: { ingredient: Ingre
         </span>
         <span>
           <span className={styles.cellLabel}>Costo</span>
-          <strong className={styles.sheetCost}>{cost !== null ? formatUnitCost(cost, ingredient.baseUnit) : "—"}</strong>
+          <strong className={styles.sheetCost}>{cost !== null ? formatUnitCost(cost, dimensionOf(unit)) : "—"}</strong>
         </span>
         <span>
           <label htmlFor={`${uid}-d`} className={styles.cellLabel}>
@@ -432,6 +438,7 @@ function PriceForm({ ingredient, title, onSaved, onCancel }: { ingredient: Ingre
           <input id={`${uid}-s`} className={`${adminStyles.input} ${styles.cellInput}`} maxLength={80} autoComplete="off" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
         </span>
       </div>
+      <EquivalenceHint ingredient={ingredient} unit={unit} />
       <span className={styles.sheetActions}>
         <Button type="submit" disabled={saving}>
           {saving ? "Guardando…" : "Guardar"}
@@ -508,7 +515,7 @@ function History({ ingredient, onClose, onChanged }: { ingredient: Ingredient; o
               </span>
               <span>{formatPurchase(p)}</span>
               <span>{formatMoney(p.totalPrice)}</span>
-              <strong>{formatUnitCost(p.unitCost, ingredient.baseUnit)}</strong>
+              <strong>{formatUnitCost(p.unitCost, dimensionOf(p.purchaseUnit))}</strong>
               {p.supplierName && <span className={styles.itemMeta}>{p.supplierName}</span>}
               <button type="button" className={`${styles.linkButton} ${styles.dangerLink}`} onClick={() => setToDelete(p)}>
                 Eliminar
@@ -585,5 +592,66 @@ function NewIngredient({ onCreated }: { onCreated: (created: { id: string; name:
         </p>
       )}
     </form>
+  );
+}
+
+/* ---------- Equivalencia: "1 unidad = X g / ml" (solo si hace falta convertir) ---------- */
+
+function Equivalence({ ingredient, onSaved }: { ingredient: Ingredient; onSaved: () => void }) {
+  const { getToken } = useAuth();
+  const uid = useId();
+  const initialUnit: "G" | "ML" = !ingredient.gramsPerUnit && ingredient.mlPerUnit ? "ML" : "G";
+  const initial = initialUnit === "ML" ? ingredient.mlPerUnit : ingredient.gramsPerUnit;
+  const [amount, setAmount] = useState(initial ? toInput(initial) : "");
+  const [unit, setUnit] = useState<"G" | "ML">(initialUnit);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    const a = amount.trim() ? parseAmount(amount) : null;
+    if (amount.trim() && (!a || a <= 0)) return setMessage("Ingresá un número mayor a 0 (o dejalo vacío para quitarla).");
+    setSaving(true);
+    setMessage(null);
+    try {
+      const value = a ? toApiNumber(a, 4) : null;
+      // Una sola equivalencia por ingrediente: en g o en ml.
+      await updateIngredient(await getToken(), ingredient.id, unit === "G" ? { gramsPerUnit: value, mlPerUnit: null } : { mlPerUnit: value, gramsPerUnit: null });
+      onSaved();
+    } catch (e) {
+      setMessage(adminErrorMessage(e, "No pudimos guardar la equivalencia."));
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} noValidate className={styles.equivForm}>
+      <span className={styles.cellLabel}>Equivalencia (solo si una receta usa otra unidad que la compra)</span>
+      <span className={styles.equivRow}>
+        <span>1 unidad =</span>
+        <input aria-label="Cantidad" className={`${adminStyles.input} ${styles.cellInput} ${styles.equivInput}`} inputMode="decimal" autoComplete="off" placeholder="22" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <select id={`${uid}-u`} aria-label="Unidad" className={`${adminStyles.input} ${styles.select} ${styles.cellInput} ${styles.equivUnit}`} value={unit} onChange={(e) => setUnit(e.target.value as "G" | "ML")}>
+          <option value="G">g</option>
+          <option value="ML">ml</option>
+        </select>
+        <Button type="submit" variant="secondary" disabled={saving}>
+          {saving ? "…" : "Guardar"}
+        </Button>
+      </span>
+      {message && <p className={adminStyles.statusError}>{message}</p>}
+    </form>
+  );
+}
+
+/** Aviso cuando la compra es en otra dimensión que la habitual del ingrediente y no hay equivalencia. */
+function EquivalenceHint({ ingredient, unit }: { ingredient: Ingredient; unit: MeasureUnit }) {
+  const differs = dimensionOf(unit) !== ingredient.baseUnit;
+  if (!differs || ingredient.gramsPerUnit || ingredient.mlPerUnit) return null;
+  return (
+    <p className={`${styles.warnBox} ${styles.sheetMessage}`}>
+      Si alguna receta usa {ingredient.baseUnit === "UNIT" ? "unidades" : ingredient.baseUnit === "GRAM" ? "gramos" : "mililitros"} y esta compra es en {UNIT_LABEL[unit]}, definí la
+      equivalencia en ⋮ (ej. 1 unidad = 22 g).
+    </p>
   );
 }

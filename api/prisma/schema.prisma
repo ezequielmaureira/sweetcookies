@@ -243,13 +243,17 @@ enum MeasureUnit {
 }
 
 model Ingredient {
-  id        String             @id @default(cuid()) @db.VarChar(40)
-  name      String             @db.VarChar(80)
-  baseUnit  IngredientBaseUnit @map("base_unit")
+  id           String             @id @default(cuid()) @db.VarChar(40)
+  name         String             @db.VarChar(80)
+  baseUnit     IngredientBaseUnit @map("base_unit")
+  /// Equivalencias opcionales para convertir unidades ↔ peso/volumen (nunca se inventan):
+  /// "1 unidad = X g" y/o "1 unidad = X ml". Sin equivalencia no se convierte.
+  gramsPerUnit Decimal?           @map("grams_per_unit") @db.Decimal(14, 4)
+  mlPerUnit    Decimal?           @map("ml_per_unit") @db.Decimal(14, 4)
   /// Inactivo: sigue en las recetas que ya lo usan, pero no se ofrece para recetas nuevas.
-  active    Boolean            @default(true)
-  createdAt DateTime           @default(now()) @map("created_at")
-  updatedAt DateTime           @updatedAt @map("updated_at")
+  active       Boolean            @default(true)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
 
   /// Historial de compras: nunca se sobrescribe. Costo actual = compra más reciente.
   prices      IngredientPrice[]

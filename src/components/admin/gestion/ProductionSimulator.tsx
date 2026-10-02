@@ -264,7 +264,7 @@ export function ProductionSimulator() {
               <p className={styles.warnBox}>
                 <strong>⚠ COSTO INCOMPLETO</strong>
                 <br />
-                Faltan precios para calcular el costo total ({summary.missingPrices} {summary.missingPrices === 1 ? "ingrediente" : "ingredientes"}).
+                Faltan precios o equivalencias para calcular el costo total ({summary.missingPrices} {summary.missingPrices === 1 ? "ingrediente" : "ingredientes"}).
               </p>
             )}
             <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
@@ -359,11 +359,19 @@ export function ProductionSimulator() {
                         <li key={`${i.component}:${i.ingredientId}`} className={styles.item}>
                           <span className={styles.itemHead}>
                             <span className={styles.itemName}>{i.name}</span>
-                            {i.cost ? <span className={styles.cost}>{formatMoney(i.cost)}</span> : <span className={styles.warn}>⚠ SIN PRECIO</span>}
+                            {i.cost ? (
+                              <span className={styles.cost}>{formatMoney(i.cost)}</span>
+                            ) : (
+                              <span className={styles.warn}>{i.missing === "NO_EQUIVALENCE" ? "⚠ FALTA EQUIVALENCIA" : "⚠ SIN PRECIO"}</span>
+                            )}
                           </span>
                           <span className={styles.neededQty}>{formatNeeded(i.quantity, i.baseUnit)}</span>
                           {i.unitCost ? (
                             <span className={styles.itemMeta}>Costo actual: {formatUnitCost(i.unitCost, i.baseUnit)}</span>
+                          ) : i.missing === "NO_EQUIVALENCE" ? (
+                            <Link href={`/admin/gestion/ingredientes?equiv=${i.ingredientId}`} className={styles.inlineLink}>
+                              No se puede calcular: falta definir la equivalencia. Definir equivalencia →
+                            </Link>
                           ) : (
                             <Link href={`/admin/gestion/ingredientes?abrir=${i.ingredientId}`} className={styles.inlineLink}>
                               Cargar precio →

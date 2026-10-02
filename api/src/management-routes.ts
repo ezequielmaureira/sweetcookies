@@ -80,11 +80,11 @@ export function registerManagementRoutes(app: Hono<{ Variables: Variables }>, { 
   app.post("/api/admin/ingredients/:id/prices", bodyLimit({ maxSize: 4 * 1024, onError: tooLarge }), async (c: AppContext) => {
     const id = c.req.param("id") ?? "";
     if (!ID.test(id)) return notFound(c);
-    const baseUnit = await management.getIngredientBaseUnit(id);
-    if (!baseUnit) return notFound(c);
+    // Solo se verifica que el ingrediente exista: la compra puede ser en cualquier unidad.
+    if (!(await management.getIngredientBaseUnit(id))) return notFound(c);
     const parsed = await readJson(c);
     if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
-    const result = validatePriceInput(parsed.body, baseUnit);
+    const result = validatePriceInput(parsed.body);
     if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
     await management.addPrice(id, result.data);
     log(`[admin] ingredient ${id} price added by ${c.get("userId")}`);
@@ -96,11 +96,11 @@ export function registerManagementRoutes(app: Hono<{ Variables: Variables }>, { 
     const id = c.req.param("id") ?? "";
     const priceId = c.req.param("priceId") ?? "";
     if (!ID.test(id) || !ID.test(priceId)) return notFound(c);
-    const baseUnit = await management.getIngredientBaseUnit(id);
-    if (!baseUnit) return notFound(c);
+    // Solo se verifica que el ingrediente exista: la compra puede ser en cualquier unidad.
+    if (!(await management.getIngredientBaseUnit(id))) return notFound(c);
     const parsed = await readJson(c);
     if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
-    const result = validatePriceInput(parsed.body, baseUnit);
+    const result = validatePriceInput(parsed.body);
     if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
     if (!(await management.updatePrice(id, priceId, result.data))) return notFound(c);
     log(`[admin] ingredient ${id} price ${priceId} updated by ${c.get("userId")}`);

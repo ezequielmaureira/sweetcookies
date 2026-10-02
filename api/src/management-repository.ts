@@ -1,7 +1,7 @@
 import type { PrismaClient } from "./generated/prisma/client.ts";
 import {
   computeRecipe,
-  isRecipeUnitFor,
+  dimensionOf,
   simulateProduction,
   toIngredientJson,
   toPriceJson,
@@ -34,6 +34,8 @@ const toRow = (i: IngredientWithLatest): IngredientRow => ({
   name: i.name,
   baseUnit: i.baseUnit,
   active: i.active,
+  gramsPerUnit: i.gramsPerUnit,
+  mlPerUnit: i.mlPerUnit,
   createdAt: i.createdAt,
   updatedAt: i.updatedAt,
   currentPrice: i.prices[0] ?? null,
@@ -55,7 +57,16 @@ type RecipeWithRelations = {
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
-  ingredients: { id: string; quantity: RecipeRow["lines"][number]["quantity"]; unit: RecipeRow["lines"][number]["unit"]; component: RecipeRow["lines"][number]["component"]; ingredient: { id: string; name: string; baseUnit: IngredientRow["baseUnit"]; active: boolean; prices: { unitCost: RecipeRow["lines"][number]["quantity"] }[] } }[];
+  ingredients: { id: string; quantity: RecipeRow["lines"][number]["quantity"]; unit: RecipeRow["lines"][number]["unit"]; component: RecipeRow["lines"][number]["component"]; ingredient: {
+      id: string;
+      name: string;
+      baseUnit: IngredientRow["baseUnit"];
+      active: boolean;
+      gramsPerUnit: IngredientRow["gramsPerUnit"];
+      mlPerUnit: IngredientRow["mlPerUnit"];
+      prices: { unitCost: RecipeRow["lines"][number]["quantity"]; purchaseUnit: RecipeRow["lines"][number]["unit"] }[];
+    };
+  }[];
   extraCosts: RecipeRow["extras"];
 };
 
@@ -66,7 +77,16 @@ const toRecipeRow = (r: RecipeWithRelations): RecipeRow => ({
       quantity: l.quantity,
       unit: l.unit,
       component: l.component,
-      ingredient: { id: l.ingredient.id, name: l.ingredient.name, baseUnit: l.ingredient.baseUnit, active: l.ingredient.active, unitCost: l.ingredient.prices[0]?.unitCost ?? null },
+      ingredient: {
+        id: l.ingredient.id,
+        name: l.ingredient.name,
+        baseUnit: l.ingredient.baseUnit,
+        active: l.ingredient.active,
+        gramsPerUnit: l.ingredient.gramsPerUnit,
+        mlPerUnit: l.ingredient.mlPerUnit,
+        // Precio vigente en la dimensión en que se compró (g / ml / unidad).
+        price: l.ingredient.prices[0] ? { unitCost: l.ingredient.prices[0].unitCost, dimension: dimensionOf(l.ingredient.prices[0].purchaseUnit) } : null,
+      },
     })),
     extras: r.extraCosts,
   });
@@ -81,16 +101,15 @@ export function createManagementRepository(prisma: PrismaClient) {
     return row ? toRow(row) : null;
   };
 
-  /** Valida las líneas contra los ingredientes reales (existencia, unidad, activo). */
+  /** Valida las líneas contra los ingredientes reales (existencia, activo). Cualquier unidad sirve: la conversión la resuelve el costo. */
   async function checkLines(input: RecipeInput, allowInactive: Set<string>): Promise<Record<string, string>> {
     const ids = [...new Set(input.lines.map((l) => l.ingredientId))];
-    const found = new Map((await prisma.ingredient.findMany({ where: { id: { in: ids } }, select: { id: true, baseUnit: true, active: true } })).map((i) => [i.id, i]));
+    const found = new Map((await prisma.ingredient.findMany({ where: { id: { in: ids } }, select: { id: true, active: true } })).map((i) => [i.id, i]));
     const errors: Record<string, string> = {};
     input.lines.forEach((line, i) => {
       const ingredient = found.get(line.ingredientId);
       if (!ingredient) errors[`ingredients.${i}.ingredientId`] = "Ese ingrediente ya no existe.";
       else if (!ingredient.active && !allowInactive.has(ingredient.id)) errors[`ingredients.${i}.ingredientId`] = "Ese ingrediente está inactivo.";
-      else if (!isRecipeUnitFor(ingredient.baseUnit, line.unit)) errors[`ingredients.${i}.unit`] = "Esa unidad no corresponde a este ingrediente.";
     });
     return errors;
   }
@@ -120,13 +139,10 @@ export function createManagementRepository(prisma: PrismaClient) {
       return { id: created.id };
     },
 
-    /** La unidad base no se puede cambiar si ya tiene precios o se usa en recetas (rompería los cálculos). */
+    /** Nombre, activo y equivalencias ("1 unidad = X g / ml"). La unidad habitual ya no limita nada. */
     async updateIngredient(id: string, data: IngredientInput): Promise<Result<{ id: string }>> {
       const row = await getIngredientRow(id);
       if (!row) return notFound;
-      if (data.baseUnit && data.baseUnit !== row.baseUnit && (row.priceCount > 0 || row.recipeCount > 0)) {
-        return { ok: false, status: 409, error: "base_unit_locked", fields: { baseUnit: "No se puede cambiar la unidad: el ingrediente ya tiene precios o se usa en recetas." } };
-      }
       await prisma.ingredient.update({ where: { id }, data });
       return { ok: true, data: { id } };
     },

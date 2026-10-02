@@ -9,9 +9,12 @@ import { ConfirmDialog } from "@/components/vouchers/ConfirmDialog";
 import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import {
   COMPONENT_LABELS,
-  MEASURE_LABELS,
   PARTS,
-  RECIPE_UNITS,
+  ALL_UNITS,
+  DEFAULT_UNIT,
+  UNIT_OPTION,
+  costIn,
+  dimensionOf,
   createRecipe,
   deleteRecipe,
   formatMoney,
@@ -130,9 +133,12 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
   const lineInfo = lines.map((line) => {
     const ingredient = byId.get(line.ingredientId);
     const q = parseAmount(line.quantity);
-    const missingPrice = Boolean(ingredient && !ingredient.unitCost);
-    const subtotal = ingredient?.unitCost && q ? toBase(q, line.unit) * Number(ingredient.unitCost) : null;
-    return { ingredient, subtotal, missingPrice };
+    // Costo en la dimensión de la línea (g / ml / unidad), con la equivalencia si hace falta.
+    const unitCost = ingredient ? costIn(ingredient, dimensionOf(line.unit)) : null;
+    const reason: "NO_PRICE" | "NO_EQUIVALENCE" | null = !ingredient ? null : !ingredient.unitCost ? "NO_PRICE" : unitCost === null ? "NO_EQUIVALENCE" : null;
+    const missingPrice = reason !== null;
+    const subtotal = unitCost !== null && q ? toBase(q, line.unit) * unitCost : null;
+    return { ingredient, subtotal, missingPrice, reason, unitCost };
   });
   const ingredientsCost = lineInfo.reduce((sum, l) => sum + (l.subtotal ?? 0), 0);
   const missing = lineInfo.filter((l) => l.missingPrice).length;
@@ -157,9 +163,9 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
       prev.map((l) => {
         if (l.key !== key) return l;
         const next = { ...l, ...patch };
-        // Al cambiar de ingrediente, la unidad tiene que corresponder a su unidad base.
+        // Al elegir otro ingrediente se propone su unidad habitual (después se puede cambiar).
         const ingredient = byId.get(next.ingredientId);
-        if (ingredient && !RECIPE_UNITS[ingredient.baseUnit].includes(next.unit)) next.unit = RECIPE_UNITS[ingredient.baseUnit][0];
+        if (patch.ingredientId !== undefined && ingredient) next.unit = DEFAULT_UNIT[ingredient.baseUnit];
         return next;
       }),
     );
@@ -237,9 +243,9 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
   const activeIngredients = ingredients.filter((i) => i.active);
 
   const renderLine = (line: Line, i: number) => {
-    const { ingredient, subtotal } = lineInfo[i];
+    const { ingredient, subtotal, reason, unitCost } = lineInfo[i];
     const options = ingredient && !ingredient.active ? [ingredient, ...activeIngredients] : activeIngredients;
-    const units = ingredient ? RECIPE_UNITS[ingredient.baseUnit] : (["G"] as MeasureUnit[]);
+    const units: readonly MeasureUnit[] = ALL_UNITS;
     return (
       <div key={line.key} className={styles.line}>
         <div className={adminStyles.field}>
@@ -312,12 +318,11 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
               id={`${uid}-${line.key}-u`}
               className={`${adminStyles.input} ${styles.select}`}
               value={line.unit}
-              disabled={!ingredient}
               onChange={(e) => updateLine(line.key, { unit: e.target.value as MeasureUnit })}
             >
               {units.map((u) => (
                 <option key={u} value={u}>
-                  {MEASURE_LABELS[u]}
+                  {UNIT_OPTION[u]}
                 </option>
               ))}
             </select>
@@ -326,8 +331,13 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
         </div>
         <div className={styles.lineFoot}>
           {ingredient &&
-            (ingredient.unitCost ? (
-              <span className={styles.lineCost}>{formatUnitCost(ingredient.unitCost, ingredient.baseUnit)}</span>
+            (unitCost !== null ? (
+              <span className={styles.lineCost}>{formatUnitCost(unitCost, dimensionOf(line.unit))}</span>
+            ) : reason === "NO_EQUIVALENCE" ? (
+              <span className={styles.warn}>
+                ⚠ No se puede calcular: falta definir la equivalencia de este ingrediente.{" "}
+                <Link href={`/admin/gestion/ingredientes?equiv=${ingredient.id}`}>Definir equivalencia</Link>
+              </span>
             ) : (
               <span className={styles.warn}>⚠ Falta cargar precio</span>
             ))}
@@ -542,14 +552,14 @@ export function RecipeEditor({ recipeId }: { recipeId?: string }) {
             <strong>⚠ RECETA INCOMPLETA</strong>
             <br />
             Faltan datos para calcular el costo real.
-            {missing > 0 && ` Además, ${missing} ${missing === 1 ? "ingrediente no tiene" : "ingredientes no tienen"} precio.`}
+            {missing > 0 && ` Además, ${missing} ${missing === 1 ? "ingrediente no tiene" : "ingredientes no tienen"} precio o equivalencia.`}
           </p>
         ) : (
           !complete && (
             <p className={styles.warnBox}>
               <strong>⚠ COSTO INCOMPLETO</strong>
               <br />
-              No se puede calcular el costo final porque hay ingredientes sin precio ({missing}).
+              No se puede calcular el costo final: hay ingredientes sin precio o sin equivalencia ({missing}).
             </p>
           )
         )}

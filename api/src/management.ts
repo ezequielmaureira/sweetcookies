@@ -3,9 +3,16 @@
  * validación y cálculo de costos. Lógica pura (sin DB ni HTTP).
  *
  * Todo el cálculo usa Decimal (nunca Float):
- *   compra → cantidad en unidad base (g, ml o unidades) → costo por unidad base
- *   receta → cantidad en unidad base × costo actual = subtotal
+ *   compra → cantidad en g, ml o unidades (según SU unidad) → costo por g / ml / unidad
+ *   receta → cantidad (en SU unidad) convertida a la de la compra × costo = subtotal
  *   total receta = ingredientes + gastos · costo por cookie = total / rendimiento
+ *
+ * Un ingrediente se puede comprar y usar en cualquier unidad (g, kg, ml, litro,
+ * unidad). Conversiones (un solo motor: convertBase / costPerBase):
+ *   - siempre: kg ↔ g, litro ↔ ml;
+ *   - unidad ↔ g / ml: solo con la equivalencia del ingrediente ("1 unidad = 22 g");
+ *   - g ↔ ml: nunca (haría falta la densidad).
+ * Sin conversión posible el costo queda incompleto ("falta equivalencia"), nunca 0.
  */
 import { Prisma } from "./generated/prisma/client.ts";
 
@@ -17,17 +24,9 @@ export type MeasureUnit = "G" | "KG" | "ML" | "L" | "UNIT" | "PACKAGE";
 
 export const BASE_UNITS: readonly BaseUnit[] = ["GRAM", "MILLILITER", "UNIT"];
 
-/** Unidades permitidas por unidad base (PACKAGE solo para compras). */
-const PURCHASE_UNITS: Record<BaseUnit, readonly MeasureUnit[]> = {
-  GRAM: ["G", "KG"],
-  MILLILITER: ["ML", "L"],
-  UNIT: ["UNIT", "PACKAGE"],
-};
-const RECIPE_UNITS: Record<BaseUnit, readonly MeasureUnit[]> = {
-  GRAM: ["G", "KG"],
-  MILLILITER: ["ML", "L"],
-  UNIT: ["UNIT"],
-};
+/** Unidades de compra y de receta, para cualquier ingrediente (PACKAGE: solo compras viejas). */
+const PURCHASE_UNITS: readonly MeasureUnit[] = ["G", "KG", "ML", "L", "UNIT", "PACKAGE"];
+const RECIPE_UNITS: readonly MeasureUnit[] = ["G", "KG", "ML", "L", "UNIT"];
 
 /** Factor a la unidad base: 1 kg = 1000 g · 1 l = 1000 ml. */
 const FACTOR: Record<Exclude<MeasureUnit, "PACKAGE">, number> = { G: 1, KG: 1000, ML: 1, L: 1000, UNIT: 1 };
@@ -36,6 +35,38 @@ const FACTOR: Record<Exclude<MeasureUnit, "PACKAGE">, number> = { G: 1, KG: 1000
 export function toBaseQuantity(quantity: Decimal, unit: MeasureUnit, unitsPerPackage?: Decimal | null): Decimal {
   if (unit === "PACKAGE") return quantity.mul(unitsPerPackage ?? 0);
   return quantity.mul(FACTOR[unit]);
+}
+
+/** Dimensión de una unidad: peso (en g), volumen (en ml) o cantidad (en unidades). */
+export const dimensionOf = (unit: MeasureUnit): BaseUnit => (unit === "G" || unit === "KG" ? "GRAM" : unit === "ML" || unit === "L" ? "MILLILITER" : "UNIT");
+
+/** Equivalencias del ingrediente: "1 unidad = X g" / "1 unidad = X ml" (null = no definida). */
+export type Equivalences = { gramsPerUnit: Decimal | null; mlPerUnit: Decimal | null };
+
+/**
+ * Pasa una cantidad de una dimensión a otra (g, ml o unidades). null = no se
+ * puede: falta la equivalencia del ingrediente, o es g ↔ ml (necesita densidad).
+ */
+export function convertBase(quantity: Decimal, from: BaseUnit, to: BaseUnit, eq: Equivalences): Decimal | null {
+  if (from === to) return quantity;
+  if (from === "UNIT" && to === "GRAM") return eq.gramsPerUnit ? quantity.mul(eq.gramsPerUnit) : null;
+  if (from === "GRAM" && to === "UNIT") return eq.gramsPerUnit ? quantity.div(eq.gramsPerUnit) : null;
+  if (from === "UNIT" && to === "MILLILITER") return eq.mlPerUnit ? quantity.mul(eq.mlPerUnit) : null;
+  if (from === "MILLILITER" && to === "UNIT") return eq.mlPerUnit ? quantity.div(eq.mlPerUnit) : null;
+  return null;
+}
+
+/** Precio vigente: costo por g / ml / unidad de la dimensión en que se COMPRÓ. */
+export type CurrentCost = { unitCost: Decimal; dimension: BaseUnit };
+
+/**
+ * Costo actual expresado en la dimensión que necesita la receta.
+ * Ej.: compra 1 barra a $1.590,80 + "1 unidad = 22 g" → $72,31 / g.
+ * null = no hay conversión posible (falta equivalencia).
+ */
+export function costPerBase(price: CurrentCost, dimension: BaseUnit, eq: Equivalences): Decimal | null {
+  const inPurchaseDimension = convertBase(new Decimal(1), dimension, price.dimension, eq);
+  return inPurchaseDimension ? price.unitCost.mul(inPurchaseDimension) : null;
 }
 
 /* ---------- Validación ---------- */
@@ -62,7 +93,7 @@ function nameFrom(value: unknown): string | null {
   return name && name.length <= NAME_MAX ? name : null;
 }
 
-export type IngredientInput = { name?: string; baseUnit?: BaseUnit; active?: boolean };
+export type IngredientInput = { name?: string; baseUnit?: BaseUnit; active?: boolean; gramsPerUnit?: Decimal | null; mlPerUnit?: Decimal | null };
 
 export function validateIngredientInput(input: unknown, partial: boolean): Validation<IngredientInput> {
   const body = obj(input);
@@ -81,6 +112,17 @@ export function validateIngredientInput(input: unknown, partial: boolean): Valid
     if (typeof body.active === "boolean") data.active = body.active;
     else errors.active = "Valor inválido.";
   }
+  // Equivalencias: número > 0, o null / "" para quitarla.
+  for (const key of ["gramsPerUnit", "mlPerUnit"] as const) {
+    const value = body[key];
+    if (value === undefined) continue;
+    if (value === null || value === "") data[key] = null;
+    else {
+      const d = decimalFrom(value, QUANTITY);
+      if (d && d.gt(0)) data[key] = d;
+      else errors[key] = "Ingresá un número mayor a 0.";
+    }
+  }
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, data };
 }
 
@@ -95,8 +137,11 @@ export type PriceData = {
   purchasedAt: Date;
 };
 
-/** Compra: cantidad + unidad + precio total → costo por unidad base. */
-export function validatePriceInput(input: unknown, baseUnit: BaseUnit): Validation<PriceData> {
+/**
+ * Compra: cantidad + unidad (cualquiera: g, kg, ml, litro, unidad) + precio
+ * total → costo por g / ml / unidad, según la unidad de ESA compra.
+ */
+export function validatePriceInput(input: unknown): Validation<PriceData> {
   const body = obj(input);
   const errors: Errors = {};
 
@@ -104,7 +149,7 @@ export function validatePriceInput(input: unknown, baseUnit: BaseUnit): Validati
   if (!quantity || quantity.lte(0)) errors.quantity = "Ingresá cuánto compraste (mayor a 0).";
 
   const unit = body.unit as MeasureUnit;
-  if (!PURCHASE_UNITS[baseUnit].includes(unit)) errors.unit = "Elegí una unidad válida para este ingrediente.";
+  if (!PURCHASE_UNITS.includes(unit)) errors.unit = "Elegí g, kg, ml, litro o unidad.";
 
   let unitsPerPackage: Decimal | null = null;
   if (unit === "PACKAGE") {
@@ -215,7 +260,7 @@ export function validateRecipeInput(input: unknown): Validation<RecipeInput> {
     if (!RECIPE_COMPONENTS.includes(component)) errors[`ingredients.${i}.component`] = "Elegí masa o relleno.";
     if (!ingredientId) errors[`ingredients.${i}.ingredientId`] = "Elegí un ingrediente.";
     if (!quantity || quantity.lte(0)) errors[`ingredients.${i}.quantity`] = "Ingresá la cantidad (mayor a 0).";
-    if (!["G", "KG", "ML", "L", "UNIT"].includes(unit)) errors[`ingredients.${i}.unit`] = "Elegí la unidad.";
+    if (!RECIPE_UNITS.includes(unit)) errors[`ingredients.${i}.unit`] = "Elegí la unidad.";
     if (ingredientId && quantity && quantity.gt(0)) lines.push({ ingredientId, quantity, unit, component });
   });
 
@@ -234,9 +279,6 @@ export function validateRecipeInput(input: unknown): Validation<RecipeInput> {
   if (Object.keys(errors).length || !name) return { ok: false, errors };
   return { ok: true, data: { name, yieldQuantity, status, notes, lines, extras } };
 }
-
-/** ¿Esa unidad sirve para ese ingrediente en una receta? */
-export const isRecipeUnitFor = (baseUnit: BaseUnit, unit: MeasureUnit) => RECIPE_UNITS[baseUnit].includes(unit);
 
 /* ---------- Costos ---------- */
 
@@ -258,6 +300,8 @@ export type IngredientRow = {
   name: string;
   baseUnit: BaseUnit;
   active: boolean;
+  gramsPerUnit: Decimal | null;
+  mlPerUnit: Decimal | null;
   createdAt: Date;
   updatedAt: Date;
   /** Compra más reciente (costo actual), o null si no tiene precios. */
@@ -287,10 +331,14 @@ export const toIngredientJson = (i: IngredientRow) => ({
   name: i.name,
   baseUnit: i.baseUnit,
   active: i.active,
+  /** "1 unidad = X g" / "1 unidad = X ml" (null = sin equivalencia). */
+  gramsPerUnit: i.gramsPerUnit?.toString() ?? null,
+  mlPerUnit: i.mlPerUnit?.toString() ?? null,
   createdAt: i.createdAt.toISOString(),
   updatedAt: i.updatedAt.toISOString(),
-  /** Costo actual por unidad base (string con precisión completa) o null = sin precio. */
+  /** Costo actual (precisión completa) por g / ml / unidad según costUnit, o null = sin precio. */
   unitCost: i.currentPrice?.unitCost.toString() ?? null,
+  costUnit: i.currentPrice ? dimensionOf(i.currentPrice.purchaseUnit) : null,
   lastPriceDate: i.currentPrice ? dateOnly(i.currentPrice.purchasedAt) : null,
   /** Compra vigente (precio pagado, cantidad y unidad tal como se cargó), para la vista tipo planilla. */
   currentPrice: i.currentPrice ? toPriceJson(i.currentPrice) : null,
@@ -307,7 +355,13 @@ export type RecipeRow = {
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
-  lines: { id: string; quantity: Decimal; unit: MeasureUnit; component: RecipeComponent; ingredient: { id: string; name: string; baseUnit: BaseUnit; active: boolean; unitCost: Decimal | null } }[];
+  lines: {
+    id: string;
+    quantity: Decimal;
+    unit: MeasureUnit;
+    component: RecipeComponent;
+    ingredient: { id: string; name: string; baseUnit: BaseUnit; active: boolean; price: CurrentCost | null } & Equivalences;
+  }[];
   extras: { id: string; name: string; amount: Decimal }[];
 };
 
@@ -322,22 +376,29 @@ const emptyParts = (): Parts => ({
   UNASSIGNED: { known: new Decimal(0), missing: 0, lines: 0 },
 });
 
+/** Por qué una línea no tiene costo: sin precio, o sin equivalencia para convertir. */
+export type MissingReason = "NO_PRICE" | "NO_EQUIVALENCE";
+
 /**
- * Cada línea de la receta × factor: cantidad en unidad base y costo con el
- * precio actual, acumulado por parte (masa, relleno, sin clasificar).
+ * Cada línea de la receta × factor: cantidad (en g / ml / unidades, según la
+ * unidad de la LÍNEA) y costo con el precio actual convertido a esa dimensión;
+ * acumulado por parte (masa, relleno, sin clasificar).
  * factor = 1 para la receta base; cookies / rendimiento en el simulador.
  */
 function costLines(r: RecipeRow, factor: Decimal) {
   const parts = emptyParts();
   const lines = r.lines.map((line) => {
+    const dimension = dimensionOf(line.unit);
     const baseQuantity = toBaseQuantity(line.quantity, line.unit).mul(factor);
-    const unitCost = line.ingredient.unitCost;
+    const price = line.ingredient.price;
+    const unitCost = price ? costPerBase(price, dimension, line.ingredient) : null;
+    const missing: MissingReason | null = !price ? "NO_PRICE" : !unitCost ? "NO_EQUIVALENCE" : null;
     const subtotal = unitCost ? baseQuantity.mul(unitCost) : null;
     const part = parts[line.component];
     part.lines++;
     if (subtotal) part.known = part.known.add(subtotal);
     else part.missing++;
-    return { line, baseQuantity, unitCost, subtotal };
+    return { line, dimension, baseQuantity, unitCost, subtotal, missing };
   });
   return { lines, parts };
 }
@@ -374,12 +435,14 @@ export function computeRecipe(r: RecipeRow) {
     active: r.active,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
-    ingredients: lines.map(({ line, baseQuantity, unitCost, subtotal }) => ({
+    ingredients: lines.map(({ line, dimension, baseQuantity, unitCost, subtotal, missing }) => ({
       id: line.id,
       ingredientId: line.ingredient.id,
       ingredientName: line.ingredient.name,
       ingredientActive: line.ingredient.active,
-      baseUnit: line.ingredient.baseUnit,
+      /** Dimensión de la línea (g / ml / unidad): unitCost y baseQuantity están en ella. */
+      baseUnit: dimension,
+      missing,
       component: line.component,
       quantity: line.quantity.toString(),
       unit: line.unit,
@@ -459,7 +522,16 @@ const addParts = (into: Parts, from: Parts) => {
  * listo para cruzar con stock y armar la lista de compras.
  */
 export function simulateProduction(recipes: Map<string, RecipeRow>, items: SimulationItem[]) {
-  type Total = { id: string; name: string; baseUnit: BaseUnit; component: RecipeComponent; unitCost: Decimal | null; quantity: Decimal; byRecipe: Map<string, Decimal> };
+  type Total = {
+    id: string;
+    name: string;
+    baseUnit: BaseUnit;
+    component: RecipeComponent;
+    unitCost: Decimal | null;
+    missing: MissingReason | null;
+    quantity: Decimal;
+    byRecipe: Map<string, Decimal>;
+  };
   const totals = new Map<string, Total>();
   const productionParts = emptyParts();
   let totalCookies = 0;
@@ -470,15 +542,16 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
     const r = recipes.get(recipeId)!;
     const factor = recipeScaleFactor(cookies, r.yieldQuantity!);
     const { lines, parts } = costLines(r, factor);
-    for (const { line, baseQuantity, unitCost } of lines) {
-      // Un mismo ingrediente puede estar en partes distintas: se agrupa por parte + ingrediente.
-      const key = `${line.component}:${line.ingredient.id}`;
+    for (const { line, dimension, baseQuantity, unitCost, missing } of lines) {
+      // Se agrupa por parte + ingrediente + dimensión (g, ml o unidades no se suman entre sí).
+      const key = `${line.component}:${line.ingredient.id}:${dimension}`;
       const t: Total = totals.get(key) ?? {
         id: line.ingredient.id,
         name: line.ingredient.name,
-        baseUnit: line.ingredient.baseUnit,
+        baseUnit: dimension,
         component: line.component,
         unitCost,
+        missing,
         quantity: new Decimal(0),
         byRecipe: new Map(),
       };
@@ -525,7 +598,9 @@ export function simulateProduction(recipes: Map<string, RecipeRow>, items: Simul
         name: t.name,
         baseUnit: t.baseUnit,
         component: t.component,
-        /** Cantidad necesaria en unidad base (g, ml o unidades). */
+        /** null, o por qué no tiene costo: sin precio / falta equivalencia. */
+        missing: t.missing,
+        /** Cantidad necesaria en g, ml o unidades (según baseUnit). */
         quantity: t.quantity.toDecimalPlaces(4).toString(),
         unitCost: t.unitCost?.toString() ?? null,
         cost: cost ? money(cost) : null,
