@@ -5,6 +5,8 @@ import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import { getAdminSiteTexts, saveAdminSiteTexts, type AdminSiteTexts, type SiteTextField } from "@/lib/admin/site-content-api";
+import { SITE_TEXT_GUIDES } from "@/lib/admin/site-text-guides";
+import { SiteTextGuide } from "./SiteTextGuide";
 import styles from "./Admin.module.css";
 
 type LoadState = "loading" | "ready" | "error";
@@ -86,7 +88,7 @@ export function SiteTextsForm() {
 
   const saving = save.kind === "saving";
 
-  const renderField = (field: SiteTextField) => {
+  const renderField = (field: SiteTextField, number?: number) => {
     const id = `${uid}-${field.key}`;
     const value = values[field.key] ?? "";
     const error = errors[field.key];
@@ -104,6 +106,7 @@ export function SiteTextsForm() {
       <div key={field.key} className={styles.field}>
         <div className={styles.fieldHead}>
           <label htmlFor={id} className={styles.label}>
+            {number && <span className={styles.fieldNumber}>{number}</span>}
             {field.label}
           </label>
           {value !== field.defaultValue && (
@@ -138,15 +141,22 @@ export function SiteTextsForm() {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate aria-busy={saving}>
-      {data.sections.map((section) => (
-        <section key={section.id} className={styles.section} aria-labelledby={`${uid}-${section.id}`}>
-          <h2 id={`${uid}-${section.id}`} className={styles.sectionTitle}>
-            {section.label}
-          </h2>
-          <p className={styles.sectionLead}>{section.description}</p>
-          {section.fields.map(renderField)}
-        </section>
-      ))}
+      {data.sections.map((section) => {
+        // Se numeran los campos que se ven en la imagen de referencia, en el orden del formulario.
+        const guide = SITE_TEXT_GUIDES[section.id];
+        const numbers: Record<string, number> = {};
+        if (guide) section.fields.filter((f) => guide.boxes[f.key]).forEach((f, i) => (numbers[f.key] = i + 1));
+        return (
+          <section key={section.id} className={styles.section} aria-labelledby={`${uid}-${section.id}`}>
+            <h2 id={`${uid}-${section.id}`} className={styles.sectionTitle}>
+              {section.label}
+            </h2>
+            <p className={styles.sectionLead}>{section.description}</p>
+            {guide && <SiteTextGuide guide={guide} numbers={numbers} />}
+            {section.fields.map((field) => renderField(field, numbers[field.key]))}
+          </section>
+        );
+      })}
 
       <p className={styles.help}>Si dejás un campo vacío, la web vuelve a mostrar el texto original.</p>
 

@@ -461,3 +461,67 @@ a.card:hover {
   border-top: 1px solid var(--color-line);
   background: var(--color-cream, #fbf6ee);
 }
+
+/* Ayuda visual: captura de la sección con recuadros numerados */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.guideFrame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream);
+}
+
+.guideImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.guideBox {
+  position: absolute;
+  border: 2px solid var(--color-chocolate);
+  border-radius: 6px;
+  background: rgba(176, 78, 54, 0.08);
+}
+
+.guideNumber {
+  position: absolute;
+  top: -11px;
+  left: -11px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(35, 28, 24, 0.25);
+}
+
+/* Número del campo, igual al de la imagen */
+.fieldNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  margin-right: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: 1px;
+}
