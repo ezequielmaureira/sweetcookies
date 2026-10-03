@@ -44,6 +44,10 @@ export function boxImageStyle({ scale, x, y, rotation }: Pick<BoxViewSource, "sc
   } as const;
 }
 
+/** Fondo del marco: negro liso cuando la foto se achicó (zoom < 100 %) y no lo cubre. */
+export const FRAME_FILL = "#000";
+export const frameBackground = (scale: number) => (scale < 1 ? FRAME_FILL : undefined);
+
 /* ---------- Formato de la caja ---------- */
 
 export type BoxFormat = { capacity: number; columns: number; rows: number };

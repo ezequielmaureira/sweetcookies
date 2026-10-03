@@ -24,6 +24,9 @@ export type BoxView = {
   imageY: number;
 };
 
+/** Zoom mínimo de los encuadres: debajo de 1 la foto se achica y el resto del marco se ve negro. */
+export const MIN_SCALE = 0.3;
+
 export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0, imageScale: 1, imageX: 50, imageY: 50 };
 
 export type Product = BoxView & {
@@ -109,11 +112,11 @@ export function parseCatalog(data: unknown): Product[] | null {
         category: typeof p.category === "string" ? p.category : null,
         featured: p.featured === true,
         boxImageUrl: safeImage(p.boxImageUrl),
-        boxImageScale: clamp(p.boxImageScale, 1, 4, 1),
+        boxImageScale: clamp(p.boxImageScale, MIN_SCALE, 4, 1),
         boxImageX: clamp(p.boxImageX, 0, 100, 50),
         boxImageY: clamp(p.boxImageY, 0, 100, 50),
         boxImageRotation: clamp(p.boxImageRotation, -180, 180, 0),
-        imageScale: clamp(p.imageScale, 1, 4, 1),
+        imageScale: clamp(p.imageScale, MIN_SCALE, 4, 1),
         imageX: clamp(p.imageX, 0, 100, 50),
         imageY: clamp(p.imageY, 0, 100, 50),
       },

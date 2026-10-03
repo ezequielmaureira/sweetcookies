@@ -1,9 +1,10 @@
 "use client";
 
 import { useId, useRef } from "react";
+import { MIN_SCALE } from "@/lib/catalog";
 import styles from "./Products.module.css";
 
-/** Encuadre de una foto: zoom (1–4), punto central (0–100 %) y, opcional, rotación. */
+/** Encuadre de una foto: zoom (0,3–4; debajo de 1 se achica con fondo negro), punto central (0–100 %) y, opcional, rotación. */
 export type Framing = { scale: number; x: number; y: number; rotation?: number };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -72,7 +73,7 @@ export function FramingControls({
 
   return (
     <div className={styles.sliders}>
-      {slider("scale", "Zoom", 1, 4, 0.05, `${Math.round(value.scale * 100)}%`)}
+      {slider("scale", "Zoom", MIN_SCALE, 4, 0.05, `${Math.round(value.scale * 100)}%`)}
       {slider("x", "Horizontal", 0, 100, 0.5, `${Math.round(value.x)}%`)}
       {slider("y", "Vertical", 0, 100, 0.5, `${Math.round(value.y)}%`)}
       {withRotation && slider("rotation", "Rotación", -180, 180, 1, `${value.rotation ?? 0}°`)}

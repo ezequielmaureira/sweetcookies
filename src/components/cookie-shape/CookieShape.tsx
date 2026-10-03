@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { boxImageStyle, type BoxViewSource } from "@/lib/box-view";
+import { boxImageStyle, frameBackground, type BoxViewSource } from "@/lib/box-view";
 import { isRemoteImage, resolveImageSrc } from "@/lib/catalog";
 import styles from "./CookieShape.module.css";
 
@@ -48,7 +48,7 @@ export function CookieShape({ view, label = "", variant = 0, sizes = "120px", cl
 
   return (
     <span className={[styles.shape, className].filter(Boolean).join(" ")} role={label ? "img" : undefined} aria-label={label || undefined}>
-      <span className={styles.mask} style={{ maskImage: mask, WebkitMaskImage: mask }}>
+      <span className={styles.mask} style={{ maskImage: mask, WebkitMaskImage: mask, background: showImage ? frameBackground(view.scale) : undefined }}>
         {showImage ? (
           <Image
             src={src}

@@ -27,7 +27,8 @@ export type BoxView = {
   imageY: number;
 };
 
-export const BOX_LIMITS = { minScale: 1, maxScale: 4, minRotation: -180, maxRotation: 180 } as const;
+/** Zoom 0,3–4: debajo de 1 la foto se achica dentro del marco (el resto se ve negro). */
+export const BOX_LIMITS = { minScale: 0.3, maxScale: 4, minRotation: -180, maxRotation: 180 } as const;
 
 export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0, imageScale: 1, imageX: 50, imageY: 50 };
 
@@ -258,11 +259,11 @@ export function validateProductInput(body: unknown, partial: boolean): ProductVa
     if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) errors[key] = message;
     else data[key] = integer ? value : Math.round(value * 100) / 100;
   };
-  numberIn("boxImageScale", BOX_LIMITS.minScale, BOX_LIMITS.maxScale, false, "El zoom va de 1 a 4.");
+  numberIn("boxImageScale", BOX_LIMITS.minScale, BOX_LIMITS.maxScale, false, "El zoom va de 30 % a 400 %.");
   numberIn("boxImageX", 0, 100, false, "La posición horizontal va de 0 a 100.");
   numberIn("boxImageY", 0, 100, false, "La posición vertical va de 0 a 100.");
   numberIn("boxImageRotation", BOX_LIMITS.minRotation, BOX_LIMITS.maxRotation, true, "La rotación va de −180° a 180°.");
-  numberIn("imageScale", BOX_LIMITS.minScale, BOX_LIMITS.maxScale, false, "El zoom va de 1 a 4.");
+  numberIn("imageScale", BOX_LIMITS.minScale, BOX_LIMITS.maxScale, false, "El zoom va de 30 % a 400 %.");
   numberIn("imageX", 0, 100, false, "La posición horizontal va de 0 a 100.");
   numberIn("imageY", 0, 100, false, "La posición vertical va de 0 a 100.");
 

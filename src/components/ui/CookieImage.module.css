@@ -28,3 +28,10 @@
   text-align: center;
   padding-inline: 12px;
 }
+
+/* Marco cuando la foto se achica: ocupa el contenedor y lo de afuera queda negro. */
+.frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { boxImageStyle } from "@/lib/box-view";
+import { boxImageStyle, frameBackground } from "@/lib/box-view";
 import { isRemoteImage, resolveImageSrc } from "@/lib/catalog";
 import styles from "./CookieImage.module.css";
 
@@ -44,7 +44,7 @@ export function CookieImage({ src: stored, alt, sizes, priority, placeholderLabe
     );
   }
 
-  return (
+  const image = (
     <Image
       src={src}
       alt={alt}
@@ -59,4 +59,13 @@ export function CookieImage({ src: stored, alt, sizes, priority, placeholderLabe
       onError={() => setFailed(true)}
     />
   );
+  // Achicada (zoom < 100 %): marco propio con fondo negro alrededor de la foto.
+  if (framing && framing.scale < 1) {
+    return (
+      <span className={styles.frame} style={{ background: frameBackground(framing.scale) }}>
+        {image}
+      </span>
+    );
+  }
+  return image;
 }
