@@ -33,11 +33,15 @@ export function boxViewSource(product: BoxView & { imageUrl: string | null }): B
 }
 
 /**
- * Estilo de la foto dentro de la silueta: cubre la cookie, el punto (x, y)
- * queda en el centro y el zoom / rotación giran alrededor de ese punto.
+ * Estilo de la foto dentro de su marco: el punto (x, y) queda en el centro y
+ * el zoom / rotación giran alrededor de ese punto. Con zoom ≥ 100 % cubre el
+ * marco; con zoom < 100 % se ve completa (sin recorte) y más chica.
  */
 export function boxImageStyle({ scale, x, y, rotation }: Pick<BoxViewSource, "scale" | "x" | "y" | "rotation">) {
   return {
+    // Zoom ≥ 100 %: "cover" (llena el marco, puede recortar). Zoom < 100 %: "contain"
+    // (la foto entera, sin recorte), achicada; lo que sobra se ve negro (frameBackground).
+    objectFit: scale < 1 ? "contain" : "cover",
     objectPosition: `${x}% ${y}%`,
     transformOrigin: `${x}% ${y}%`,
     transform: `scale(${scale})${rotation ? ` rotate(${rotation}deg)` : ""}`,
