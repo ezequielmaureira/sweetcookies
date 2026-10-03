@@ -18,9 +18,13 @@ export type BoxView = {
   boxImageX: number;
   boxImageY: number;
   boxImageRotation: number;
+  /** Encuadre de la FOTO PRINCIPAL (catálogo): zoom 1–4 y punto central 0–100 %. */
+  imageScale: number;
+  imageX: number;
+  imageY: number;
 };
 
-export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 };
+export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0, imageScale: 1, imageX: 50, imageY: 50 };
 
 export type Product = BoxView & {
   id: string;
@@ -109,6 +113,9 @@ export function parseCatalog(data: unknown): Product[] | null {
         boxImageX: clamp(p.boxImageX, 0, 100, 50),
         boxImageY: clamp(p.boxImageY, 0, 100, 50),
         boxImageRotation: clamp(p.boxImageRotation, -180, 180, 0),
+        imageScale: clamp(p.imageScale, 1, 4, 1),
+        imageX: clamp(p.imageX, 0, 100, 50),
+        imageY: clamp(p.imageY, 0, 100, 50),
       },
     ];
   });

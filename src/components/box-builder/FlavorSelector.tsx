@@ -55,6 +55,7 @@ export function FlavorSelector({ quantities, onIncrement, onDecrement }: FlavorS
                 alt={productAlt(product)}
                 sizes="(min-width: 1024px) 260px, (min-width: 640px) 30vw, 45vw"
                 placeholderLabel={product.name}
+                framing={{ scale: product.imageScale, x: product.imageX, y: product.imageY }}
               />
               {quantity > 0 && (
                 <span key={quantity} className={styles.badge} aria-hidden="true">

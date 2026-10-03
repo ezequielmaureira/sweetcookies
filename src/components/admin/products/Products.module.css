@@ -465,3 +465,33 @@
   min-height: 32px;
   accent-color: var(--color-chocolate);
 }
+
+/* Encuadre de la foto principal (misma proporción que la card del catálogo) */
+.mainFraming {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 640px) {
+  .mainFraming {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+}
+
+.mainFramingPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mainFramingFrame {
+  position: relative;
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-beige-deep);
+  touch-action: none;
+}

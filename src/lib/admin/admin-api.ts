@@ -61,6 +61,10 @@ export type BoxViewInput = {
   boxImageX: number;
   boxImageY: number;
   boxImageRotation: number;
+  /** Encuadre de la foto principal (catálogo). */
+  imageScale: number;
+  imageX: number;
+  imageY: number;
 };
 
 export type AdminProduct = BoxViewInput & {

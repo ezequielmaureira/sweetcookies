@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { boxImageStyle } from "@/lib/box-view";
 import { isRemoteImage, resolveImageSrc } from "@/lib/catalog";
 import styles from "./CookieImage.module.css";
 
@@ -14,6 +15,8 @@ type CookieImageProps = {
   /** Texto discreto del placeholder cuando falta la foto. */
   placeholderLabel?: string;
   className?: string;
+  /** Encuadre de la foto (zoom y punto central). Sin encuadre: centrada, como siempre. */
+  framing?: { scale: number; x: number; y: number };
 };
 
 /**
@@ -21,7 +24,7 @@ type CookieImageProps = {
  * Si falta el archivo o falla la carga, muestra un placeholder neutro.
  * El contenedor padre define el tamaño / aspect-ratio.
  */
-export function CookieImage({ src: stored, alt, sizes, priority, placeholderLabel, className }: CookieImageProps) {
+export function CookieImage({ src: stored, alt, sizes, priority, placeholderLabel, className, framing }: CookieImageProps) {
   const [failed, setFailed] = useState(false);
   // Las fotos subidas desde el panel se sirven desde la API.
   const src = resolveImageSrc(stored);
@@ -51,6 +54,8 @@ export function CookieImage({ src: stored, alt, sizes, priority, placeholderLabe
       // Imágenes https cargadas desde el admin: sin optimizador (no hay dominios configurados).
       unoptimized={isRemoteImage(src)}
       className={[styles.image, className].filter(Boolean).join(" ")}
+      style={framing ? boxImageStyle({ ...framing, rotation: 0 }) : undefined}
+      draggable={false}
       onError={() => setFailed(true)}
     />
   );

@@ -40,6 +40,7 @@ export function CookieCard({ product, onAdded }: CookieCardProps) {
           sizes="(min-width: 1024px) 380px, (min-width: 640px) 45vw, 74vw"
           placeholderLabel={product.name}
           className={styles.image}
+          framing={{ scale: product.imageScale, x: product.imageX, y: product.imageY }}
         />
         {product.featured && <span className={styles.featured}>Destacada</span>}
       </div>

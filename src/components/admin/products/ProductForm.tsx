@@ -20,6 +20,7 @@ import {
 import { moneyToInput, normalizeMoneyInput } from "@/lib/admin/money-input";
 import { uploadProductImage, type UploadKind } from "@/lib/admin/product-upload";
 import { BoxViewEditor } from "./BoxViewEditor";
+import { FramingArea, FramingControls, type Framing } from "./FramingControls";
 import styles from "./Products.module.css";
 
 type FormValues = BoxViewInput & {
@@ -35,7 +36,7 @@ type FormValues = BoxViewInput & {
 
 type FormErrors = Partial<Record<keyof FormValues | "form", string>>;
 
-const DEFAULT_BOX: BoxViewInput = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 };
+const DEFAULT_BOX: BoxViewInput = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0, imageScale: 1, imageX: 50, imageY: 50 };
 
 const EMPTY: FormValues = { name: "", category: "Cookies", description: "", price: "", stock: "0", imageUrl: "", status: "ACTIVE", featured: false, ...DEFAULT_BOX };
 
@@ -54,6 +55,9 @@ function fromProduct(p: AdminProduct): FormValues {
     boxImageX: p.boxImageX,
     boxImageY: p.boxImageY,
     boxImageRotation: p.boxImageRotation,
+    imageScale: p.imageScale,
+    imageX: p.imageX,
+    imageY: p.imageY,
   };
 }
 
@@ -83,6 +87,9 @@ function toInput(values: FormValues): { input: ProductInput } | { errors: FormEr
       boxImageX: values.boxImageX,
       boxImageY: values.boxImageY,
       boxImageRotation: values.boxImageRotation,
+      imageScale: values.imageScale,
+      imageX: values.imageX,
+      imageY: values.imageY,
     },
   };
 }
@@ -154,7 +161,10 @@ export function ProductForm({ productId }: { productId: string | null }) {
     event.target.value = "";
     if (!file) return;
     const url = await upload(file, "main");
-    if (url) update("imageUrl", url);
+    if (url) {
+      update("imageUrl", url);
+      setValues((prev) => ({ ...prev, imageScale: 1, imageX: 50, imageY: 50 }));
+    }
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -204,6 +214,14 @@ export function ProductForm({ productId }: { productId: string | null }) {
   }
 
   const previewSrc = values.imageUrl.trim().startsWith("/") || values.imageUrl.trim().startsWith("https://") ? values.imageUrl.trim() : null;
+  const mainFraming: Framing = { scale: values.imageScale, x: values.imageX, y: values.imageY };
+  const setMainFraming = (patch: Partial<Framing>) =>
+    setValues((prev) => ({
+      ...prev,
+      ...(patch.scale !== undefined ? { imageScale: patch.scale } : {}),
+      ...(patch.x !== undefined ? { imageX: patch.x } : {}),
+      ...(patch.y !== undefined ? { imageY: patch.y } : {}),
+    }));
 
   const field = (name: keyof FormValues, label: string, input: React.ReactNode, help?: string) => (
     <div className={styles.field}>
@@ -240,7 +258,7 @@ export function ProductForm({ productId }: { productId: string | null }) {
       <div className={styles.editorBody}>
         <div className={styles.editorPreview}>
           <div className={styles.previewImage}>
-            <CookieImage key={previewSrc ?? "none"} src={previewSrc} alt="" sizes="260px" placeholderLabel="Sin foto" />
+            <CookieImage key={previewSrc ?? "none"} src={previewSrc} alt="" sizes="260px" placeholderLabel="Sin foto" framing={mainFraming} />
           </div>
           <p className={styles.help}>Foto principal (catálogo)</p>
         </div>
@@ -302,6 +320,22 @@ export function ProductForm({ productId }: { productId: string | null }) {
               </div>,
               "Se usa en el catálogo y en las cards. JPG, PNG o WebP.",
             )}
+
+            {/* Encuadre de la foto principal: como queda en la card del catálogo. */}
+            <div className={styles.mainFraming}>
+              <div className={styles.mainFramingPreview}>
+                <FramingArea
+                  value={mainFraming}
+                  onChange={setMainFraming}
+                  enabled={Boolean(previewSrc)}
+                  className={[styles.mainFramingFrame, previewSrc ? styles.dragEnabled : ""].join(" ")}
+                >
+                  <CookieImage key={previewSrc ?? "none"} src={previewSrc} alt="" sizes="220px" placeholderLabel="Sin foto" framing={mainFraming} />
+                </FramingArea>
+                <p className={styles.previewCaption}>{previewSrc ? "Así se ve en el catálogo · arrastrá para encuadrar" : "Subí la foto principal para encuadrarla."}</p>
+              </div>
+              <FramingControls value={mainFraming} onChange={setMainFraming} disabled={!previewSrc} />
+            </div>
 
             <BoxViewEditor
               key={productId ?? "new"}

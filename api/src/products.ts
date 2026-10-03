@@ -21,11 +21,15 @@ export type BoxView = {
   boxImageY: number;
   /** Grados, −180 a 180. */
   boxImageRotation: number;
+  /** Encuadre de la FOTO PRINCIPAL (catálogo): zoom 1–4 y punto central 0–100 %. */
+  imageScale: number;
+  imageX: number;
+  imageY: number;
 };
 
 export const BOX_LIMITS = { minScale: 1, maxScale: 4, minRotation: -180, maxRotation: 180 } as const;
 
-export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 };
+export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0, imageScale: 1, imageX: 50, imageY: 50 };
 
 /** Producto tal como lo maneja el servidor (dinero en centavos). */
 export type ProductRecord = BoxView & {
@@ -97,6 +101,9 @@ export function toPublicProduct(p: ProductRecord): PublicProduct {
     boxImageX: p.boxImageX,
     boxImageY: p.boxImageY,
     boxImageRotation: p.boxImageRotation,
+    imageScale: p.imageScale,
+    imageX: p.imageX,
+    imageY: p.imageY,
   };
 }
 
@@ -236,7 +243,13 @@ export function validateProductInput(body: unknown, partial: boolean): ProductVa
     else errors.boxImageUrl = "Usá una imagen subida, una ruta del sitio o una URL https.";
   } else if (!partial) data.boxImageUrl = null;
 
-  const numberIn = (key: "boxImageScale" | "boxImageX" | "boxImageY" | "boxImageRotation", min: number, max: number, integer: boolean, message: string) => {
+  const numberIn = (
+    key: "boxImageScale" | "boxImageX" | "boxImageY" | "boxImageRotation" | "imageScale" | "imageX" | "imageY",
+    min: number,
+    max: number,
+    integer: boolean,
+    message: string,
+  ) => {
     if (!has(key)) {
       if (!partial) data[key] = DEFAULT_BOX_VIEW[key];
       return;
@@ -249,6 +262,9 @@ export function validateProductInput(body: unknown, partial: boolean): ProductVa
   numberIn("boxImageX", 0, 100, false, "La posición horizontal va de 0 a 100.");
   numberIn("boxImageY", 0, 100, false, "La posición vertical va de 0 a 100.");
   numberIn("boxImageRotation", BOX_LIMITS.minRotation, BOX_LIMITS.maxRotation, true, "La rotación va de −180° a 180°.");
+  numberIn("imageScale", BOX_LIMITS.minScale, BOX_LIMITS.maxScale, false, "El zoom va de 1 a 4.");
+  numberIn("imageX", 0, 100, false, "La posición horizontal va de 0 a 100.");
+  numberIn("imageY", 0, 100, false, "La posición vertical va de 0 a 100.");
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   if (partial && Object.keys(data).length === 0) return { ok: false, errors: { body: "No hay cambios." } };
@@ -273,5 +289,8 @@ export function duplicateData(p: ProductRecord): ProductData {
     boxImageX: p.boxImageX,
     boxImageY: p.boxImageY,
     boxImageRotation: p.boxImageRotation,
+    imageScale: p.imageScale,
+    imageX: p.imageX,
+    imageY: p.imageY,
   };
 }

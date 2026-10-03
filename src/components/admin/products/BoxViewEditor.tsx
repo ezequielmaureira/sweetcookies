@@ -4,12 +4,13 @@ import { useId, useRef, useState } from "react";
 import { CookieShape } from "@/components/cookie-shape/CookieShape";
 import type { BoxViewInput } from "@/lib/admin/admin-api";
 import { boxViewSource } from "@/lib/box-view";
+import { FramingControls, useFramingDrag, type Framing } from "./FramingControls";
 import styles from "./Products.module.css";
 
 type BoxViewEditorProps = {
   /** Foto principal actual del formulario. */
   imageUrl: string | null;
-  value: BoxViewInput;
+  value: Pick<BoxViewInput, "boxImageUrl" | "boxImageScale" | "boxImageX" | "boxImageY" | "boxImageRotation">;
   onChange: (patch: Partial<BoxViewInput>) => void;
   /** Sube una imagen para caja y devuelve su ruta (o null si falló; el error lo muestra el padre). */
   onUpload: (file: File) => Promise<string | null>;
@@ -18,9 +19,6 @@ type BoxViewEditorProps = {
 };
 
 type Mode = "main" | "specific";
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-const round = (value: number) => Math.round(value * 10) / 10;
 
 /**
  * "Vista en caja": cómo se ve la cookie dentro de la caja del comprador.
@@ -34,9 +32,18 @@ export function BoxViewEditor({ imageUrl, value, onChange, onUpload, uploading, 
   const [mode, setMode] = useState<Mode>(value.boxImageUrl ? "specific" : "main");
   // Si se vuelve a "foto principal" y después a "específica" sin guardar, se recupera la subida.
   const [lastSpecific, setLastSpecific] = useState<string | null>(value.boxImageUrl);
-  const drag = useRef<{ x: number; y: number; startX: number; startY: number; size: number } | null>(null);
 
-  const view = boxViewSource({ ...value, imageUrl });
+  const view = boxViewSource({ ...value, imageUrl, imageScale: 1, imageX: 50, imageY: 50 });
+  // Mismos controles y arrastre que la foto principal (FramingControls).
+  const framing: Framing = { scale: value.boxImageScale, x: value.boxImageX, y: value.boxImageY, rotation: value.boxImageRotation };
+  const setFraming = (patch: Partial<Framing>) =>
+    onChange({
+      ...(patch.scale !== undefined ? { boxImageScale: patch.scale } : {}),
+      ...(patch.x !== undefined ? { boxImageX: patch.x } : {}),
+      ...(patch.y !== undefined ? { boxImageY: patch.y } : {}),
+      ...(patch.rotation !== undefined ? { boxImageRotation: patch.rotation } : {}),
+    });
+  const dragHandlers = useFramingDrag(framing, setFraming, Boolean(view.src));
 
   const chooseMode = (next: Mode) => {
     setMode(next);
@@ -59,53 +66,6 @@ export function BoxViewEditor({ imageUrl, value, onChange, onUpload, uploading, 
       onChange({ boxImageUrl: url, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 });
     }
   };
-
-  // Arrastrar sobre la cookie mueve el encuadre (mismo efecto que los controles).
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!view.src) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { x: event.clientX, y: event.clientY, startX: value.boxImageX, startY: value.boxImageY, size: event.currentTarget.clientWidth };
-  };
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d) return;
-    const factor = 100 / (d.size * value.boxImageScale);
-    onChange({
-      boxImageX: round(clamp(d.startX - (event.clientX - d.x) * factor, 0, 100)),
-      boxImageY: round(clamp(d.startY - (event.clientY - d.y) * factor, 0, 100)),
-    });
-  };
-  const endDrag = () => {
-    drag.current = null;
-  };
-
-  const slider = (
-    field: "boxImageScale" | "boxImageX" | "boxImageY" | "boxImageRotation",
-    label: string,
-    min: number,
-    max: number,
-    step: number,
-    display: string,
-  ) => (
-    <div className={styles.slider}>
-      <label htmlFor={id(field)} className={styles.sliderLabel}>
-        <span>{label}</span>
-        <output htmlFor={id(field)} className={styles.sliderValue}>
-          {display}
-        </output>
-      </label>
-      <input
-        id={id(field)}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value[field]}
-        disabled={!view.src}
-        onChange={(e) => onChange({ [field]: Number(e.target.value) })}
-      />
-    </div>
-  );
 
   return (
     <section className={styles.boxView} aria-labelledby={id("title")}>
@@ -155,10 +115,7 @@ export function BoxViewEditor({ imageUrl, value, onChange, onUpload, uploading, 
         <div className={styles.boxViewPreview}>
           <div
             className={[styles.dragArea, view.src ? styles.dragEnabled : ""].join(" ")}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
+            {...dragHandlers}
             aria-hidden="true"
           >
             <CookieShape view={view} sizes="200px" />
@@ -178,20 +135,7 @@ export function BoxViewEditor({ imageUrl, value, onChange, onUpload, uploading, 
           </div>
         </div>
 
-        <div className={styles.sliders}>
-          {slider("boxImageScale", "Zoom", 1, 4, 0.05, `${Math.round(value.boxImageScale * 100)}%`)}
-          {slider("boxImageX", "Horizontal", 0, 100, 0.5, `${Math.round(value.boxImageX)}%`)}
-          {slider("boxImageY", "Vertical", 0, 100, 0.5, `${Math.round(value.boxImageY)}%`)}
-          {slider("boxImageRotation", "Rotación", -180, 180, 1, `${value.boxImageRotation}°`)}
-          <button
-            type="button"
-            className={styles.linkButton}
-            onClick={() => onChange({ boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0 })}
-            disabled={!view.src}
-          >
-            Restablecer encuadre
-          </button>
-        </div>
+        <FramingControls value={framing} onChange={setFraming} disabled={!view.src} withRotation />
       </div>
     </section>
   );

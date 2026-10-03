@@ -7,22 +7,17 @@ import { isRemoteImage, resolveImageSrc } from "@/lib/catalog";
 import styles from "./CookieShape.module.css";
 
 /**
- * Silueta de cookie casera: redonda en esencia, con el borde levemente
- * irregular (suma de ondas suaves). Determinista: la misma forma en servidor,
- * cliente y en cada cookie; varía con `variant` para que la caja no se vea
- * "clonada".
+ * Silueta de cookie casera: casi circular, con el borde apenas irregular
+ * (ondas muy suaves: artesanal, sin parecer un "blob"). Determinista: la
+ * misma forma en servidor, cliente y en cada cookie; varía con `variant` para
+ * que la caja no se vea "clonada".
  */
 function cookiePath(variant: number): string {
   const points: string[] = [];
   const phase = variant * 1.7;
   for (let i = 0; i < 72; i++) {
     const t = (i / 72) * Math.PI * 2;
-    const r =
-      46.2 +
-      1.5 * Math.sin(3 * t + 0.4 + phase) +
-      1.0 * Math.sin(5 * t + 1.3 + phase * 0.6) +
-      0.6 * Math.sin(9 * t + 2.1 + phase * 1.3) +
-      0.35 * Math.sin(14 * t + phase * 0.4);
+    const r = 47 + 0.6 * Math.sin(3 * t + 0.4 + phase) + 0.35 * Math.sin(5 * t + 1.3 + phase * 0.6) + 0.15 * Math.sin(9 * t + 2.1 + phase * 1.3);
     points.push(`${(50 + Math.cos(t) * r).toFixed(2)} ${(50 + Math.sin(t) * r).toFixed(2)}`);
   }
   return `M${points.join("L")}Z`;

@@ -34,6 +34,9 @@ type ProductRow = {
   boxImageX: number;
   boxImageY: number;
   boxImageRotation: number;
+  imageScale: number;
+  imageX: number;
+  imageY: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -56,6 +59,9 @@ export function toProductRecord(row: ProductRow): ProductRecord {
     boxImageX: row.boxImageX,
     boxImageY: row.boxImageY,
     boxImageRotation: row.boxImageRotation,
+    imageScale: row.imageScale,
+    imageX: row.imageX,
+    imageY: row.imageY,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

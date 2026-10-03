@@ -49,6 +49,10 @@ model Product {
   /// Foto principal (catálogo, cards). Ruta local (/images/...), imagen subida
   /// (/api/public/images/<id>) o URL https.
   imageUrl         String?       @map("image_url") @db.VarChar(500)
+  /// Encuadre de la foto principal (catálogo): zoom 1–4 y punto central 0–100 %.
+  imageScale       Float         @default(1) @map("image_scale")
+  imageX           Float         @default(50) @map("image_x")
+  imageY           Float         @default(50) @map("image_y")
   /// Imagen OPCIONAL solo para la caja. Si existe, la caja usa esta; si no,
   /// usa imageUrl encuadrada con los parámetros box_image_*.
   boxImageUrl      String?       @map("box_image_url") @db.VarChar(500)
