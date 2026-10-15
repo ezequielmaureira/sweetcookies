@@ -3,22 +3,27 @@
 import { useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { useSiteTexts } from "@/components/site-content/SiteTextsProvider";
-import type { Product } from "@/lib/catalog";
+import { isCookie, type Product } from "@/lib/catalog";
 import { CookieCard } from "./CookieCard";
 import styles from "./FlavorsSection.module.css";
 
-/** Lista del catálogo real (CartProvider lo refresca contra la API). */
-export function FlavorsList() {
-  const { products, catalogStatus, refreshCatalog } = useCart();
+/**
+ * Lista del catálogo real (CartProvider lo refresca contra la API).
+ * kind "COOKIE" (por defecto): los sabores. kind "OTHER": "Sumá algo más" (no muestra nada si no hay).
+ */
+export function FlavorsList({ kind = "COOKIE" }: { kind?: Product["kind"] }) {
+  const { products: catalog, catalogStatus, refreshCatalog } = useCart();
+  const products = catalog.filter((p) => (kind === "COOKIE" ? isCookie(p) : !isCookie(p)));
   const [announcement, setAnnouncement] = useState("");
   const texts = useSiteTexts();
 
   const handleAdded = (product: Product) => {
     // Un carácter invisible distinto fuerza a repetir el anuncio si se agrega el mismo sabor.
-    setAnnouncement((prev) => `${product.name} agregada al carrito${prev.endsWith("​") ? "" : "​"}`);
+    setAnnouncement((prev) => `Se agregó ${product.name} al carrito${prev.endsWith("​") ? "" : "​"}`);
   };
 
   if (products.length === 0) {
+    if (kind === "OTHER") return null;
     return (
       <div className="container">
         {catalogStatus === "error" ? (

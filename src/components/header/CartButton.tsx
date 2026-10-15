@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useCart } from "@/components/cart/CartProvider";
 import { routes } from "@/data/site";
+import { formatCartCount } from "@/lib/cart";
 import styles from "./Header.module.css";
 
 /** Acceso al carrito: lleva a "Armá tu caja", donde está el resumen del pedido. */
 export function CartButton() {
-  const { totalCount, addSignal } = useCart();
+  const { totalCount, cookieCount, extraCount, addSignal } = useCart();
 
-  const label =
-    totalCount === 0 ? "Carrito vacío" : `Carrito: ${totalCount} ${totalCount === 1 ? "cookie" : "cookies"}`;
+  const label = totalCount === 0 ? "Carrito vacío" : `Carrito: ${formatCartCount(cookieCount, extraCount)}`;
 
   return (
     <Link href={routes.buildBox} className={styles.cart} aria-label={label}>

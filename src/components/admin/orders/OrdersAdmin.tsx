@@ -281,21 +281,34 @@ function OrderDetail({ order }: { order: AdminOrderDetail }) {
             </th>
           </tr>
         </thead>
-        <tbody>
-          {order.items.map((item, i) => (
-            <tr key={`${item.productId ?? "deleted"}-${i}`}>
-              <th scope="row">
-                {item.productName}
-                {!item.productId && <span className={styles.muted}> (eliminado)</span>}
-              </th>
-              <td className={styles.num}>{item.quantity}</td>
-              <td className={styles.num}>{formatPrice(item.unitPrice)}</td>
-              <td className={styles.num}>{formatPrice(item.unitCost)}</td>
-              <td className={styles.num}>{formatPrice(item.subtotal)}</td>
-              <td className={styles.num}>{formatPrice(item.profit)}</td>
-            </tr>
-          ))}
-        </tbody>
+        {/* El box (cookies) y los productos adicionales, separados. */}
+        {(["COOKIE", "OTHER"] as const).map((kind) => {
+          const group = order.items.filter((item) => (item.kind ?? "COOKIE") === kind);
+          if (group.length === 0) return null;
+          const units = group.reduce((sum, item) => sum + item.quantity, 0);
+          return (
+            <tbody key={kind}>
+              <tr className={styles.groupRow}>
+                <th scope="colgroup" colSpan={6}>
+                  {kind === "COOKIE" ? `Box · ${units} ${units === 1 ? "cookie" : "cookies"}` : "Productos adicionales"}
+                </th>
+              </tr>
+              {group.map((item, i) => (
+                <tr key={`${item.productId ?? "deleted"}-${i}`}>
+                  <th scope="row">
+                    {item.productName}
+                    {!item.productId && <span className={styles.muted}> (eliminado)</span>}
+                  </th>
+                  <td className={styles.num}>{item.quantity}</td>
+                  <td className={styles.num}>{formatPrice(item.unitPrice)}</td>
+                  <td className={styles.num}>{formatPrice(item.unitCost)}</td>
+                  <td className={styles.num}>{formatPrice(item.subtotal)}</td>
+                  <td className={styles.num}>{formatPrice(item.profit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          );
+        })}
         <tfoot>
           <tr>
             <th scope="row">Total</th>

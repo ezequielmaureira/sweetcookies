@@ -25,6 +25,14 @@
   background: var(--color-beige);
 }
 
+/* Encuadre elegido en el panel (Configuración → Foto de “Armá tu box”).
+   Celular y tablet usan uno; computadora (≥ 1024 px) el otro. Zoom ≥ 100 %: siempre cubre. */
+.framed {
+  object-position: var(--frame-m-x) var(--frame-m-y);
+  transform-origin: var(--frame-m-x) var(--frame-m-y);
+  transform: scale(var(--frame-m-scale));
+}
+
 .copy {
   display: flex;
   flex-direction: column;
@@ -70,5 +78,11 @@
 
   .photo {
     aspect-ratio: 5 / 4;
+  }
+
+  .framed {
+    object-position: var(--frame-d-x) var(--frame-d-y);
+    transform-origin: var(--frame-d-x) var(--frame-d-y);
+    transform: scale(var(--frame-d-scale));
   }
 }

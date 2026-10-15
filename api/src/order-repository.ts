@@ -37,6 +37,8 @@ export type OrderDetail = OrderSummaryRow & {
   items: {
     productId: string | null;
     productName: string;
+    /** COOKIE = dentro del box; OTHER = producto adicional. Pedidos anteriores: COOKIE. */
+    kind: "COOKIE" | "OTHER";
     quantity: number;
     unitPrice: string;
     unitCost: string;
@@ -140,6 +142,7 @@ export function createOrderRepository(prisma: PrismaClient): OrderRepository {
                 create: priced.lines.map((l) => ({
                   productId: l.productId,
                   productNameSnapshot: l.productNameSnapshot,
+                  productKind: l.kind,
                   quantity: l.quantity,
                   unitPrice: centsToDecimalString(l.unitPriceCents),
                   unitCost: centsToDecimalString(l.unitCostCents),
@@ -205,6 +208,7 @@ export function createOrderRepository(prisma: PrismaClient): OrderRepository {
         items: order.items.map((item) => ({
           productId: item.productId,
           productName: item.productNameSnapshot,
+          kind: item.productKind,
           quantity: item.quantity,
           unitPrice: money(item.unitPrice),
           unitCost: money(item.unitCost),

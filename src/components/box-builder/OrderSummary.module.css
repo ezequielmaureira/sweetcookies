@@ -118,3 +118,56 @@
   font-weight: 400;
   color: var(--color-muted);
 }
+
+/* Box y productos adicionales, separados. */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.groupTitle {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-chocolate-soft);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-chocolate);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.stepValue {
+  min-width: 2ch;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  text-align: center;
+  color: var(--color-terracotta);
+}

@@ -37,6 +37,7 @@ export function product(overrides: Partial<ProductRecord> = {}): ProductRecord {
     stock: 10,
     imageUrl: "/images/cookies/hero-cookie-cutout.png",
     category: "Cookies",
+    kind: "COOKIE",
     status: "ACTIVE",
     featured: false,
     sortOrder: 1,
@@ -246,6 +247,33 @@ describe("pedidos: validación", () => {
 });
 
 describe("pedidos: cálculo con snapshots", () => {
+  it("box + productos adicionales: un solo pedido, total sumado y tipo de cada línea", () => {
+    const priced = priceOrder(
+      [
+        { productId: "chips", quantity: 6 },
+        { productId: "budin", quantity: 1 },
+      ],
+      [product(), product({ id: "budin", name: "Budín de limón", kind: "OTHER", priceCents: 800000, costCents: 300000, stock: 1 })],
+    );
+    assert.equal(priced.totalCents, 6 * 500000 + 800000);
+    assert.deepEqual(priced.lines.map((l) => [l.productId, l.kind]), [["chips", "COOKIE"], ["budin", "OTHER"]]);
+    const receipt = toReceipt({ id: "o1", number: 1001, itemCount: 7 }, priced);
+    assert.deepEqual(receipt.items.map((i) => i.kind), ["COOKIE", "OTHER"]);
+  });
+  it("producto adicional: no se puede pedir más que su stock", () => {
+    assert.throws(
+      () => priceOrder([{ productId: "budin", quantity: 2 }], [product({ id: "budin", kind: "OTHER", stock: 1 })]),
+      (e: unknown) => e instanceof OrderError && e.problems[0].reason === "insufficient_stock" && e.problems[0].available === 1,
+    );
+  });
+  it("el tipo se valida al crear/editar (por defecto, cookie)", () => {
+    const created = validateProductInput({ name: "Budín", price: "8000", cost: "3000", stock: 2, kind: "OTHER" }, false);
+    assert.ok(created.ok && created.data.kind === "OTHER");
+    const def = validateProductInput({ name: "Chips", price: "4000", cost: "2000", stock: 2 }, false);
+    assert.ok(def.ok && def.data.kind === "COOKIE");
+    assert.equal(validateProductInput({ kind: "TORTA" }, true).ok, false);
+    assert.equal(toPublicProduct(product({ kind: "OTHER" })).kind, "OTHER");
+  });
   it("subtotal, total y ganancia salen de la base", () => {
     const priced = priceOrder(
       [
@@ -260,6 +288,7 @@ describe("pedidos: cálculo con snapshots", () => {
     assert.deepEqual(priced.lines[0], {
       productId: "chips",
       productNameSnapshot: "Cookie Chips Clásica",
+      kind: "COOKIE",
       quantity: 2,
       unitPriceCents: 500000,
       unitCostCents: 250000,

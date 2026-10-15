@@ -1,4 +1,5 @@
 import { adminRequest } from "@/lib/admin/admin-api";
+import type { ResponsiveFraming } from "@/lib/site-content";
 
 export type SiteTextField = {
   key: string;
@@ -31,11 +32,13 @@ export type SiteImageField = {
   description: string;
   /** Ruta de la foto subida; null = se muestra la original del sitio. */
   url: string | null;
+  /** Encuadre guardado (centrado si nunca se cambió). */
+  framing: ResponsiveFraming;
   updatedAt: string | null;
 };
 
 export const getAdminSiteImages = (token: string | null) => adminRequest<{ images: SiteImageField[] }>("/api/admin/content/images", token);
 
-/** Guarda la foto (ruta devuelta por uploadImage). null = vuelve la original. */
-export const saveAdminSiteImage = (token: string | null, key: string, url: string | null) =>
-  adminRequest<{ images: SiteImageField[] }>(`/api/admin/content/images/${encodeURIComponent(key)}`, token, { method: "PUT", body: JSON.stringify({ url }) });
+/** Guarda la foto (ruta devuelta por uploadImage; null = la original) y su encuadre, juntos. */
+export const saveAdminSiteImage = (token: string | null, key: string, url: string | null, framing: ResponsiveFraming) =>
+  adminRequest<{ images: SiteImageField[] }>(`/api/admin/content/images/${encodeURIComponent(key)}`, token, { method: "PUT", body: JSON.stringify({ url, framing }) });

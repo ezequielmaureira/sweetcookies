@@ -14,7 +14,9 @@ import {
   updateProduct,
   type AdminProduct,
   type BoxViewInput,
+  PRODUCT_KIND_LABELS,
   type ProductInput,
+  type ProductKind,
   type ProductStatus,
 } from "@/lib/admin/admin-api";
 import { moneyToInput, normalizeMoneyInput } from "@/lib/admin/money-input";
@@ -25,6 +27,7 @@ import styles from "./Products.module.css";
 
 type FormValues = BoxViewInput & {
   name: string;
+  kind: ProductKind;
   category: string;
   description: string;
   price: string;
@@ -38,11 +41,12 @@ type FormErrors = Partial<Record<keyof FormValues | "form", string>>;
 
 const DEFAULT_BOX: BoxViewInput = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0, imageScale: 1, imageX: 50, imageY: 50 };
 
-const EMPTY: FormValues = { name: "", category: "Cookies", description: "", price: "", stock: "0", imageUrl: "", status: "ACTIVE", featured: false, ...DEFAULT_BOX };
+const EMPTY: FormValues = { name: "", kind: "COOKIE", category: "Cookies", description: "", price: "", stock: "0", imageUrl: "", status: "ACTIVE", featured: false, ...DEFAULT_BOX };
 
 function fromProduct(p: AdminProduct): FormValues {
   return {
     name: p.name,
+    kind: p.kind ?? "COOKIE",
     category: p.category ?? "",
     description: p.description ?? "",
     price: moneyToInput(p.price),
@@ -75,6 +79,7 @@ function toInput(values: FormValues): { input: ProductInput } | { errors: FormEr
   return {
     input: {
       name: values.name.trim(),
+      kind: values.kind,
       category: values.category.trim(),
       description: values.description.trim(),
       price,
@@ -267,7 +272,38 @@ export function ProductForm({ productId }: { productId: string | null }) {
           <fieldset className={styles.group}>
             <legend className={styles.groupTitle}>Datos</legend>
             {field("name", "Nombre", <input {...inputProps("name")} type="text" maxLength={80} value={values.name} onChange={(e) => update("name", e.target.value)} />)}
-            {field("category", "Categoría", <input {...inputProps("category")} type="text" maxLength={40} value={values.category} onChange={(e) => update("category", e.target.value)} />)}
+            <div className={styles.field}>
+              <span className={styles.label} id={id("kind-label")}>
+                Tipo
+              </span>
+              <div className={styles.segmented} role="radiogroup" aria-labelledby={id("kind-label")} aria-describedby={id("kind-help")}>
+                {(["COOKIE", "OTHER"] as const).map((kind) => (
+                  <label key={kind} className={styles.segment}>
+                    <input
+                      type="radio"
+                      name={id("kind")}
+                      checked={values.kind === kind}
+                      onChange={() => {
+                        update("kind", kind);
+                        // Categoría sugerida solo si todavía es la de cookies (no pisa la que cargaste).
+                        if (kind === "OTHER" && values.category.trim() === "Cookies") update("category", "");
+                      }}
+                    />
+                    <span>{PRODUCT_KIND_LABELS[kind]}</span>
+                  </label>
+                ))}
+              </div>
+              <p id={id("kind-help")} className={styles.help}>
+                {values.kind === "COOKIE"
+                  ? "Se puede elegir para armar el box."
+                  : "Budín, torta, brownie…: se compra aparte, en “Sumá algo más”. No ocupa lugar en el box."}
+              </p>
+            </div>
+            {field(
+              "category",
+              "Categoría",
+              <input {...inputProps("category")} type="text" maxLength={40} placeholder={values.kind === "OTHER" ? "Budines, Tortas…" : "Cookies"} value={values.category} onChange={(e) => update("category", e.target.value)} />,
+            )}
             {field(
               "description",
               "Descripción",
@@ -337,21 +373,24 @@ export function ProductForm({ productId }: { productId: string | null }) {
               <FramingControls value={mainFraming} onChange={setMainFraming} disabled={!previewSrc} />
             </div>
 
-            <BoxViewEditor
-              key={productId ?? "new"}
-              imageUrl={previewSrc}
-              value={{
-                boxImageUrl: values.boxImageUrl,
-                boxImageScale: values.boxImageScale,
-                boxImageX: values.boxImageX,
-                boxImageY: values.boxImageY,
-                boxImageRotation: values.boxImageRotation,
-              }}
-              onChange={updateBox}
-              onUpload={(file) => upload(file, "box")}
-              uploading={uploading === "box"}
-              error={errors.boxImageUrl ?? errors.boxImageScale ?? errors.boxImageX ?? errors.boxImageY ?? errors.boxImageRotation}
-            />
+            {/* La vista dentro del box solo tiene sentido para cookies. */}
+            {values.kind === "COOKIE" && (
+              <BoxViewEditor
+                key={productId ?? "new"}
+                imageUrl={previewSrc}
+                value={{
+                  boxImageUrl: values.boxImageUrl,
+                  boxImageScale: values.boxImageScale,
+                  boxImageX: values.boxImageX,
+                  boxImageY: values.boxImageY,
+                  boxImageRotation: values.boxImageRotation,
+                }}
+                onChange={updateBox}
+                onUpload={(file) => upload(file, "box")}
+                uploading={uploading === "box"}
+                error={errors.boxImageUrl ?? errors.boxImageScale ?? errors.boxImageX ?? errors.boxImageY ?? errors.boxImageRotation}
+              />
+            )}
           </fieldset>
         </div>
       </div>

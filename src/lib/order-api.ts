@@ -7,7 +7,8 @@ export type OrderReceipt = {
   number: number;
   total: string;
   itemCount: number;
-  items: { name: string; quantity: number; unitPrice: string; subtotal: string }[];
+  /** kind: COOKIE (dentro del box) u OTHER (producto adicional). Una API anterior puede no mandarlo. */
+  items: { name: string; kind?: "COOKIE" | "OTHER"; quantity: number; unitPrice: string; subtotal: string }[];
 };
 
 export type OrderProblem = { productId: string; name: string | null; reason: "not_found" | "unavailable" | "insufficient_stock"; available: number };

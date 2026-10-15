@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { EMPTY_CART, MAX_QUANTITY_PER_FLAVOR, countItems, sanitizeCartItems, withQuantity } from "./cart.ts";
+import { EMPTY_CART, MAX_QUANTITY_PER_FLAVOR, countItems, formatCartCount, sanitizeCartItems, withQuantity } from "./cart.ts";
 
 const ids = new Set(["pistacho", "red-velvet"]);
 
@@ -42,3 +42,11 @@ describe("withQuantity", () => {
   });
 });
 
+describe("contador del pedido (box + adicionales)", () => {
+  it("los productos adicionales no se cuentan como cookies", () => {
+    assert.equal(formatCartCount(6, 0), "6 cookies");
+    assert.equal(formatCartCount(1, 0), "1 cookie");
+    assert.equal(formatCartCount(0, 1), "1 producto");
+    assert.equal(formatCartCount(6, 2), "6 cookies + 2 productos");
+  });
+});

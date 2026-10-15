@@ -11,8 +11,8 @@ const IMG = "/api/public/images/img0000000001";
 
 describe("fotos del sitio: validación", () => {
   it("acepta una imagen subida o null (volver a la original)", () => {
-    assert.deepEqual(validateSiteImageInput({ url: IMG }), { ok: true, url: IMG });
-    assert.deepEqual(validateSiteImageInput({ url: null }), { ok: true, url: null });
+    assert.deepEqual(validateSiteImageInput({ url: IMG }), { ok: true, url: IMG, framing: null });
+    assert.deepEqual(validateSiteImageInput({ url: null }), { ok: true, url: null, framing: null });
   });
 
   it("rechaza URLs externas, rutas del sitio y formatos raros", () => {
@@ -39,9 +39,10 @@ function setup() {
   const content: SiteContentRepository = {
     list: async () => rows,
     save: async () => rows,
-    saveImage: async (key, url) => {
-      rows = rows.filter((r) => r.key !== key);
+    saveImage: async (key, url, framing) => {
+      rows = rows.filter((r) => r.key !== key && r.key !== `${key}_FRAMING`);
       if (url) rows.push({ key, value: url, updatedAt: new Date(0) });
+      if (framing) rows.push({ key: `${key}_FRAMING`, value: JSON.stringify(framing), updatedAt: new Date(0) });
       return rows;
     },
   };
@@ -60,6 +61,36 @@ function setup() {
     app.request(`/api/admin/content/images/${key}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return { app, put };
 }
+
+describe("fotos del sitio: encuadre", () => {
+  const framing = { mobile: { scale: 1.5, x: 30, y: 70 }, desktop: { scale: 1, x: 50, y: 20 } };
+  it("acepta encuadres para celular y computadora dentro de rango", () => {
+    assert.deepEqual(validateSiteImageInput({ url: IMG, framing }), { ok: true, url: IMG, framing });
+    // El encuadre centrado no se guarda (es el de siempre).
+    const centered = { mobile: { scale: 1, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } };
+    assert.deepEqual(validateSiteImageInput({ url: null, framing: centered }), { ok: true, url: null, framing: null });
+  });
+  it("rechaza zoom menor a 100 % (dejaría espacios vacíos), fuera de rango o incompleto", () => {
+    for (const bad of [
+      { mobile: { scale: 0.5, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
+      { mobile: { scale: 5, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
+      { mobile: { scale: 1, x: 150, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
+      { mobile: { scale: 1, x: 50, y: 50 } },
+      "x",
+    ]) {
+      assert.equal(validateSiteImageInput({ url: IMG, framing: bad }).ok, false, JSON.stringify(bad));
+    }
+  });
+  it("el encuadre se guarda, la web lo recibe y el panel lo recupera (también con la foto original)", async () => {
+    const { app, put } = setup();
+    assert.equal((await put("BOX_IMAGE", { url: null, framing })).status, 200);
+    const pub = (await (await app.request("/api/public/content")).json()) as { images: unknown; framings: unknown };
+    assert.deepEqual(pub.images, {});
+    assert.deepEqual(pub.framings, { BOX_IMAGE: framing });
+    const admin = (await (await app.request("/api/admin/content/images")).json()) as { images: { framing: unknown }[] };
+    assert.deepEqual(admin.images[0].framing, framing);
+  });
+});
 
 describe("fotos del sitio: rutas", () => {
   it("guardar → la web la recibe; volver a la original → desaparece", async () => {

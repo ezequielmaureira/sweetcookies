@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_BOX_VIEW, availabilityLabel, formatCents, isOutOfStock, parseCatalog, resolveImageSrc, toCents } from "./catalog.ts";
+import { DEFAULT_BOX_VIEW, availabilityLabel, formatCents, isCookie, isOutOfStock, parseCatalog, resolveImageSrc, toCents } from "./catalog.ts";
 
 const item = {
   id: "chips",
@@ -10,6 +10,7 @@ const item = {
   stock: 4,
   imageUrl: "/images/cookies/a.jpg",
   category: "Cookies",
+  kind: "COOKIE",
   featured: true,
   ...DEFAULT_BOX_VIEW,
 };
@@ -37,6 +38,12 @@ describe("catálogo público", () => {
     assert.equal(availabilityLabel(0), "Sin stock");
     assert.equal(parseCatalog({}), null);
     assert.equal(parseCatalog(null), null);
+  });
+  it("tipo de producto: OTHER se respeta; sin tipo o desconocido = cookie (compatibilidad)", () => {
+    const list = parseCatalog({ products: [{ ...item, id: "budin", kind: "OTHER" }, { ...item, id: "a", kind: "RARO" }, { ...item, id: "b" }] }) ?? [];
+    assert.deepEqual(list.map((p) => [p.id, p.kind]), [["budin", "OTHER"], ["a", "COOKIE"], ["b", "COOKIE"]]);
+    assert.equal(isCookie(list[0]), false);
+    assert.equal(isCookie(list[2]), true);
   });
   it("vista en caja: valores fuera de rango se acotan y URLs peligrosas se descartan", () => {
     const [p] =

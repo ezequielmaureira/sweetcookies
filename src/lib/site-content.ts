@@ -74,6 +74,36 @@ const SITE_IMAGE_KEYS: readonly SiteImageKey[] = ["BOX_IMAGE"];
 /** Solo rutas de imágenes subidas desde el panel (se sirven desde la API). */
 const UPLOADED_IMAGE = /^\/api\/public\/images\/[a-z0-9]{10,40}$/;
 
+/** Encuadre de una foto del sitio: zoom 1–4 (siempre cubre el recuadro) y punto central 0–100 %. */
+export type ImageFraming = { scale: number; x: number; y: number };
+/** Celular/tablet (< 1024 px) y computadora (≥ 1024 px). */
+export type ResponsiveFraming = { mobile: ImageFraming; desktop: ImageFraming };
+export type SiteImageFramings = Partial<Record<SiteImageKey, ResponsiveFraming>>;
+
+export const DEFAULT_IMAGE_FRAMING: ImageFraming = { scale: 1, x: 50, y: 50 };
+
+function parseFraming(raw: unknown): ImageFraming | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const { scale, x, y } = raw as Record<string, unknown>;
+  const ok = (v: unknown, min: number, max: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
+  return ok(scale, 1, 4) && ok(x, 0, 100) && ok(y, 0, 100) ? { scale, x, y } : null;
+}
+
+/** Encuadres que vinieron de la API (los inválidos se ignoran: queda centrada, como siempre). */
+export function parseSiteImageFramings(json: unknown): SiteImageFramings {
+  const framings: SiteImageFramings = {};
+  const raw = typeof json === "object" && json !== null ? (json as Record<string, unknown>).framings : null;
+  if (typeof raw !== "object" || raw === null) return framings;
+  for (const key of SITE_IMAGE_KEYS) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (typeof value !== "object" || value === null) continue;
+    const mobile = parseFraming((value as Record<string, unknown>).mobile);
+    const desktop = parseFraming((value as Record<string, unknown>).desktop);
+    if (mobile && desktop) framings[key] = { mobile, desktop };
+  }
+  return framings;
+}
+
 /** Fotos que vinieron de la API (ignora claves desconocidas o rutas inválidas). */
 export function parseSiteImages(json: unknown): SiteImages {
   const images: SiteImages = {};

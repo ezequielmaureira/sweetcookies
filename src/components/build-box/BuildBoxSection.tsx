@@ -2,10 +2,13 @@ import { ButtonLink } from "@/components/ui/Button";
 import { CookieImage } from "@/components/ui/CookieImage";
 import { Parallax } from "@/components/ui/Parallax";
 import { routes, sectionIds } from "@/data/site";
+import type { ResponsiveFraming } from "@/lib/site-content";
 import styles from "./BuildBoxSection.module.css";
 
 type BuildBoxSectionProps = {
   imageSrc: string | null;
+  /** Encuadre elegido en el panel (celular/tablet y computadora). Sin encuadre: centrada. */
+  imageFraming?: ResponsiveFraming;
   title?: string;
   text?: string;
   ctaLabel?: string;
@@ -17,6 +20,7 @@ type BuildBoxSectionProps = {
 
 export function BuildBoxSection({
   imageSrc,
+  imageFraming,
   title = "Armá tu box",
   text = "Elegí tus cookies favoritas y creá tu combinación.",
   ctaLabel = "Empezar",
@@ -28,12 +32,13 @@ export function BuildBoxSection({
       <div className={`container ${styles.grid}`}>
         <div className={styles.media} data-reveal>
           <Parallax speed={0.035} className={styles.parallax}>
-            <div className={styles.photo}>
+            <div className={styles.photo} style={imageFraming ? framingVars(imageFraming) : undefined}>
               <CookieImage
                 src={imageSrc}
                 alt="Box de Sweet Cookies con cookies surtidas"
                 sizes="(min-width: 1024px) 720px, 100vw"
                 placeholderLabel="Foto del box"
+                className={imageFraming ? styles.framed : undefined}
               />
             </div>
           </Parallax>
@@ -53,4 +58,16 @@ export function BuildBoxSection({
       </div>
     </section>
   );
+}
+
+/** Mismo cálculo que la vista previa del panel: el punto (x, y) queda al centro y el zoom crece desde ahí. */
+function framingVars({ mobile, desktop }: ResponsiveFraming) {
+  return {
+    "--frame-m-x": `${mobile.x}%`,
+    "--frame-m-y": `${mobile.y}%`,
+    "--frame-m-scale": mobile.scale,
+    "--frame-d-x": `${desktop.x}%`,
+    "--frame-d-y": `${desktop.y}%`,
+    "--frame-d-scale": desktop.scale,
+  } as React.CSSProperties;
 }

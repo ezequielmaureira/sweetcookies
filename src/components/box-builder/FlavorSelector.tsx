@@ -2,21 +2,25 @@
 
 import { useCart } from "@/components/cart/CartProvider";
 import { CookieImage } from "@/components/ui/CookieImage";
-import { availabilityLabel, formatPrice, isOutOfStock, productAlt } from "@/lib/catalog";
+import { availabilityLabel, formatPrice, isCookie, isOutOfStock, productAlt, type ProductKind } from "@/lib/catalog";
 import { QuantityStepper } from "./QuantityStepper";
 import styles from "./FlavorSelector.module.css";
 
 type FlavorSelectorProps = {
+  /** COOKIE (por defecto): sabores del box. OTHER: productos adicionales (no muestra nada si no hay). */
+  kind?: ProductKind;
   quantities: Readonly<Record<string, number>>;
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
 };
 
 /** Paso 1: catálogo real (PostgreSQL) con selector de cantidad limitado al stock. */
-export function FlavorSelector({ quantities, onIncrement, onDecrement }: FlavorSelectorProps) {
-  const { products, catalogStatus, refreshCatalog } = useCart();
+export function FlavorSelector({ kind = "COOKIE", quantities, onIncrement, onDecrement }: FlavorSelectorProps) {
+  const { products: catalog, catalogStatus, refreshCatalog } = useCart();
+  const products = catalog.filter((p) => (kind === "COOKIE" ? isCookie(p) : !isCookie(p)));
 
   if (products.length === 0) {
+    if (kind === "OTHER") return null;
     // Distinguir "cargando" / "no se pudo cargar" de "no hay productos disponibles".
     if (catalogStatus === "loading") {
       return (

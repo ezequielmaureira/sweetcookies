@@ -263,3 +263,23 @@
 .pausedNotice {
   margin-top: 18px;
 }
+
+/* "Sumá algo más": productos que no son cookies (fuera del box). */
+.extras {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--color-line);
+}
+
+.extrasTitle {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 2vw + 1rem, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-chocolate);
+}
+
+.extrasLead {
+  margin: 6px 0 20px;
+  color: var(--color-muted);
+}

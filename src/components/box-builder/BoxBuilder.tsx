@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
-import { formatCookieCount } from "@/lib/cart";
+import { formatCartCount, formatCookieCount } from "@/lib/cart";
 import { usePublicSettings } from "@/lib/use-public-settings";
 import { BoxPreview } from "./BoxPreview";
 import { CustomerForm } from "./CustomerForm";
@@ -25,7 +25,8 @@ const SECTION = {
  * fija arriba de la lista; en desktop, la columna derecha fija.
  */
 export function BoxBuilder() {
-  const { items, lines, totalCount, totalCents, productsById, incrementItem, decrementItem, removeItem, clearCart } = useCart();
+  const { products, items, boxLines, extraLines, totalCount, cookieCount, extraCount, boxCents, totalCents, productsById, incrementItem, decrementItem, removeItem, clearCart } = useCart();
+  const hasExtras = products.some((p) => p.kind === "OTHER");
   const texts = useSiteTexts();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
@@ -48,8 +49,11 @@ export function BoxBuilder() {
   }, [checkoutOpen]);
 
   const announce = (id: string, quantity: number) => {
-    const name = productsById[id]?.name ?? "";
-    const text = quantity === 0 ? `${name} quitada de tu box.` : `${name}: ${quantity} en tu box.`;
+    const product = productsById[id];
+    const name = product?.name ?? "";
+    // Los adicionales no van en el box: se anuncian como parte del pedido.
+    const where = product?.kind === "OTHER" ? "tu pedido" : "tu box";
+    const text = quantity === 0 ? `${name}: quitado de ${where}.` : `${name}: ${quantity} en ${where}.`;
     // Alterna un carácter invisible para que se repita el anuncio aunque el texto sea igual.
     setAnnouncement((prev) => (prev.endsWith("​") ? text : `${text}​`));
   };
@@ -139,13 +143,24 @@ export function BoxBuilder() {
           </StepHeading>
           {/* Mobile/tablet: la caja en vivo queda fija arriba mientras se recorre la lista. */}
           <div className={styles.liveBox}>
-            <BoxPreview lines={lines} totalCount={totalCount} totalCents={totalCents} compact />
+            <BoxPreview lines={boxLines} totalCount={cookieCount} totalCents={boxCents} compact />
           </div>
           <FlavorSelector
             quantities={items}
             onIncrement={handleIncrement}
             onDecrement={handleDecrement}
           />
+
+          {/* Productos que no son cookies: se suman al pedido, NO ocupan lugar en el box. */}
+          {hasExtras && (
+            <div className={styles.extras} aria-labelledby="sumar-algo-mas-title">
+              <h3 id="sumar-algo-mas-title" className={styles.extrasTitle}>
+                Sumá algo más
+              </h3>
+              <p className={styles.extrasLead}>Budines, tortas y más. Van aparte: no ocupan lugar en tu box.</p>
+              <FlavorSelector kind="OTHER" quantities={items} onIncrement={handleIncrement} onDecrement={handleDecrement} />
+            </div>
+          )}
         </section>
 
         <aside id={SECTION.box} className={styles.boxColumn} aria-labelledby={`${SECTION.box}-title`}>
@@ -155,13 +170,15 @@ export function BoxBuilder() {
             </StepHeading>
             {/* Desktop: caja grande en la columna fija (en mobile ya está arriba, en vivo). */}
             <div className={styles.boxDesktop}>
-              <BoxPreview lines={lines} totalCount={totalCount} />
+              <BoxPreview lines={boxLines} totalCount={cookieCount} />
             </div>
             <OrderSummary
-              lines={lines}
-              totalCount={totalCount}
+              boxLines={boxLines}
+              extraLines={extraLines}
               totalCents={totalCents}
               onRemove={handleRemove}
+              onIncrement={handleIncrement}
+              onDecrement={handleDecrement}
               onKeepChoosing={goToFlavors}
               onContinue={openCheckout}
             />
@@ -177,13 +194,15 @@ export function BoxBuilder() {
             </StepHeading>
             {checkoutOpen ? (
               <>
-                <OrderSummary lines={lines} totalCount={totalCount} totalCents={totalCents} compact />
+                <OrderSummary boxLines={boxLines} extraLines={extraLines} totalCents={totalCents} compact />
               </>
             ) : (
               <p className={styles.confirmHint}>
-                {totalCount > 0
-                  ? `Tu box tiene ${formatCookieCount(totalCount)}. Cuando esté listo, continuá tu pedido.`
-                  : "Cuando tengas tu box listo, completá tus datos y envianos el pedido por WhatsApp."}
+                {cookieCount > 0
+                  ? `Tu box tiene ${formatCookieCount(cookieCount)}${extraCount > 0 ? ` y sumaste ${formatCartCount(0, extraCount)}` : ""}. Cuando esté listo, continuá tu pedido.`
+                  : extraCount > 0
+                    ? `Tu pedido tiene ${formatCartCount(0, extraCount)}. Podés sumar un box o continuar tu pedido.`
+                    : "Cuando tengas tu box listo, completá tus datos y envianos el pedido por WhatsApp."}
               </p>
             )}
           </div>
@@ -204,7 +223,7 @@ export function BoxBuilder() {
         </div>
       </section>
 
-      <MobileBoxBar totalCount={totalCount} totalCents={totalCents} boxTargetId={SECTION.box} hideWhenVisibleIds={[SECTION.box, SECTION.confirm]} />
+      <MobileBoxBar totalCount={totalCount} label={formatCartCount(cookieCount, extraCount)} totalCents={totalCents} boxTargetId={SECTION.box} hideWhenVisibleIds={[SECTION.box, SECTION.confirm]} />
 
       <p className="visually-hidden" aria-live="polite">
         {announcement}

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore } from "react";
 import { EMPTY_CART, countItems, withQuantity, type CartItems } from "@/lib/cart";
 import { cartStore } from "@/lib/cart-store";
-import { toCents, type Product } from "@/lib/catalog";
+import { isCookie, toCents, type Product } from "@/lib/catalog";
 import { useLiveCatalog, type CatalogStatus } from "@/lib/use-live-catalog";
 
 export type { CartItems } from "@/lib/cart";
@@ -21,7 +21,18 @@ type CartContextValue = {
   items: CartItems;
   /** Líneas válidas del carrito (en el orden en que se agregaron), limitadas al stock. */
   lines: CartLine[];
+  /** Solo cookies: lo que va DENTRO del box (lugares, contador y reglas del box). */
+  boxLines: CartLine[];
+  /** Productos adicionales (budín, torta…): fuera del box, líneas independientes. */
+  extraLines: CartLine[];
+  /** Unidades totales del pedido (cookies + adicionales). */
   totalCount: number;
+  /** Cookies del box. */
+  cookieCount: number;
+  /** Unidades de productos adicionales. */
+  extraCount: number;
+  /** Subtotal del box (solo cookies), en centavos. */
+  boxCents: number;
   /** Total estimado en centavos (el definitivo lo calcula el servidor al confirmar). */
   totalCents: number;
   /** false durante SSR / hidratación: todavía no se leyó localStorage. */
@@ -105,6 +116,10 @@ export function CartProvider({ initialProducts, catalogOk, children }: CartProvi
       return product && available > 0 ? [{ product, quantity: available }] : [];
     });
     const valid = Object.fromEntries(lines.map((l) => [l.product.id, l.quantity]));
+    const boxLines = lines.filter((l) => isCookie(l.product));
+    const extraLines = lines.filter((l) => !isCookie(l.product));
+    const units = (list: CartLine[]) => list.reduce((sum, l) => sum + l.quantity, 0);
+    const cents = (list: CartLine[]) => list.reduce((sum, l) => sum + toCents(l.product.price) * l.quantity, 0);
     return {
       products,
       catalogStatus,
@@ -112,8 +127,13 @@ export function CartProvider({ initialProducts, catalogOk, children }: CartProvi
       productsById,
       items,
       lines,
+      boxLines,
+      extraLines,
       totalCount: countItems(valid),
-      totalCents: lines.reduce((sum, l) => sum + toCents(l.product.price) * l.quantity, 0),
+      cookieCount: units(boxLines),
+      extraCount: units(extraLines),
+      boxCents: cents(boxLines),
+      totalCents: cents(lines),
       isHydrated,
       addSignal,
       addItem,

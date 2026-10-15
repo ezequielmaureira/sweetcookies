@@ -239,6 +239,7 @@ describe("API", () => {
       "featured",
       "id",
       "imageUrl",
+      "kind",
       "name",
       "price",
       "stock",
@@ -313,6 +314,25 @@ describe("API", () => {
     }
     const bad = await app.request("/api/admin/products/order", { method: "PUT", headers: admin, body: JSON.stringify({ ids: ["chips", "chips"] }) });
     assert.equal(bad.status, 422);
+  });
+
+  it("POST /api/orders: cookies + producto adicional en un pedido; descuenta el stock de los dos", async () => {
+    const { app, memory } = setup();
+    const admin = { Authorization: "Bearer admin-token", "Content-Type": "application/json" };
+    const created = await app.request("/api/admin/products", { method: "POST", headers: admin, body: JSON.stringify({ name: "Budín de limón", price: "8000", cost: "3000", stock: 2, kind: "OTHER" }) });
+    const budin = (await json(created)).id;
+    const pub = (await json(await app.request("/api/public/products"))).products.find((p: { id: string }) => p.id === budin);
+    assert.equal(pub.kind, "OTHER");
+    const res = await app.request(order({ items: [{ productId: "chips", quantity: 6 }, { productId: budin, quantity: 1 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }));
+    assert.equal(res.status, 201);
+    const body = await json(res);
+    assert.equal(body.order.total, "38000.00");
+    assert.deepEqual(body.order.items.map((i: { kind: string }) => i.kind), ["COOKIE", "OTHER"]);
+    assert.equal(memory.items().find((p) => p.id === "chips")?.stock, 4);
+    assert.equal(memory.items().find((p) => p.id === budin)?.stock, 1);
+    // Solo productos adicionales (sin box) también se puede.
+    assert.equal((await app.request(order({ items: [{ productId: budin, quantity: 1 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }))).status, 201);
+    assert.equal((await app.request(order({ items: [{ productId: budin, quantity: 1 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }))).status, 409);
   });
 
   it("POST /api/orders: producto sin stock → 409, sin pedido y sin stock negativo", async () => {

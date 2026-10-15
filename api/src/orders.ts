@@ -5,7 +5,7 @@
  * total y ganancia se calculan SIEMPRE acá con los datos de la base.
  */
 import { centsToDecimalString } from "./money.ts";
-import { isPurchasable, type ProductRecord } from "./products.ts";
+import { isPurchasable, type ProductKind, type ProductRecord } from "./products.ts";
 
 export type DeliveryMethod = "PICKUP" | "DELIVERY";
 export type OrderStatus = "PENDING" | "CONFIRMED" | "DELIVERED" | "CANCELLED";
@@ -123,6 +123,8 @@ export function validateOrderRequest(body: unknown): { ok: true; data: OrderRequ
 export type PricedLine = {
   productId: string;
   productNameSnapshot: string;
+  /** COOKIE (dentro del box) u OTHER (producto adicional, fuera del box). */
+  kind: ProductKind;
   quantity: number;
   unitPriceCents: number;
   unitCostCents: number;
@@ -175,6 +177,7 @@ export function priceOrder(items: OrderRequestItem[], products: ProductRecord[])
     lines.push({
       productId,
       productNameSnapshot: product.name,
+      kind: product.kind,
       quantity,
       unitPriceCents: product.priceCents,
       unitCostCents: product.costCents,
@@ -204,7 +207,7 @@ export type PublicOrderReceipt = {
   number: number;
   total: string;
   itemCount: number;
-  items: { name: string; quantity: number; unitPrice: string; subtotal: string }[];
+  items: { name: string; kind: ProductKind; quantity: number; unitPrice: string; subtotal: string }[];
 };
 
 export function toReceipt(order: { id: string; number: number; itemCount: number }, priced: PricedOrder): PublicOrderReceipt {
@@ -215,6 +218,7 @@ export function toReceipt(order: { id: string; number: number; itemCount: number
     itemCount: priced.itemCount,
     items: priced.lines.map((l) => ({
       name: l.productNameSnapshot,
+      kind: l.kind,
       quantity: l.quantity,
       unitPrice: centsToDecimalString(l.unitPriceCents),
       subtotal: centsToDecimalString(l.subtotalCents),

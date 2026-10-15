@@ -54,3 +54,14 @@ export function countItems(items: CartItems): number {
 export function formatCookieCount(count: number): string {
   return `${count} ${count === 1 ? "cookie" : "cookies"}`;
 }
+
+export function formatExtraCount(count: number): string {
+  return `${count} ${count === 1 ? "producto" : "productos"}`;
+}
+
+/** "6 cookies", "1 producto" o "6 cookies + 1 producto" (los adicionales no son cookies). */
+export function formatCartCount(cookies: number, extras: number): string {
+  if (extras === 0) return formatCookieCount(cookies);
+  if (cookies === 0) return formatExtraCount(extras);
+  return `${formatCookieCount(cookies)} + ${formatExtraCount(extras)}`;
+}

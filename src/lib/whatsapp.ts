@@ -35,10 +35,24 @@ function cleanText(value: string, { multiline = false } = {}): string {
 /** Datos del pedido guardado (número y total calculado por el servidor). */
 export type SavedOrderInfo = { number: number; total: string };
 
+/**
+ * Mensaje del pedido. El box (cookies) y los productos adicionales van en
+ * secciones separadas: los adicionales no son parte del box.
+ */
 export function buildOrderMessage(lines: OrderLine[], customer: CustomerDetails, order?: SavedOrderInfo): string {
   const validLines = lines.filter((line) => line.quantity > 0);
-  const total = validLines.reduce((sum, line) => sum + line.quantity, 0);
-  const cookies = `${total} ${total === 1 ? "cookie" : "cookies"}`;
+  const boxLines = validLines.filter((line) => line.kind !== "OTHER");
+  const extraLines = validLines.filter((line) => line.kind === "OTHER");
+  const units = (list: OrderLine[]) => list.reduce((sum, line) => sum + line.quantity, 0);
+  const cookieCount = units(boxLines);
+  const extraCount = units(extraLines);
+  const cookies = `${cookieCount} ${cookieCount === 1 ? "cookie" : "cookies"}`;
+  const extras = `${extraCount} ${extraCount === 1 ? "producto" : "productos"}`;
+  const count = extraCount === 0 ? cookies : cookieCount === 0 ? extras : `${cookies} + ${extras}`;
+  const lineText = (line: OrderLine) => `${line.quantity} × ${line.name}${line.subtotal ? ` — ${formatPrice(line.subtotal)}` : ""}`;
+  const sections: string[] = [];
+  if (boxLines.length) sections.push(`BOX DE ${cookies.toUpperCase()}:`, ...boxLines.map(lineText), "");
+  if (extraLines.length) sections.push("PRODUCTOS ADICIONALES:", ...extraLines.map(lineText), "");
 
   const name = cleanText(`${customer.name} ${customer.lastName ?? ""}`);
   const phone = cleanText(customer.phone);
@@ -51,9 +65,8 @@ export function buildOrderMessage(lines: OrderLine[], customer: CustomerDetails,
     "",
     "Hola! Quiero hacer este pedido:",
     "",
-    ...validLines.map((line) => `${line.quantity} × ${line.name}${line.subtotal ? ` — ${formatPrice(line.subtotal)}` : ""}`),
-    "",
-    order ? `Total: ${formatPrice(order.total)} (${cookies})` : `Total: ${cookies}`,
+    ...sections,
+    order ? `TOTAL: ${formatPrice(order.total)} (${count})` : `Total: ${count}`,
     "",
     `Nombre: ${name}`,
   ];

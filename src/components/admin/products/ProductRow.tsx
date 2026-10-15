@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId } from "react";
 import { CookieImage } from "@/components/ui/CookieImage";
-import type { AdminProduct } from "@/lib/admin/admin-api";
+import { PRODUCT_KIND_LABELS, type AdminProduct } from "@/lib/admin/admin-api";
 import { moneyToInput } from "@/lib/admin/money-input";
 import { formatPrice } from "@/lib/catalog";
 import { RowMenu } from "./RowMenu";
@@ -116,7 +116,10 @@ export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onT
         <Link href={editUrl} className={styles.name}>
           {product.name}
         </Link>
-        <span className={styles.category}>{product.category ?? "Sin categoría"}</span>
+        <span className={styles.category}>
+          {product.kind === "OTHER" ? `${PRODUCT_KIND_LABELS.OTHER} · ` : ""}
+          {product.category ?? "Sin categoría"}
+        </span>
         {reorder && (
           <div className={styles.orderControls} role="group" aria-label={`Orden de ${product.name} en la web`}>
             <span

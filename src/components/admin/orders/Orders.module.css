@@ -435,3 +435,14 @@
     transition: none;
   }
 }
+
+/* Detalle del pedido: separador "Box" / "Productos adicionales". */
+.groupRow th {
+  padding-top: 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--color-chocolate-soft);
+}

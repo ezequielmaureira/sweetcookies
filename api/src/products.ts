@@ -4,6 +4,8 @@
 import { centsToDecimalString, parseMoney } from "./money.ts";
 
 export type ProductStatus = "ACTIVE" | "PAUSED";
+/** COOKIE: se elige para el box. OTHER: se compra suelto, nunca ocupa lugar en el box. */
+export type ProductKind = "COOKIE" | "OTHER";
 /** Estado que ve el admin. OUT_OF_STOCK es calculado (ACTIVE con stock 0), no se guarda. */
 export type DisplayStatus = ProductStatus | "OUT_OF_STOCK";
 
@@ -42,6 +44,7 @@ export type ProductRecord = BoxView & {
   stock: number;
   imageUrl: string | null;
   category: string | null;
+  kind: ProductKind;
   status: ProductStatus;
   featured: boolean;
   sortOrder: number;
@@ -58,6 +61,7 @@ export type PublicProduct = BoxView & {
   stock: number;
   imageUrl: string | null;
   category: string | null;
+  kind: ProductKind;
   featured: boolean;
 };
 
@@ -105,6 +109,7 @@ export function toPublicProduct(p: ProductRecord): PublicProduct {
     stock: p.stock,
     imageUrl: p.imageUrl,
     category: p.category,
+    kind: p.kind,
     featured: p.featured,
     boxImageUrl: p.boxImageUrl,
     boxImageScale: p.boxImageScale,
@@ -146,6 +151,7 @@ export type ProductData = BoxView & {
   stock: number;
   imageUrl: string | null;
   category: string | null;
+  kind: ProductKind;
   status: ProductStatus;
   featured: boolean;
 };
@@ -235,6 +241,11 @@ export function validateProductInput(body: unknown, partial: boolean): ProductVa
     else errors.imageUrl = "Usá una ruta del sitio (/images/...) o una URL https.";
   } else if (!partial) data.imageUrl = null;
 
+  if (has("kind")) {
+    if (input.kind === "COOKIE" || input.kind === "OTHER") data.kind = input.kind;
+    else errors.kind = "Tipo inválido.";
+  } else if (!partial) data.kind = "COOKIE";
+
   if (has("status")) {
     if (input.status === "ACTIVE" || input.status === "PAUSED") data.status = input.status;
     else errors.status = "Estado inválido.";
@@ -291,6 +302,7 @@ export function duplicateData(p: ProductRecord): ProductData {
     stock: p.stock,
     imageUrl: p.imageUrl,
     category: p.category,
+    kind: p.kind,
     status: "PAUSED",
     featured: false,
     boxImageUrl: p.boxImageUrl,

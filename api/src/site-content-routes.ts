@@ -3,7 +3,7 @@ import { bodyLimit } from "hono/body-limit";
 import type { ImageRepository } from "./image-repository.ts";
 import type { SiteContentRepository } from "./site-content-repository.ts";
 import { toAdminSiteTexts, toPublicSiteTexts, validateSiteTextsInput } from "./site-content.ts";
-import { siteImageDefinition, toAdminSiteImages, toPublicSiteImages, uploadedImageId, validateSiteImageInput } from "./site-images.ts";
+import { siteImageDefinition, toAdminSiteImages, toPublicSiteImageFramings, toPublicSiteImages, uploadedImageId, validateSiteImageInput } from "./site-images.ts";
 
 type Variables = { userId: string };
 type AppContext = Context<{ Variables: Variables }>;
@@ -24,7 +24,7 @@ export function registerSiteContentRoutes(app: Hono<{ Variables: Variables }>, {
   app.get("/api/public/content", async (c) => {
     c.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=30");
     const rows = await content.list();
-    return c.json({ texts: toPublicSiteTexts(rows), images: toPublicSiteImages(rows) });
+    return c.json({ texts: toPublicSiteTexts(rows), images: toPublicSiteImages(rows), framings: toPublicSiteImageFramings(rows) });
   });
 
   app.get("/api/admin/content", async (c) => c.json(toAdminSiteTexts(await content.list())));
@@ -61,7 +61,7 @@ export function registerSiteContentRoutes(app: Hono<{ Variables: Variables }>, {
     if (result.url && !(await images.get(uploadedImageId(result.url) ?? ""))) {
       return c.json({ error: "validation_error", fields: { url: "La imagen no existe. Volvé a subirla." } }, 422);
     }
-    const rows = await content.saveImage(key, result.url, c.get("userId"));
+    const rows = await content.saveImage(key, result.url, result.framing, c.get("userId"));
     log(`[admin] site image ${key} ${result.url ? "updated" : "reset"} by ${c.get("userId")}`);
     return c.json(toAdminSiteImages(rows));
   });

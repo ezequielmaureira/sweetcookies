@@ -127,7 +127,7 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
     }
 
     const message = buildOrderMessage(
-      created.order.items.map((item) => ({ name: item.name, quantity: item.quantity, subtotal: item.subtotal })),
+      created.order.items.map((item) => ({ name: item.name, quantity: item.quantity, subtotal: item.subtotal, kind: item.kind })),
       customer,
       { number: created.order.number, total: created.order.total },
     );
@@ -307,7 +307,7 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
       <div className={styles.submit}>
         {submitted && cartEmpty && !done && (
           <p className={styles.formError} role="alert">
-            Tu box está vacío. Agregá al menos una cookie.
+            Tu pedido está vacío. Agregá cookies a tu box u otros productos.
           </p>
         )}
         {ordersPaused && !done && <OrdersPausedNotice message={pausedMessage} instagramHandle={instagramHandle} />}

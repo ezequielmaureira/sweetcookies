@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatCookieCount } from "@/lib/cart";
 import { formatCents } from "@/lib/catalog";
 import styles from "./MobileBoxBar.module.css";
 
 type MobileBoxBarProps = {
   totalCount: number;
+  /** "6 cookies + 1 producto". */
+  label: string;
   /** Total estimado (se muestra junto a la cantidad). */
   totalCents: number;
   boxTargetId: string;
@@ -19,7 +20,7 @@ type MobileBoxBarProps = {
  * "Continuar", que lleva al resumen del pedido. Se oculta cuando el resumen o
  * la confirmación están a la vista (la caja en vivo ya se ve arriba).
  */
-export function MobileBoxBar({ totalCount, totalCents, boxTargetId, hideWhenVisibleIds }: MobileBoxBarProps) {
+export function MobileBoxBar({ totalCount, label, totalCents, boxTargetId, hideWhenVisibleIds }: MobileBoxBarProps) {
   const [targetsVisible, setTargetsVisible] = useState(true);
   const ids = hideWhenVisibleIds.join(",");
 
@@ -48,7 +49,7 @@ export function MobileBoxBar({ totalCount, totalCents, boxTargetId, hideWhenVisi
     <div className={[styles.bar, show ? styles.visible : ""].join(" ")} inert={!show}>
       <p className={styles.count}>
         <span className={styles.dot} aria-hidden="true" />
-        <strong>{formatCookieCount(totalCount)}</strong> · {formatCents(totalCents)}
+        <strong>{label}</strong> · {formatCents(totalCents)}
       </p>
       <a
         href={`#${boxTargetId}`}

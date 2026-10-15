@@ -52,6 +52,9 @@ export function adminErrorMessage(error: unknown, fallback = "No pudimos complet
 /* ---------- Productos ---------- */
 
 export type ProductStatus = "ACTIVE" | "PAUSED";
+/** COOKIE: se elige para el box. OTHER (budín, torta…): se compra suelto, nunca va dentro del box. */
+export type ProductKind = "COOKIE" | "OTHER";
+export const PRODUCT_KIND_LABELS: Record<ProductKind, string> = { COOKIE: "Cookie", OTHER: "Otro producto" };
 export type DisplayStatus = ProductStatus | "OUT_OF_STOCK";
 
 /** Vista en caja: imagen específica opcional + encuadre (ver src/lib/box-view.ts). */
@@ -77,6 +80,8 @@ export type AdminProduct = BoxViewInput & {
   stock: number;
   imageUrl: string | null;
   category: string | null;
+  /** Una API anterior puede no mandarlo: se toma como COOKIE. */
+  kind?: ProductKind;
   status: ProductStatus;
   displayStatus: DisplayStatus;
   featured: boolean;
@@ -94,6 +99,7 @@ export type ProductInput = BoxViewInput & {
   stock: number;
   imageUrl: string;
   category: string;
+  kind: ProductKind;
   status: ProductStatus;
   featured: boolean;
 };
@@ -152,7 +158,8 @@ export type AdminOrderRow = {
 export type AdminOrderDetail = AdminOrderRow & {
   deliveryAddress: string | null;
   notes: string | null;
-  items: { productId: string | null; productName: string; quantity: number; unitPrice: string; unitCost: string; subtotal: string; profit: string }[];
+  /** kind: COOKIE = dentro del box; OTHER = producto adicional (pedidos anteriores: COOKIE). */
+  items: { productId: string | null; productName: string; kind?: ProductKind; quantity: number; unitPrice: string; unitCost: string; subtotal: string; profit: string }[];
 };
 
 export type OrderSort = "recent" | "oldest" | "total_desc" | "total_asc" | "profit_desc" | "profit_asc" | "customer_asc" | "customer_desc";

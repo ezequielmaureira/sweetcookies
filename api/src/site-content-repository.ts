@@ -1,13 +1,16 @@
 import type { Prisma, PrismaClient } from "./generated/prisma/client.ts";
 import { siteTextDefinition, type SiteTextChange, type SiteTextRow } from "./site-content.ts";
-import { siteImageDefinition } from "./site-images.ts";
+import { framingKey, siteImageDefinition, type SiteImageFraming } from "./site-images.ts";
 
 export type SiteContentRepository = {
   list(): Promise<SiteTextRow[]>;
   /** Guarda todos los cambios juntos (null = se borra la fila y vuelve el original). */
   save(changes: SiteTextChange[], userId: string): Promise<SiteTextRow[]>;
-  /** Guarda la ruta de una foto del sitio (null = se borra la fila y vuelve la original). */
-  saveImage(key: string, url: string | null, userId: string): Promise<SiteTextRow[]>;
+  /**
+   * Guarda la ruta de una foto del sitio y su encuadre, juntos.
+   * url null = vuelve la original; framing null = encuadre centrado (se borran las filas).
+   */
+  saveImage(key: string, url: string | null, framing: SiteImageFraming | null, userId: string): Promise<SiteTextRow[]>;
 };
 
 const select = { key: true, value: true, updatedAt: true } as const;
@@ -40,19 +43,23 @@ export function createSiteContentRepository(prisma: PrismaClient): SiteContentRe
       if (ops.length) await prisma.$transaction(ops);
       return list();
     },
-    async saveImage(key, url, userId) {
+    async saveImage(key, url, framing, userId) {
       const def = siteImageDefinition(key);
       if (!def) return list();
-      if (url === null) {
-        await prisma.siteContent.deleteMany({ where: { key } });
-        return list();
-      }
-      const meta = { section: def.section, label: def.label, description: def.description };
-      await prisma.siteContent.upsert({
-        where: { key },
-        create: { key, value: url, ...meta, updatedByUserId: userId },
-        update: { value: url, ...meta, updatedByUserId: userId },
-      });
+      const meta = { section: def.section, description: def.description };
+      const write = (rowKey: string, label: string, value: string | null) =>
+        value === null
+          ? prisma.siteContent.deleteMany({ where: { key: rowKey } })
+          : prisma.siteContent.upsert({
+              where: { key: rowKey },
+              create: { key: rowKey, value, label, ...meta, updatedByUserId: userId },
+              update: { value, label, ...meta, updatedByUserId: userId },
+            });
+      // Foto y encuadre juntos: o se guardan los dos o ninguno.
+      await prisma.$transaction([
+        write(key, def.label, url),
+        write(framingKey(key), `${def.label} · encuadre`.slice(0, 80), framing ? JSON.stringify(framing) : null),
+      ]);
       return list();
     },
   };

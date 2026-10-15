@@ -28,6 +28,7 @@ type ProductRow = {
   stock: number;
   imageUrl: string | null;
   category: string | null;
+  kind: "COOKIE" | "OTHER";
   status: "ACTIVE" | "PAUSED";
   featured: boolean;
   sortOrder: number;
@@ -53,6 +54,7 @@ export function toProductRecord(row: ProductRow): ProductRecord {
     stock: row.stock,
     imageUrl: row.imageUrl,
     category: row.category,
+    kind: row.kind,
     status: row.status,
     featured: row.featured,
     sortOrder: row.sortOrder,

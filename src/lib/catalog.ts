@@ -29,6 +29,9 @@ export const MIN_SCALE = 0.3;
 
 export const DEFAULT_BOX_VIEW: BoxView = { boxImageUrl: null, boxImageScale: 1, boxImageX: 50, boxImageY: 50, boxImageRotation: 0, imageScale: 1, imageX: 50, imageY: 50 };
 
+/** COOKIE: se elige para el box. OTHER (budín, torta…): se compra suelto, nunca ocupa lugar en el box. */
+export type ProductKind = "COOKIE" | "OTHER";
+
 export type Product = BoxView & {
   id: string;
   name: string;
@@ -39,8 +42,11 @@ export type Product = BoxView & {
   /** Foto principal (catálogo, cards): ruta del sitio, imagen subida (/api/public/images/…) o URL https. */
   imageUrl: string | null;
   category: string | null;
+  kind: ProductKind;
   featured: boolean;
 };
+
+export const isCookie = (product: Pick<Product, "kind">) => product.kind === "COOKIE";
 
 export const PUBLIC_PRODUCTS_PATH = "/api/public/products";
 
@@ -68,8 +74,8 @@ export function formatCents(cents: number): string {
 
 export const formatPrice = (value: string) => formatCents(toCents(value));
 
-export function productAlt(product: Pick<Product, "name">): string {
-  return `Cookie ${product.name} de Sweet Cookies`;
+export function productAlt(product: Pick<Product, "name"> & Partial<Pick<Product, "kind">>): string {
+  return product.kind === "OTHER" ? `${product.name} de Sweet Cookies` : `Cookie ${product.name} de Sweet Cookies`;
 }
 
 /** Imagen con URL absoluta (API o externa): se muestra sin el optimizador de Next. */
@@ -111,6 +117,8 @@ export function parseCatalog(data: unknown): Product[] | null {
         stock: p.stock,
         imageUrl: safeImage(p.imageUrl),
         category: typeof p.category === "string" ? p.category : null,
+        // Sin tipo (API anterior) = cookie, como hasta ahora.
+        kind: p.kind === "OTHER" ? "OTHER" : "COOKIE",
         featured: p.featured === true,
         boxImageUrl: safeImage(p.boxImageUrl),
         boxImageScale: clamp(p.boxImageScale, MIN_SCALE, 4, 1),

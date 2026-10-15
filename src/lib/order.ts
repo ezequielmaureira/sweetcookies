@@ -39,8 +39,11 @@ export const FIELD_LIMITS = {
   notes: 600,
 } as const;
 
-/** Línea del mensaje. Con precios (comprobante del servidor) se muestran importes. */
-export type OrderLine = { name: string; quantity: number; subtotal?: string };
+/**
+ * Línea del mensaje. Con precios (comprobante del servidor) se muestran importes.
+ * kind: COOKIE (dentro del box, por defecto) u OTHER (producto adicional, fuera del box).
+ */
+export type OrderLine = { name: string; quantity: number; subtotal?: string; kind?: "COOKIE" | "OTHER" };
 
 export type CustomerField = "name" | "email" | "method" | "address";
 export type FieldErrors = Partial<Record<CustomerField, string>>;
