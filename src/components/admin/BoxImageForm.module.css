@@ -1,0 +1,52 @@
+/* Vistas previas con las mismas proporciones que el bloque del inicio
+   (BuildBoxSection: 5:4 en celular, 16:11 desde 768 px). */
+.previews {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 16px;
+  align-items: end;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-beige);
+}
+
+.mobile {
+  aspect-ratio: 5 / 4;
+}
+
+.desktop {
+  aspect-ratio: 16 / 11;
+}
+
+.image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.empty,
+.caption {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+@media (max-width: 479px) {
+  .previews {
+    grid-template-columns: 1fr;
+  }
+}

@@ -46,7 +46,7 @@ export const VOUCHER_FILTER_LABELS: Record<VoucherFilter, string> = {
   cancelled: "Anulados",
 };
 
-export const boxLabel = (quantity: number) => `Caja de ${quantity} cookies`;
+export const boxLabel = (quantity: number) => `Box de ${quantity} cookies`;
 
 /** Texto del voucher cuando no se cargó descripción (y en los vouchers anteriores al campo). */
 export const DEFAULT_VOUCHER_DESCRIPTION = "Premio donado por Sweet Cookies";

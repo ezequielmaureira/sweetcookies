@@ -22,3 +22,20 @@ export const getAdminSiteTexts = (token: string | null) => adminRequest<AdminSit
 /** Guarda todos los textos juntos. Vacío o igual al original = vuelve el original. */
 export const saveAdminSiteTexts = (token: string | null, texts: Record<string, string>) =>
   adminRequest<AdminSiteTexts>("/api/admin/content", token, { method: "PUT", body: JSON.stringify({ texts }) });
+
+/* ---------- Fotos del sitio ---------- */
+
+export type SiteImageField = {
+  key: string;
+  label: string;
+  description: string;
+  /** Ruta de la foto subida; null = se muestra la original del sitio. */
+  url: string | null;
+  updatedAt: string | null;
+};
+
+export const getAdminSiteImages = (token: string | null) => adminRequest<{ images: SiteImageField[] }>("/api/admin/content/images", token);
+
+/** Guarda la foto (ruta devuelta por uploadImage). null = vuelve la original. */
+export const saveAdminSiteImage = (token: string | null, key: string, url: string | null) =>
+  adminRequest<{ images: SiteImageField[] }>(`/api/admin/content/images/${encodeURIComponent(key)}`, token, { method: "PUT", body: JSON.stringify({ url }) });

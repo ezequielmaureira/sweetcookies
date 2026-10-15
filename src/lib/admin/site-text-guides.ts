@@ -63,7 +63,7 @@ export const SITE_TEXT_GUIDES: Record<string, SiteTextGuide> = {
     image: "/images/admin/textos/caja.jpg",
     width: 1200,
     height: 777,
-    alt: "Bloque “Armá tu caja” del inicio",
+    alt: "Bloque “Armá tu box” del inicio",
     boxes: {
       BOX_TITLE: { x: 61.8, y: 34.6, w: 32.4, h: 11 },
       BOX_DESCRIPTION: { x: 61.8, y: 46.1, w: 31.8, h: 9 },
@@ -84,7 +84,7 @@ export const SITE_TEXT_GUIDES: Record<string, SiteTextGuide> = {
     image: "/images/admin/textos/pagina-caja.jpg",
     width: 1200,
     height: 360,
-    alt: "Encabezado de la página “Armá tu caja”",
+    alt: "Encabezado de la página “Armá tu box”",
     boxes: {
       BUILDER_EYEBROW: { x: 3.5, y: 11.6, w: 12.9, h: 8.7 },
       BUILDER_TITLE: { x: 3.5, y: 19.7, w: 55.1, h: 45.6 },

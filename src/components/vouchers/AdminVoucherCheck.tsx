@@ -28,7 +28,7 @@ export function AdminVoucherCheck({ initial }: { initial: PublicVoucher }) {
       const response = await redeemVoucher(await getToken(), voucher.publicId);
       if (response.voucher) setVoucher(response.voucher);
       if (response.ok) {
-        setResult({ kind: "ok", text: "Canje registrado ✓ Entregá la caja." });
+        setResult({ kind: "ok", text: "Canje registrado ✓ Entregá el box." });
       } else {
         const status = response.voucher?.status;
         setResult({

@@ -1,10 +1,13 @@
 import type { Prisma, PrismaClient } from "./generated/prisma/client.ts";
 import { siteTextDefinition, type SiteTextChange, type SiteTextRow } from "./site-content.ts";
+import { siteImageDefinition } from "./site-images.ts";
 
 export type SiteContentRepository = {
   list(): Promise<SiteTextRow[]>;
   /** Guarda todos los cambios juntos (null = se borra la fila y vuelve el original). */
   save(changes: SiteTextChange[], userId: string): Promise<SiteTextRow[]>;
+  /** Guarda la ruta de una foto del sitio (null = se borra la fila y vuelve la original). */
+  saveImage(key: string, url: string | null, userId: string): Promise<SiteTextRow[]>;
 };
 
 const select = { key: true, value: true, updatedAt: true } as const;
@@ -35,6 +38,21 @@ export function createSiteContentRepository(prisma: PrismaClient): SiteContentRe
         );
       }
       if (ops.length) await prisma.$transaction(ops);
+      return list();
+    },
+    async saveImage(key, url, userId) {
+      const def = siteImageDefinition(key);
+      if (!def) return list();
+      if (url === null) {
+        await prisma.siteContent.deleteMany({ where: { key } });
+        return list();
+      }
+      const meta = { section: def.section, label: def.label, description: def.description };
+      await prisma.siteContent.upsert({
+        where: { key },
+        create: { key, value: url, ...meta, updatedByUserId: userId },
+        update: { value: url, ...meta, updatedByUserId: userId },
+      });
       return list();
     },
   };

@@ -64,8 +64,8 @@ export function BoxPreview({ lines, totalCount, compact = false, totalCents }: B
 
   const description =
     totalCount === 0
-      ? "Tu caja está vacía."
-      : `Tu caja con ${formatCookieCount(totalCount)}: ${lines.map((l) => `${l.quantity} ${l.product.name}`).join(", ")}.`;
+      ? "Tu box está vacío."
+      : `Tu box con ${formatCookieCount(totalCount)}: ${lines.map((l) => `${l.quantity} ${l.product.name}`).join(", ")}.`;
 
   const cells = Array.from({ length: capacity }, (_, index) => {
     const unit = slots[index];
@@ -118,7 +118,7 @@ export function BoxPreview({ lines, totalCount, compact = false, totalCents }: B
       >
         {box}
         <div className={styles.info} aria-hidden="true">
-          <span className={styles.brand}>Tu caja</span>
+          <span className={styles.brand}>Tu box</span>
           <span key={totalCount} className={styles.bigCount}>
             {totalCount}
           </span>
@@ -133,12 +133,12 @@ export function BoxPreview({ lines, totalCount, compact = false, totalCents }: B
   return (
     <div className={styles.box} role="img" aria-label={description}>
       <div className={styles.lid} aria-hidden="true">
-        <span className={styles.brand}>Tu caja</span>
+        <span className={styles.brand}>Tu box</span>
         <span className={styles.count}>{formatCookieCount(totalCount)}</span>
       </div>
       <div className={styles.frame} aria-hidden="true">
         {box}
-        {totalCount === 0 && <p className={styles.emptyText}>Tu caja está vacía. Agregá tus sabores.</p>}
+        {totalCount === 0 && <p className={styles.emptyText}>Tu box está vacío. Agregá tus sabores.</p>}
       </div>
     </div>
   );

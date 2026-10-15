@@ -32,9 +32,9 @@ export const SITE_TEXT_SECTIONS = [
   { id: "home", label: "Inicio", description: "La primera pantalla de la web." },
   { id: "homeCookie", label: "Cookie del inicio", description: "La cookie grande del inicio, que también se puede morder." },
   { id: "flavors", label: "Sabores", description: "La sección con las cookies del catálogo." },
-  { id: "box", label: "Armá tu caja (en el inicio)", description: "El bloque con la foto de la caja." },
+  { id: "box", label: "Armá tu box (en el inicio)", description: "El bloque con la foto del box." },
   { id: "final", label: "Cierre del inicio", description: "La invitación final, antes del pie de página." },
-  { id: "builder", label: "Página “Armá tu caja”", description: "El encabezado de la página donde se arma el pedido." },
+  { id: "builder", label: "Página “Armá tu box”", description: "El encabezado de la página donde se arma el pedido." },
 ] as const;
 
 export const SITE_TEXTS: readonly SiteTextDefinition[] = [
@@ -58,7 +58,7 @@ export const SITE_TEXTS: readonly SiteTextDefinition[] = [
   },
   { key: "HOME_DESCRIPTION", section: "home", label: "Descripción", kind: "description", defaultValue: "Cookies artesanales, combinaciones únicas y mucho sabor." },
   { key: "HOME_PRIMARY_CTA", section: "home", label: "Botón principal", description: "Lleva a los sabores.", kind: "button", defaultValue: "Ver sabores" },
-  { key: "HOME_SECONDARY_CTA", section: "home", label: "Botón secundario", description: "Lleva a “Armá tu caja”.", kind: "button", defaultValue: "Armá tu caja" },
+  { key: "HOME_SECONDARY_CTA", section: "home", label: "Botón secundario", description: "Lleva a “Armá tu box”.", kind: "button", defaultValue: "Armá tu box" },
 
   // Cookie del inicio
   { key: "HOME_COOKIE_LABEL", section: "homeCookie", label: "Texto de la cookie", description: "Antes de la primera mordida.", kind: "short", max: 60, defaultValue: "Tocá la cookie" },
@@ -80,17 +80,17 @@ export const SITE_TEXTS: readonly SiteTextDefinition[] = [
     defaultValue: "Estamos horneando: muy pronto vas a ver nuestros sabores acá.",
   },
 
-  // Armá tu caja (inicio)
-  { key: "BOX_TITLE", section: "box", label: "Título", kind: "title", defaultValue: "Armá tu caja" },
+  // Armá tu box (inicio)
+  { key: "BOX_TITLE", section: "box", label: "Título", kind: "title", defaultValue: "Armá tu box" },
   { key: "BOX_DESCRIPTION", section: "box", label: "Descripción", kind: "description", defaultValue: "Elegí tus cookies favoritas y creá tu combinación." },
   { key: "BOX_CTA", section: "box", label: "Botón", kind: "button", defaultValue: "Empezar" },
 
   // Cierre
   { key: "FINAL_CTA_TITLE", section: "final", label: "Título", kind: "title", defaultValue: "¿Ya elegiste tus favoritas?" },
-  { key: "FINAL_CTA_BUTTON", section: "final", label: "Botón", kind: "button", defaultValue: "Armá tu caja" },
+  { key: "FINAL_CTA_BUTTON", section: "final", label: "Botón", kind: "button", defaultValue: "Armá tu box" },
 
-  // Página Armá tu caja
-  { key: "BUILDER_EYEBROW", section: "builder", label: "Etiqueta superior", description: "Se muestra en mayúsculas, arriba del título.", kind: "short", max: 40, defaultValue: "Armá tu caja" },
+  // Página Armá tu box
+  { key: "BUILDER_EYEBROW", section: "builder", label: "Etiqueta superior", description: "Se muestra en mayúsculas, arriba del título.", kind: "short", max: 40, defaultValue: "Armá tu box" },
   { key: "BUILDER_TITLE", section: "builder", label: "Título", kind: "title", defaultValue: "Creá tu combinación perfecta." },
   { key: "BUILDER_DESCRIPTION", section: "builder", label: "Descripción", kind: "description", defaultValue: "Elegí tus cookies favoritas y armá tu pedido." },
 ];

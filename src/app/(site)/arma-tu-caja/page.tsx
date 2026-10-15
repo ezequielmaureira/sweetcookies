@@ -7,8 +7,8 @@ import { site } from "@/data/site";
 import { resolveImage } from "@/lib/images";
 
 export const metadata: Metadata = {
-  title: `Armá tu caja — ${site.name}`,
-  description: "Elegí tus cookies favoritas, armá tu caja y envianos el pedido por WhatsApp.",
+  title: `Armá tu box — ${site.name}`,
+  description: "Elegí tus cookies favoritas, armá tu box y envianos el pedido por WhatsApp.",
 };
 
 /** El catálogo real (PostgreSQL) llega por el CartProvider del layout público. */

@@ -23,7 +23,7 @@ describe("voucher-format", () => {
   it("URL del QR y textos", () => {
     assert.equal(voucherUrl("d8f7sd8f7sd8f7AB"), "https://sweetcookies-seven.vercel.app/v/d8f7sd8f7sd8f7AB");
     assert.equal(voucherUrl("abc", "http://192.168.0.10:3000"), "http://192.168.0.10:3000/v/abc");
-    assert.equal(boxLabel(6), "Caja de 6 cookies");
+    assert.equal(boxLabel(6), "Box de 6 cookies");
     assert.ok(isValidPublicId("d8f7sd8f7sd8f7AB"));
     assert.ok(!isValidPublicId("../admin"));
   });
@@ -31,7 +31,7 @@ describe("voucher-format", () => {
   it("textos para compartir: solo el link, sin imágenes", () => {
     const v = { publicId: "d8f7sd8f7sd8f7AB", cookieQuantity: 6, expiresAt: "2026-10-16T02:59:59.999Z" };
     const url = "https://sweetcookies-seven.vercel.app/v/d8f7sd8f7sd8f7AB";
-    assert.equal(voucherShareText(v), `Tenés un voucher de Sweet Cookies 🍪\n\nCaja de 6 cookies\nVálido hasta 15/10/2026\n\n${url}`);
+    assert.equal(voucherShareText(v), `Tenés un voucher de Sweet Cookies 🍪\n\nBox de 6 cookies\nVálido hasta 15/10/2026\n\n${url}`);
   });
 
   it("WhatsApp y email: mensaje con el link, sin destinatario ni adjuntos", () => {
@@ -39,13 +39,13 @@ describe("voucher-format", () => {
     const url = "https://sweetcookies-seven.vercel.app/v/d8f7sd8f7sd8f7AB";
     const wa = new URL(voucherWhatsAppUrl(v));
     assert.equal(wa.origin + wa.pathname, "https://wa.me/");
-    assert.equal(wa.searchParams.get("text"), `Tenés un voucher de Sweet Cookies 🍪\n\nCaja de 4 cookies\nVálido hasta 15/10/2026\n\nAbrí tu voucher acá:\n${url}`);
+    assert.equal(wa.searchParams.get("text"), `Tenés un voucher de Sweet Cookies 🍪\n\nBox de 4 cookies\nVálido hasta 15/10/2026\n\nAbrí tu voucher acá:\n${url}`);
 
     const mail = voucherMailtoUrl(v);
     assert.ok(mail.startsWith("mailto:?subject="));
     const params = new URLSearchParams(mail.slice("mailto:?".length));
     assert.equal(params.get("subject"), "Tenés un voucher de Sweet Cookies 🍪");
-    assert.equal(params.get("body"), `Tenés un voucher de Sweet Cookies.\n\nCaja de 4 cookies\nVálido hasta 15/10/2026\n\nVoucher:\n${url}\n\nImagen del voucher:\n${url}/image`);
+    assert.equal(params.get("body"), `Tenés un voucher de Sweet Cookies.\n\nBox de 4 cookies\nVálido hasta 15/10/2026\n\nVoucher:\n${url}\n\nImagen del voucher:\n${url}/image`);
   });
 
   it("copiar link: la URL del voucher según el entorno", () => {

@@ -15,7 +15,7 @@ describe("escáner: qué QR se aceptan", () => {
 
   it("rechaza QR externos, textos y URLs que imitan el dominio", () => {
     for (const text of [
-      "Caja de 6 cookies",
+      "Box de 6 cookies",
       `https://otra-web.com/v/${ID}`,
       `https://sweetcookies-seven.vercel.app.evil.com/v/${ID}`,
       `http://sweetcookies-seven.vercel.app/v/${ID}`,

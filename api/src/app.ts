@@ -251,7 +251,7 @@ export function createApp({
     return c.body(null, 204);
   });
 
-  // Subida de imágenes (foto principal o de caja). Body = archivo binario.
+  // Subida de imágenes (foto principal, de caja o del sitio). Body = archivo binario.
   app.post(
     "/api/admin/images",
     bodyLimit({ maxSize: MAX_IMAGE_BYTES, onError: tooLarge }),
@@ -280,7 +280,7 @@ export function createApp({
   if (vouchers) registerVoucherRoutes(app, { vouchers, auth, log });
 
   // Textos del sitio (público: lectura · admin: Configuración → Textos del sitio).
-  if (content) registerSiteContentRoutes(app, { content, log });
+  if (content) registerSiteContentRoutes(app, { content, images, log });
 
   // Gestión de costos (solo admin: ingredientes, precios y recetas).
   if (management) registerManagementRoutes(app, { management, log });

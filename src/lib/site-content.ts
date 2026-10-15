@@ -17,7 +17,7 @@ export const SITE_TEXT_DEFAULTS = {
   HOME_TITLE: "Cookies hechas\npara darte un gusto.",
   HOME_DESCRIPTION: "Cookies artesanales, combinaciones únicas y mucho sabor.",
   HOME_PRIMARY_CTA: "Ver sabores",
-  HOME_SECONDARY_CTA: "Armá tu caja",
+  HOME_SECONDARY_CTA: "Armá tu box",
   // Cookie del inicio
   HOME_COOKIE_LABEL: "Tocá la cookie",
   HOME_COOKIE_BITE_ONE: "Mmm...",
@@ -29,15 +29,15 @@ export const SITE_TEXT_DEFAULTS = {
   FLAVORS_TITLE: "Nuestros sabores",
   FLAVORS_DESCRIPTION: "Elegí tu favorita. O probalas todas.",
   FLAVORS_EMPTY: "Estamos horneando: muy pronto vas a ver nuestros sabores acá.",
-  // Armá tu caja (inicio)
-  BOX_TITLE: "Armá tu caja",
+  // Armá tu box (inicio)
+  BOX_TITLE: "Armá tu box",
   BOX_DESCRIPTION: "Elegí tus cookies favoritas y creá tu combinación.",
   BOX_CTA: "Empezar",
   // Cierre
   FINAL_CTA_TITLE: "¿Ya elegiste tus favoritas?",
-  FINAL_CTA_BUTTON: "Armá tu caja",
-  // Página Armá tu caja
-  BUILDER_EYEBROW: "Armá tu caja",
+  FINAL_CTA_BUTTON: "Armá tu box",
+  // Página Armá tu box
+  BUILDER_EYEBROW: "Armá tu box",
   BUILDER_TITLE: "Creá tu combinación perfecta.",
   BUILDER_DESCRIPTION: "Elegí tus cookies favoritas y armá tu pedido.",
 } as const;
@@ -61,3 +61,27 @@ export function parseSiteTexts(json: unknown): SiteTexts {
 
 /** Renglones de un texto (el título del inicio va en líneas separadas). */
 export const textLines = (text: string) => text.split("\n").filter((line) => line.trim());
+
+/**
+ * Fotos del sitio cambiadas desde el panel (Configuración → Foto de “Armá tu box”).
+ * Sin valor, la web usa la foto original de public/images/cookies/.
+ */
+export type SiteImageKey = "BOX_IMAGE";
+export type SiteImages = Partial<Record<SiteImageKey, string>>;
+
+const SITE_IMAGE_KEYS: readonly SiteImageKey[] = ["BOX_IMAGE"];
+
+/** Solo rutas de imágenes subidas desde el panel (se sirven desde la API). */
+const UPLOADED_IMAGE = /^\/api\/public\/images\/[a-z0-9]{10,40}$/;
+
+/** Fotos que vinieron de la API (ignora claves desconocidas o rutas inválidas). */
+export function parseSiteImages(json: unknown): SiteImages {
+  const images: SiteImages = {};
+  const raw = typeof json === "object" && json !== null ? (json as Record<string, unknown>).images : null;
+  if (typeof raw !== "object" || raw === null) return images;
+  for (const key of SITE_IMAGE_KEYS) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (typeof value === "string" && UPLOADED_IMAGE.test(value)) images[key] = value;
+  }
+  return images;
+}

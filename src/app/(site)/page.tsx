@@ -8,10 +8,10 @@ import { RevealObserver } from "@/components/ui/RevealObserver";
 import { brandImages } from "@/data/cookies";
 import { getHeroCookie } from "@/lib/hero-cookie";
 import { resolveImage } from "@/lib/images";
-import { getSiteTexts } from "@/lib/site-content-server";
+import { getSiteContent } from "@/lib/site-content-server";
 
 export default async function HomePage() {
-  const texts = await getSiteTexts();
+  const { texts, images } = await getSiteContent();
   const heroCookie = getHeroCookie();
 
   return (
@@ -21,7 +21,7 @@ export default async function HomePage() {
         <Hero cookieSrc={heroCookie.src} isCutout={heroCookie.isCutout} imageAlt={heroCookie.alt} texts={texts} />
         <FlavorsSection title={texts.FLAVORS_TITLE} subtitle={texts.FLAVORS_DESCRIPTION} />
         <BuildBoxSection
-          imageSrc={resolveImage(brandImages.box)}
+          imageSrc={images.BOX_IMAGE ?? resolveImage(brandImages.box)}
           title={texts.BOX_TITLE}
           text={texts.BOX_DESCRIPTION}
           ctaLabel={texts.BOX_CTA}

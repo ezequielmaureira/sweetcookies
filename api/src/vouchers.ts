@@ -108,7 +108,7 @@ export function validateVoucherInput(body: unknown, now = new Date()): { ok: tru
 
   const quantity = input.cookieQuantity;
   const validQuantity = typeof quantity === "number" && (VOUCHER_QUANTITIES as readonly number[]).includes(quantity);
-  if (!validQuantity) errors.cookieQuantity = "Elegí caja de 4 o de 6 cookies.";
+  if (!validQuantity) errors.cookieQuantity = "Elegí box de 4 o de 6 cookies.";
 
   const raw = typeof input.validUntil === "string" ? input.validUntil.trim() : "";
   const expiresAt = endOfDayInArgentina(raw);

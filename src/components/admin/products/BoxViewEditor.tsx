@@ -71,31 +71,31 @@ export function BoxViewEditor({ imageUrl, value, onChange, onUpload, uploading, 
     <section className={styles.boxView} aria-labelledby={id("title")}>
       <div>
         <h3 id={id("title")} className={styles.boxViewTitle}>
-          Vista en caja
+          Vista en box
         </h3>
-        <p className={styles.help}>Así se ve esta cookie dentro de la caja del comprador. En el catálogo se sigue usando la foto principal.</p>
+        <p className={styles.help}>Así se ve esta cookie dentro del box del comprador. En el catálogo se sigue usando la foto principal.</p>
       </div>
 
-      <div className={styles.segmented} role="radiogroup" aria-label="Imagen para la caja">
+      <div className={styles.segmented} role="radiogroup" aria-label="Imagen para el box">
         <label className={styles.segment}>
           <input type="radio" name={id("mode")} checked={mode === "main"} onChange={() => chooseMode("main")} />
           <span>Usar foto principal</span>
         </label>
         <label className={styles.segment}>
           <input type="radio" name={id("mode")} checked={mode === "specific"} onChange={() => chooseMode("specific")} />
-          <span>Imagen para caja</span>
+          <span>Imagen para box</span>
         </label>
       </div>
 
       {mode === "specific" && (
         <div className={styles.specific}>
           <p className={styles.help}>
-            Opcional. {value.boxImageUrl ? "La caja usa esta imagen." : "Mientras no subas una, la caja usa la foto principal."}
+            Opcional. {value.boxImageUrl ? "El box usa esta imagen." : "Mientras no subas una, el box usa la foto principal."}
           </p>
           <div className={styles.uploadRow}>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="visually-hidden" tabIndex={-1} aria-hidden="true" onChange={handleFile} />
             <button type="button" className={styles.uploadButton} onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? "Subiendo…" : value.boxImageUrl ? "Cambiar imagen para caja" : "Subir imagen para caja"}
+              {uploading ? "Subiendo…" : value.boxImageUrl ? "Cambiar imagen para box" : "Subir imagen para box"}
             </button>
             {value.boxImageUrl && (
               <button type="button" className={styles.linkButton} onClick={() => chooseMode("main")} disabled={uploading}>
@@ -122,7 +122,7 @@ export function BoxViewEditor({ imageUrl, value, onChange, onUpload, uploading, 
           </div>
           <p className={styles.previewCaption}>
             {view.src
-              ? `${view.specific ? "Imagen para caja" : "Foto principal"} · arrastrá para encuadrar`
+              ? `${view.specific ? "Imagen para box" : "Foto principal"} · arrastrá para encuadrar`
               : "Cargá la foto principal para ver la cookie."}
           </p>
           {/* Contexto: así queda junto a otras cookies en la caja. */}

@@ -10,7 +10,7 @@ export default function AdminVouchersPage() {
         <div>
           <p className="kicker">Regalos</p>
           <h1 className={styles.title}>Vouchers</h1>
-          <p className={styles.lead}>Cajas de 4 o 6 cookies con QR único. Cada voucher se canjea una sola vez.</p>
+          <p className={styles.lead}>Boxes de 4 o 6 cookies con QR único. Cada voucher se canjea una sola vez.</p>
         </div>
         <div className={vouchersStyles.mainActions}>
           <ButtonLink href="/admin/vouchers/nuevo">+ Crear voucher</ButtonLink>

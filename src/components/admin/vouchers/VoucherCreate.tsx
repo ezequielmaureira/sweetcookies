@@ -85,7 +85,7 @@ export function VoucherCreate() {
               <input type="radio" name="cookieQuantity" value={q} checked={quantity === q} onChange={() => setQuantity(q)} />
               <span className={styles.typeCard}>
                 <span className={styles.typeNumber}>{q}</span>
-                <span className={styles.typeLabel}>Caja de {q} cookies</span>
+                <span className={styles.typeLabel}>Box de {q} cookies</span>
               </span>
             </label>
           ))}

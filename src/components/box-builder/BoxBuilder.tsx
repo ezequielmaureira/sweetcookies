@@ -49,7 +49,7 @@ export function BoxBuilder() {
 
   const announce = (id: string, quantity: number) => {
     const name = productsById[id]?.name ?? "";
-    const text = quantity === 0 ? `${name} quitada de tu caja.` : `${name}: ${quantity} en tu caja.`;
+    const text = quantity === 0 ? `${name} quitada de tu box.` : `${name}: ${quantity} en tu box.`;
     // Alterna un carácter invisible para que se repita el anuncio aunque el texto sea igual.
     setAnnouncement((prev) => (prev.endsWith("​") ? text : `${text}​`));
   };
@@ -87,7 +87,7 @@ export function BoxBuilder() {
     clearCart();
     setFormKey((k) => k + 1);
     setCheckoutOpen(false);
-    setAnnouncement("Pedido vacío. Podés armar una caja nueva.");
+    setAnnouncement("Pedido vacío. Podés armar un box nuevo.");
     goToFlavors();
   };
 
@@ -105,7 +105,7 @@ export function BoxBuilder() {
         <ol className={styles.steps} aria-label="Pasos del pedido">
           {[
             { n: 1, label: "Elegí tus sabores", href: SECTION.flavors },
-            { n: 2, label: "Armá tu caja", href: SECTION.box },
+            { n: 2, label: "Armá tu box", href: SECTION.box },
             { n: 3, label: "Confirmá tu pedido", href: SECTION.confirm },
           ].map((step) => (
             <li
@@ -151,7 +151,7 @@ export function BoxBuilder() {
         <aside id={SECTION.box} className={styles.boxColumn} aria-labelledby={`${SECTION.box}-title`}>
           <div className={styles.sticky}>
             <StepHeading id={`${SECTION.box}-title`} n={2}>
-              Armá tu caja
+              Armá tu box
             </StepHeading>
             {/* Desktop: caja grande en la columna fija (en mobile ya está arriba, en vivo). */}
             <div className={styles.boxDesktop}>
@@ -182,8 +182,8 @@ export function BoxBuilder() {
             ) : (
               <p className={styles.confirmHint}>
                 {totalCount > 0
-                  ? `Tu caja tiene ${formatCookieCount(totalCount)}. Cuando esté lista, continuá tu pedido.`
-                  : "Cuando tengas tu caja lista, completá tus datos y envianos el pedido por WhatsApp."}
+                  ? `Tu box tiene ${formatCookieCount(totalCount)}. Cuando esté listo, continuá tu pedido.`
+                  : "Cuando tengas tu box listo, completá tus datos y envianos el pedido por WhatsApp."}
               </p>
             )}
           </div>

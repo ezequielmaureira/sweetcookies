@@ -24,7 +24,7 @@ export function VoucherQr({ publicId, code }: { publicId: string; code: string }
         <rect width={total} height={total} fill="#fff" />
         <path d={path} fill="#1f150f" />
       </svg>
-      <figcaption>Mostrá este QR al retirar tu caja</figcaption>
+      <figcaption>Mostrá este QR al retirar tu box</figcaption>
     </figure>
   );
 }

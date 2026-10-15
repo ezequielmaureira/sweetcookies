@@ -20,7 +20,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: `${site.name} — Cookies artesanales`,
-  description: "Cookies artesanales, combinaciones únicas y mucho sabor. Elegí tus favoritas y armá tu caja.",
+  description: "Cookies artesanales, combinaciones únicas y mucho sabor. Elegí tus favoritas y armá tu box.",
 };
 
 export const viewport: Viewport = {

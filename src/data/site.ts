@@ -23,7 +23,7 @@ export const routes = {
 export const navLinks: NavLink[] = [
   { label: "Inicio", href: "/#inicio" },
   { label: "Sabores", href: "/#sabores" },
-  { label: "Armá tu caja", href: routes.buildBox },
+  { label: "Armá tu box", href: routes.buildBox },
 ];
 
 /** Anclas de las secciones de la home (reutilizadas por header, CTAs y secciones). */

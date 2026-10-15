@@ -109,7 +109,7 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
         void refreshCatalog(); // Stock real, directo de la API (sin caché).
         setState({
           kind: "error",
-          message: "Algunos productos cambiaron mientras armabas tu caja. Ya ajustamos tu pedido; revisalo y volvé a enviarlo:",
+          message: "Algunos productos cambiaron mientras armabas tu box. Ya ajustamos tu pedido; revisalo y volvé a enviarlo:",
           problems: created.problems,
         });
       } else if (created.kind === "validation") {
@@ -307,7 +307,7 @@ export function CustomerForm({ onReset }: CustomerFormProps) {
       <div className={styles.submit}>
         {submitted && cartEmpty && !done && (
           <p className={styles.formError} role="alert">
-            Tu caja está vacía. Agregá al menos una cookie.
+            Tu box está vacío. Agregá al menos una cookie.
           </p>
         )}
         {ordersPaused && !done && <OrdersPausedNotice message={pausedMessage} instagramHandle={instagramHandle} />}

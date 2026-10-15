@@ -17,7 +17,7 @@ type BuildBoxSectionProps = {
 
 export function BuildBoxSection({
   imageSrc,
-  title = "Armá tu caja",
+  title = "Armá tu box",
   text = "Elegí tus cookies favoritas y creá tu combinación.",
   ctaLabel = "Empezar",
   ctaHref = routes.buildBox,
@@ -31,9 +31,9 @@ export function BuildBoxSection({
             <div className={styles.photo}>
               <CookieImage
                 src={imageSrc}
-                alt="Caja de Sweet Cookies con cookies surtidas"
+                alt="Box de Sweet Cookies con cookies surtidas"
                 sizes="(min-width: 1024px) 720px, 100vw"
-                placeholderLabel="Foto de la caja"
+                placeholderLabel="Foto del box"
               />
             </div>
           </Parallax>
