@@ -18,6 +18,7 @@ import {
   type ProductInput,
 } from "@/lib/admin/admin-api";
 import { normalizeMoneyInput } from "@/lib/admin/money-input";
+import { moveId, reorderErrorMessage } from "@/lib/admin/product-order";
 import { ProductRow, type QuickField, type RowDraft, type RowReorder, type RowState } from "./ProductRow";
 import styles from "./ProductList.module.css";
 
@@ -240,24 +241,27 @@ export function ProductsAdmin() {
    */
   const moveTo = async (id: string, toIndex: number) => {
     if (reordering) return;
-    const ordered = [...products].sort(compare.manual);
-    const from = ordered.findIndex((p) => p.id === id);
-    if (from < 0 || toIndex < 0 || toIndex >= ordered.length || from === toIndex) return;
-    const [moved] = ordered.splice(from, 1);
-    ordered.splice(toIndex, 0, moved);
+    const ids = moveId(
+      [...products].sort(compare.manual).map((p) => p.id),
+      id,
+      toIndex,
+    );
+    const moved = products.find((p) => p.id === id);
+    if (!ids || !moved) return;
     const previous = products;
-    setProducts(ordered.map((p, i) => ({ ...p, sortOrder: i + 1 })));
+    const position = new Map(ids.map((pid, i) => [pid, i + 1]));
+    // Se ve al instante; si el servidor no lo guarda, vuelve atrás con el error real.
+    setProducts(products.map((p) => ({ ...p, sortOrder: position.get(p.id) ?? p.sortOrder })));
     setReordering(true);
+    setNotice({ kind: "ok", text: "Guardando orden…" });
     try {
-      const { products: saved } = await reorderProducts(
-        await getToken(),
-        ordered.map((p) => p.id),
-      );
+      const { products: saved } = await reorderProducts(await getToken(), ids);
       setProducts(saved);
-      setNotice({ kind: "ok", text: `Orden guardado: “${moved.name}” quedó en el lugar ${toIndex + 1}.` });
+      const place = [...saved].sort(compare.manual).findIndex((p) => p.id === id) + 1;
+      setNotice({ kind: "ok", text: `Orden guardado: “${moved.name}” quedó en el lugar ${place}.` });
     } catch (error) {
       setProducts(previous);
-      setNotice({ kind: "error", text: adminErrorMessage(error, "No pudimos guardar el orden.") });
+      setNotice({ kind: "error", text: reorderErrorMessage(error) });
     } finally {
       setReordering(false);
     }
@@ -299,7 +303,8 @@ export function ProductsAdmin() {
       event.dataTransfer.setData("text/plain", product.id);
       const row = event.currentTarget.closest("li");
       if (row) event.dataTransfer.setDragImage(row, 24, 24);
-      setDragId(product.id);
+      // Después del dragstart: cambiar la fila en el mismo evento puede cancelar el arrastre en Chrome.
+      window.setTimeout(() => setDragId(product.id), 0);
     },
     onDragOver: (event) => {
       if (!dragId) return;
