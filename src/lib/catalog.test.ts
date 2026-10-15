@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { DEFAULT_BOX_VIEW, availabilityLabel, formatCents, parseCatalog, resolveImageSrc, toCents } from "./catalog.ts";
+import { DEFAULT_BOX_VIEW, availabilityLabel, formatCents, isOutOfStock, parseCatalog, resolveImageSrc, toCents } from "./catalog.ts";
 
 const item = {
   id: "chips",
@@ -20,16 +20,21 @@ describe("catálogo público", () => {
     assert.deepEqual(p, item);
     assert.ok(!("cost" in (p as object)));
   });
-  it("descarta productos sin stock, sin precio o con imagen peligrosa", () => {
+  it("conserva los sin stock (se muestran sin poder comprarse); descarta sin precio, stock inválido o imagen peligrosa", () => {
     const list = parseCatalog({
       products: [
         { ...item, id: "a", stock: 0 },
         { ...item, id: "b", price: "0.00" },
         { ...item, id: "c", imageUrl: "javascript:alert(1)" },
         { ...item, id: "d e" },
+        { ...item, id: "f", stock: -1 },
+        { ...item, id: "g", stock: 1.5 },
       ],
     });
-    assert.deepEqual(list?.map((p) => [p.id, p.imageUrl]), [["c", null]]);
+    assert.deepEqual(list?.map((p) => [p.id, p.imageUrl]), [["a", item.imageUrl], ["c", null]]);
+    assert.equal(isOutOfStock(list![0]), true);
+    assert.equal(isOutOfStock(list![1]), false);
+    assert.equal(availabilityLabel(0), "Sin stock");
     assert.equal(parseCatalog({}), null);
     assert.equal(parseCatalog(null), null);
   });

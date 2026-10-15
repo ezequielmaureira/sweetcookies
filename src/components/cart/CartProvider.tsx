@@ -11,7 +11,7 @@ export type { CartItems } from "@/lib/cart";
 export type CartLine = { product: Product; quantity: number };
 
 type CartContextValue = {
-  /** Catálogo real (base de datos): solo productos activos, con stock y precio. */
+  /** Catálogo real (base de datos): productos activos con precio, también sin stock (no se pueden agregar). */
   products: Product[];
   /** "error" solo si nunca se pudo cargar el catálogo (ni en el servidor ni en el navegador). */
   catalogStatus: CatalogStatus;
@@ -101,7 +101,8 @@ export function CartProvider({ initialProducts, catalogOk, children }: CartProvi
     // Productos que ya no están disponibles no se muestran ni se envían; la cantidad se limita al stock.
     const lines = Object.entries(items).flatMap(([id, quantity]) => {
       const product = productsById[id];
-      return product ? [{ product, quantity: Math.min(quantity, product.stock) }] : [];
+      const available = product ? Math.min(quantity, product.stock) : 0;
+      return product && available > 0 ? [{ product, quantity: available }] : [];
     });
     const valid = Object.fromEntries(lines.map((l) => [l.product.id, l.quantity]));
     return {

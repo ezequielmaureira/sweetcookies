@@ -87,6 +87,15 @@ export function isPurchasable(product: Pick<ProductRecord, "status" | "stock" | 
   return product.status === "ACTIVE" && product.stock > 0 && product.priceCents > 0;
 }
 
+/**
+ * ¿Se muestra en el catálogo del comprador? ACTIVE y con precio. Con stock 0
+ * también se ve (con la leyenda "Sin stock" y sin poder agregarse); para
+ * comprar sigue haciendo falta isPurchasable. Los pausados no se muestran.
+ */
+export function isListedPublicly(product: Pick<ProductRecord, "status" | "priceCents">): boolean {
+  return product.status === "ACTIVE" && product.priceCents > 0;
+}
+
 export function toPublicProduct(p: ProductRecord): PublicProduct {
   return {
     id: p.id,
@@ -121,9 +130,8 @@ export function toAdminProduct(p: ProductRecord): AdminProduct {
   };
 }
 
-/** Destacados primero; después el orden del catálogo (y antigüedad como desempate). */
+/** Orden manual del panel (sortOrder), con prioridad sobre destacado; antigüedad como desempate. */
 export function compareCatalogOrder(a: ProductRecord, b: ProductRecord): number {
-  if (a.featured !== b.featured) return a.featured ? -1 : 1;
   if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
   return a.createdAt.getTime() - b.createdAt.getTime();
 }
@@ -294,4 +302,19 @@ export function duplicateData(p: ProductRecord): ProductData {
     imageX: p.imageX,
     imageY: p.imageY,
   };
+}
+
+/** Tope de productos por reordenamiento (muy por encima de un catálogo real). */
+const MAX_REORDER = 500;
+const PRODUCT_ID = /^[\w-]{1,40}$/;
+
+export type ReorderValidation = { ok: true; ids: string[] } | { ok: false; error: string };
+
+/** Body del admin: { ids: ["id1", "id2", …] } en el orden en que se ven en la web. */
+export function validateReorderInput(input: unknown): ReorderValidation {
+  const ids = typeof input === "object" && input !== null ? (input as { ids?: unknown }).ids : undefined;
+  if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_REORDER) return { ok: false, error: "Lista de productos inválida." };
+  if (!ids.every((id): id is string => typeof id === "string" && PRODUCT_ID.test(id))) return { ok: false, error: "Producto inválido." };
+  if (new Set(ids).size !== ids.length) return { ok: false, error: "Hay productos repetidos." };
+  return { ok: true, ids };
 }

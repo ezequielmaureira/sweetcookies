@@ -2,7 +2,7 @@
 
 import { useCart } from "@/components/cart/CartProvider";
 import { CookieImage } from "@/components/ui/CookieImage";
-import { availabilityLabel, formatPrice, productAlt } from "@/lib/catalog";
+import { availabilityLabel, formatPrice, isOutOfStock, productAlt } from "@/lib/catalog";
 import { QuantityStepper } from "./QuantityStepper";
 import styles from "./FlavorSelector.module.css";
 
@@ -47,6 +47,7 @@ export function FlavorSelector({ quantities, onIncrement, onDecrement }: FlavorS
       {products.map((product) => {
         const quantity = Math.min(quantities[product.id] ?? 0, product.stock);
         const availability = availabilityLabel(product.stock);
+        const outOfStock = isOutOfStock(product);
         return (
           <li key={product.id} className={[styles.option, quantity > 0 ? styles.selected : ""].join(" ")}>
             <div className={styles.media}>
@@ -57,6 +58,7 @@ export function FlavorSelector({ quantities, onIncrement, onDecrement }: FlavorS
                 placeholderLabel={product.name}
                 framing={{ scale: product.imageScale, x: product.imageX, y: product.imageY }}
               />
+              {outOfStock && <span className={styles.outOfStock}>Sin stock</span>}
               {quantity > 0 && (
                 <span key={quantity} className={styles.badge} aria-hidden="true">
                   ×{quantity}
@@ -76,6 +78,7 @@ export function FlavorSelector({ quantities, onIncrement, onDecrement }: FlavorS
                 name={product.name}
                 quantity={quantity}
                 max={product.stock}
+                disabled={outOfStock}
                 onIncrement={() => onIncrement(product.id)}
                 onDecrement={() => onDecrement(product.id)}
               />

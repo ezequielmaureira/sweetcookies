@@ -15,6 +15,21 @@ export type QuickField = "price" | "stock";
 export type RowDraft = Partial<Record<QuickField, string>>;
 export type RowState = { saving?: boolean; error?: string; saved?: boolean };
 
+/** Controles del orden de la web (solo con "Orden de la web" y sin filtros). */
+export type RowReorder = {
+  position: number;
+  total: number;
+  disabled: boolean;
+  dragging: boolean;
+  dragOver: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDragStart: (event: React.DragEvent<HTMLElement>) => void;
+  onDragOver: (event: React.DragEvent<HTMLElement>) => void;
+  onDrop: (event: React.DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+};
+
 type ProductRowProps = {
   product: AdminProduct;
   draft: RowDraft;
@@ -26,10 +41,11 @@ type ProductRowProps = {
   onToggleStatus: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  reorder?: RowReorder;
 };
 
 /** Fila operativa: precio y stock editables en el lugar, destacado y estado con un toque. */
-export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onToggleFeatured, onToggleStatus, onDuplicate, onDelete }: ProductRowProps) {
+export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onToggleFeatured, onToggleStatus, onDuplicate, onDelete, reorder }: ProductRowProps) {
   const uid = useId();
   const editUrl = `/admin/productos/${encodeURIComponent(product.id)}`;
   const priceValue = draft.price ?? moneyToInput(product.price);
@@ -80,7 +96,18 @@ export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onT
   );
 
   return (
-    <li className={[styles.row, paused ? styles.rowPaused : "", pricePending || stockPending ? styles.rowPending : ""].join(" ")} aria-busy={busy}>
+    <li
+      className={[
+        styles.row,
+        paused ? styles.rowPaused : "",
+        pricePending || stockPending ? styles.rowPending : "",
+        reorder?.dragging ? styles.rowDragging : "",
+        reorder?.dragOver ? styles.rowDragOver : "",
+      ].join(" ")}
+      aria-busy={busy}
+      onDragOver={reorder?.onDragOver}
+      onDrop={reorder?.onDrop}
+    >
       <div className={styles.thumb}>
         <CookieImage key={product.imageUrl ?? "none"} src={product.imageUrl} alt="" sizes="56px" />
       </div>
@@ -90,6 +117,38 @@ export function ProductRow({ product, draft, state, onDraft, onSave, onEdit, onT
           {product.name}
         </Link>
         <span className={styles.category}>{product.category ?? "Sin categoría"}</span>
+        {reorder && (
+          <div className={styles.orderControls} role="group" aria-label={`Orden de ${product.name} en la web`}>
+            <span
+              className={styles.dragHandle}
+              draggable={!reorder.disabled}
+              onDragStart={reorder.onDragStart}
+              onDragEnd={reorder.onDragEnd}
+              title="Arrastrá para cambiar el orden"
+              aria-hidden="true"
+            >
+              <svg viewBox="0 0 16 16">
+                <circle cx="5.5" cy="3.5" r="1.3" />
+                <circle cx="10.5" cy="3.5" r="1.3" />
+                <circle cx="5.5" cy="8" r="1.3" />
+                <circle cx="10.5" cy="8" r="1.3" />
+                <circle cx="5.5" cy="12.5" r="1.3" />
+                <circle cx="10.5" cy="12.5" r="1.3" />
+              </svg>
+            </span>
+            <span className={styles.orderPosition}>#{reorder.position}</span>
+            <button type="button" className={styles.orderButton} onClick={reorder.onMoveUp} disabled={reorder.disabled || reorder.position === 1} aria-label={`Subir ${product.name}`} title="Subir">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <button type="button" className={styles.orderButton} onClick={reorder.onMoveDown} disabled={reorder.disabled || reorder.position === reorder.total} aria-label={`Bajar ${product.name}`} title="Bajar">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={styles.priceCell}>

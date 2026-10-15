@@ -8,7 +8,7 @@ import type { ImageRepository } from "./image-repository.ts";
 import { MAX_IMAGE_BYTES, imagePath, validateImage } from "./images.ts";
 import type { OrderRepository } from "./order-repository.ts";
 import { OrderError, parseOrderListQuery, validateOrderRequest } from "./orders.ts";
-import { toAdminProduct, toPublicProduct, validateProductInput } from "./products.ts";
+import { toAdminProduct, toPublicProduct, validateProductInput, validateReorderInput } from "./products.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { SettingsRepository } from "./repository.ts";
 import type { ManagementRepository } from "./management-repository.ts";
@@ -223,6 +223,17 @@ export function createApp({
     const created = await products.create(result.data);
     log(`[admin] product ${created.id} created by ${c.get("userId")}`);
     return c.json(toAdminProduct(created), 201);
+  });
+
+  // Orden manual del catálogo (Productos → "Orden de la web"). Solo cambia sortOrder.
+  app.put("/api/admin/products/order", bodyLimit({ maxSize: 32 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const result = validateReorderInput(parsed.body);
+    if (!result.ok) return c.json({ error: "validation_error", fields: { ids: result.error } }, 422);
+    await products.reorder(result.ids);
+    log(`[admin] products reordered (${result.ids.length}) by ${c.get("userId")}`);
+    return c.json({ products: (await products.listAll()).map(toAdminProduct) });
   });
 
   // Edición parcial: también activar/pausar ({status}), destacar ({featured}), stock, precio, costo, imagen.

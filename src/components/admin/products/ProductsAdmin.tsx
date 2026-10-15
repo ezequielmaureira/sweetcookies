@@ -11,23 +11,26 @@ import {
   deleteProduct,
   duplicateProduct,
   listProducts,
+  reorderProducts,
   updateProduct,
   type AdminProduct,
   type DisplayStatus,
   type ProductInput,
 } from "@/lib/admin/admin-api";
 import { normalizeMoneyInput } from "@/lib/admin/money-input";
-import { ProductRow, type QuickField, type RowDraft, type RowState } from "./ProductRow";
+import { ProductRow, type QuickField, type RowDraft, type RowReorder, type RowState } from "./ProductRow";
 import styles from "./ProductList.module.css";
 
 type LoadState = "loading" | "ready" | "error";
-type Sort = "name" | "price" | "stock" | "recent";
+type Sort = "manual" | "name" | "price" | "stock" | "recent";
 
-const SORT_LABELS: Record<Sort, string> = { name: "Nombre", price: "Precio", stock: "Stock", recent: "Más recientes" };
+const SORT_LABELS: Record<Sort, string> = { manual: "Orden de la web", name: "Nombre", price: "Precio", stock: "Stock", recent: "Más recientes" };
 const STATUS_FILTERS: Record<"" | DisplayStatus, string> = { "": "Todos los estados", ACTIVE: "Activos", PAUSED: "Pausados", OUT_OF_STOCK: "Sin stock" };
 const MAX_STOCK = 100_000;
 
 const compare: Record<Sort, (a: AdminProduct, b: AdminProduct) => number> = {
+  // Mismo orden que el catálogo de la web (el orden manual manda sobre "destacado").
+  manual: (a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt),
   name: (a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" }),
   price: (a, b) => Number(a.price) - Number(b.price) || a.name.localeCompare(b.name, "es"),
   stock: (a, b) => a.stock - b.stock || a.name.localeCompare(b.name, "es"),
@@ -74,7 +77,10 @@ export function ProductsAdmin() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState<"" | DisplayStatus>("");
-  const [sort, setSort] = useState<Sort>("name");
+  const [sort, setSort] = useState<Sort>("manual");
+  const [reordering, setReordering] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<AdminProduct | null>(null);
   const confirmRef = useRef<HTMLDialogElement>(null);
   const savedTimers = useRef<Record<string, number>>({});
@@ -228,6 +234,35 @@ export function ProductsAdmin() {
     }
   };
 
+  /**
+   * Mueve un producto a otra posición del orden de la web y lo guarda enseguida.
+   * Solo cambia sortOrder (precio, stock y fotos no se tocan). Si falla, vuelve atrás.
+   */
+  const moveTo = async (id: string, toIndex: number) => {
+    if (reordering) return;
+    const ordered = [...products].sort(compare.manual);
+    const from = ordered.findIndex((p) => p.id === id);
+    if (from < 0 || toIndex < 0 || toIndex >= ordered.length || from === toIndex) return;
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(toIndex, 0, moved);
+    const previous = products;
+    setProducts(ordered.map((p, i) => ({ ...p, sortOrder: i + 1 })));
+    setReordering(true);
+    try {
+      const { products: saved } = await reorderProducts(
+        await getToken(),
+        ordered.map((p) => p.id),
+      );
+      setProducts(saved);
+      setNotice({ kind: "ok", text: `Orden guardado: “${moved.name}” quedó en el lugar ${toIndex + 1}.` });
+    } catch (error) {
+      setProducts(previous);
+      setNotice({ kind: "error", text: adminErrorMessage(error, "No pudimos guardar el orden.") });
+    } finally {
+      setReordering(false);
+    }
+  };
+
   const categories = useMemo(
     () => [...new Set(products.map((p) => p.category).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b, "es")),
     [products],
@@ -248,6 +283,42 @@ export function ProductsAdmin() {
     out: products.filter((p) => p.displayStatus === "OUT_OF_STOCK").length,
   };
   const filtered = Boolean(query || category || status);
+  // El orden se edita sobre la lista completa: con filtros o con otro orden no se puede arrastrar.
+  const canReorder = sort === "manual" && !filtered && loadState === "ready";
+
+  const reorderFor = (product: AdminProduct, index: number): RowReorder => ({
+    position: index + 1,
+    total: visible.length,
+    disabled: reordering || pendingCount > 0,
+    dragging: dragId === product.id,
+    dragOver: dragOverId === product.id && dragId !== product.id,
+    onMoveUp: () => void moveTo(product.id, index - 1),
+    onMoveDown: () => void moveTo(product.id, index + 1),
+    onDragStart: (event) => {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", product.id);
+      const row = event.currentTarget.closest("li");
+      if (row) event.dataTransfer.setDragImage(row, 24, 24);
+      setDragId(product.id);
+    },
+    onDragOver: (event) => {
+      if (!dragId) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      if (dragOverId !== product.id) setDragOverId(product.id);
+    },
+    onDrop: (event) => {
+      event.preventDefault();
+      const id = dragId;
+      setDragId(null);
+      setDragOverId(null);
+      if (id && id !== product.id) void moveTo(id, index);
+    },
+    onDragEnd: () => {
+      setDragId(null);
+      setDragOverId(null);
+    },
+  });
 
   return (
     <>
@@ -306,6 +377,16 @@ export function ProductsAdmin() {
         </div>
       </form>
 
+      {loadState === "ready" && products.length > 1 && (
+        <p className={styles.orderHelp}>
+          {canReorder
+            ? pendingCount > 0
+              ? "Guardá o descartá los cambios de precio y stock para poder cambiar el orden."
+              : "Este es el orden en que se ven las cookies en la web (también las sin stock). Arrastrá ⠿ o usá las flechas para cambiarlo: se guarda solo."
+            : "Para cambiar el orden de la web, elegí “Orden de la web” y quitá los filtros."}
+        </p>
+      )}
+
       <p className={notice?.kind === "error" ? styles.noticeError : styles.notice} role={notice?.kind === "error" ? "alert" : "status"}>
         {notice?.text}
       </p>
@@ -336,9 +417,10 @@ export function ProductsAdmin() {
             <span />
             <span />
           </li>
-          {visible.map((product) => (
+          {visible.map((product, index) => (
             <ProductRow
               key={product.id}
+              reorder={canReorder ? reorderFor(product, index) : undefined}
               product={product}
               draft={drafts[product.id] ?? {}}
               state={rowStates[product.id] ?? {}}

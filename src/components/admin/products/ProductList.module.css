@@ -91,6 +91,12 @@
   box-shadow: 0 0 0 3px rgba(176, 78, 54, 0.22);
 }
 
+.orderHelp {
+  margin-top: 4px;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
 .notice,
 .noticeError {
   min-height: 1.5em;
@@ -215,6 +221,81 @@
 .category {
   font-size: 0.8125rem;
   color: var(--color-muted);
+}
+
+/* Orden de la web: arrastrar (⠿) o subir / bajar. */
+.orderControls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.dragHandle {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--color-muted);
+  cursor: grab;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.dragHandle[draggable="false"] {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.dragHandle svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.orderPosition {
+  min-width: 2.2em;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.orderButton {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--color-chocolate);
+  cursor: pointer;
+}
+
+.orderButton:hover:not(:disabled) {
+  border-color: var(--color-chocolate-soft);
+}
+
+.orderButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.orderButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rowDragging {
+  opacity: 0.45;
+}
+
+.rowDragOver {
+  border-color: var(--color-terracotta);
+  box-shadow: 0 -3px 0 var(--color-terracotta);
 }
 
 .priceCell {

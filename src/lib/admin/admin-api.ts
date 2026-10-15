@@ -116,6 +116,10 @@ export const duplicateProduct = (token: string | null, id: string) =>
 export const deleteProduct = (token: string | null, id: string) =>
   adminRequest<void>(`/api/admin/products/${encodeURIComponent(id)}`, token, { method: "DELETE" });
 
+/** Orden manual de la web: ids en el orden en que se ven. Solo cambia el orden (no precio, stock ni fotos). */
+export const reorderProducts = (token: string | null, ids: string[]) =>
+  adminRequest<{ products: AdminProduct[] }>("/api/admin/products/order", token, { method: "PUT", body: JSON.stringify({ ids }) });
+
 /* ---------- Imágenes ---------- */
 
 /** Sube una imagen (ya reducida en el navegador). Devuelve la ruta a guardar en imageUrl / boxImageUrl. */

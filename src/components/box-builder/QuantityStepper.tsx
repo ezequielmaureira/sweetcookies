@@ -41,7 +41,7 @@ export function QuantityStepper({ name, quantity, onIncrement, onDecrement, disa
           onIncrement();
         }}
         disabled={disabled || limit <= 0}
-        aria-label={`Agregar ${name}`}
+        aria-label={limit <= 0 ? `${name}: sin stock` : `Agregar ${name}`}
       >
         <span aria-hidden="true">+</span> Agregar
       </button>

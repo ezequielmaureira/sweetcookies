@@ -100,7 +100,8 @@ export function parseCatalog(data: unknown): Product[] | null {
   return list.flatMap((raw): Product[] => {
     const p = raw as Record<string, unknown>;
     if (typeof p?.id !== "string" || !ID.test(p.id) || typeof p.name !== "string" || typeof p.price !== "string") return [];
-    if (toCents(p.price) <= 0 || typeof p.stock !== "number" || !Number.isInteger(p.stock) || p.stock <= 0) return [];
+    // Stock 0 se acepta: la cookie se muestra con "Sin stock" y sin poder agregarse.
+    if (toCents(p.price) <= 0 || typeof p.stock !== "number" || !Number.isInteger(p.stock) || p.stock < 0) return [];
     return [
       {
         id: p.id,
@@ -123,6 +124,9 @@ export function parseCatalog(data: unknown): Product[] | null {
     ];
   });
 }
+
+/** ¿Se puede agregar al pedido? (el servidor vuelve a validar el stock al registrarlo). */
+export const isOutOfStock = (product: Pick<Product, "stock">) => product.stock <= 0;
 
 /** Aviso de disponibilidad cuando quedan pocas unidades. */
 export function availabilityLabel(stock: number): string | null {

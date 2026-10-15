@@ -7,7 +7,7 @@ import { PNG_1x1, product } from "./catalog.test.ts";
 import type { ImageRepository } from "./image-repository.ts";
 import type { OrderRepository } from "./order-repository.ts";
 import { OrderError, priceOrder, toReceipt } from "./orders.ts";
-import { compareCatalogOrder, isPurchasable, type ProductRecord } from "./products.ts";
+import { compareCatalogOrder, isListedPublicly, type ProductRecord } from "./products.ts";
 import { createRateLimiter } from "./rate-limit.ts";
 import type { SettingsRepository } from "./repository.ts";
 import { DEFAULT_SETTINGS, type AdminSettings } from "./settings.ts";
@@ -26,7 +26,7 @@ function memoryRepos(getSettings: () => AdminSettings) {
   ];
   const created: { number: number; total: number; profit: number }[] = [];
   const products: ProductRepository = {
-    listPublic: async () => items.filter(isPurchasable).sort(compareCatalogOrder),
+    listPublic: async () => items.filter(isListedPublicly).sort(compareCatalogOrder),
     listAll: async () => [...items].sort(compareCatalogOrder),
     get: async (id) => items.find((p) => p.id === id) ?? null,
     create: async (data) => {
@@ -46,6 +46,12 @@ function memoryRepos(getSettings: () => AdminSettings) {
       return items.length < before;
     },
     duplicate: async () => null,
+    reorder: async (ids) => {
+      ids.forEach((id, i) => {
+        const p = items.find((x) => x.id === id);
+        if (p) p.sortOrder = i + 1;
+      });
+    },
   };
   const orders: OrderRepository = {
     create: async (request) => {
@@ -220,7 +226,8 @@ describe("API", () => {
     const res = await setup().app.request("/api/public/products");
     assert.equal(res.status, 200);
     const body = await json(res);
-    assert.deepEqual(body.products.map((p: { id: string }) => p.id), ["chips"]);
+    // Activos, también sin stock (se muestran con la leyenda); los pausados no.
+    assert.deepEqual(body.products.map((p: { id: string }) => p.id), ["chips", "empty"]);
     assert.deepEqual(Object.keys(body.products[0]).sort(), [
       "boxImageRotation",
       "boxImageScale",
@@ -250,6 +257,7 @@ describe("API", () => {
       ["PATCH", "/api/admin/products/chips"],
       ["DELETE", "/api/admin/products/chips"],
       ["POST", "/api/admin/products/chips/duplicate"],
+      ["PUT", "/api/admin/products/order"],
       ["GET", "/api/admin/orders"],
       ["GET", "/api/admin/orders/o1"],
     ];
@@ -279,13 +287,40 @@ describe("API", () => {
     assert.ok((await ids()).includes(id));
     assert.equal((await patch({ status: "PAUSED" })).status, 200);
     assert.ok(!(await ids()).includes(id));
+    // Sin stock: sigue en el catálogo (con stock 0, sin poder comprarse) y al reponer vuelve a estar disponible.
     assert.equal((await patch({ status: "ACTIVE", stock: 0 })).status, 200);
-    assert.ok(!(await ids()).includes(id));
+    const stockOf = async () => (await json(await app.request("/api/public/products"))).products.find((p: { id: string }) => p.id === id)?.stock;
+    assert.equal(await stockOf(), 0);
     assert.equal((await patch({ stock: 3 })).status, 200);
-    assert.ok((await ids()).includes(id));
+    assert.equal(await stockOf(), 3);
     assert.equal((await patch({ price: "-5" })).status, 422);
     assert.equal((await app.request(`/api/admin/products/${id}`, { method: "DELETE", headers: admin })).status, 204);
     assert.equal((await app.request(`/api/admin/products/${id}`, { method: "DELETE", headers: admin })).status, 404);
+  });
+
+  it("orden manual: el admin reordena y el catálogo público lo respeta (sin tocar precio ni stock)", async () => {
+    const { app, memory } = setup();
+    const admin = { Authorization: "Bearer admin-token", "Content-Type": "application/json" };
+    const before = memory.items().map((p) => ({ id: p.id, price: p.priceCents, stock: p.stock }));
+    const res = await app.request("/api/admin/products/order", { method: "PUT", headers: admin, body: JSON.stringify({ ids: ["empty", "paused", "chips"] }) });
+    assert.equal(res.status, 200);
+    assert.deepEqual((await json(res)).products.map((p: { id: string }) => p.id), ["empty", "paused", "chips"]);
+    const pub = await json(await app.request("/api/public/products"));
+    assert.deepEqual(pub.products.map((p: { id: string }) => p.id), ["empty", "chips"]);
+    for (const b of before) {
+      const now = memory.items().find((p) => p.id === b.id);
+      assert.deepEqual({ id: now?.id, price: now?.priceCents, stock: now?.stock }, b);
+    }
+    const bad = await app.request("/api/admin/products/order", { method: "PUT", headers: admin, body: JSON.stringify({ ids: ["chips", "chips"] }) });
+    assert.equal(bad.status, 422);
+  });
+
+  it("POST /api/orders: producto sin stock → 409, sin pedido y sin stock negativo", async () => {
+    const { app, memory } = setup();
+    const res = await app.request(order({ items: [{ productId: "empty", quantity: 1 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }));
+    assert.equal(res.status, 409);
+    assert.equal(memory.items().find((p) => p.id === "empty")?.stock, 0);
+    assert.equal(memory.created.length, 0);
   });
 
   it("POST /api/orders: calcula en el servidor, descuenta stock y devuelve el WhatsApp del negocio", async () => {
@@ -356,7 +391,9 @@ describe("API", () => {
     assert.equal(price.stock, 10, "no toca el resto");
     const zero = await json(await patch({ stock: 0 }));
     assert.equal(zero.displayStatus, "OUT_OF_STOCK");
-    assert.equal((await json(await app.request("/api/public/products"))).products.length, 0);
+    // Sigue visible en el catálogo, con stock 0 (la web muestra "Sin stock").
+    const listed = (await json(await app.request("/api/public/products"))).products.find((p: { id: string }) => p.id === "chips");
+    assert.equal(listed.stock, 0);
     const back = await json(await patch({ stock: 10 }));
     assert.equal(back.displayStatus, "ACTIVE");
     assert.equal((await patch({ stock: -1 })).status, 422);
@@ -405,7 +442,7 @@ describe("API", () => {
     const patch = (body: unknown) =>
       app.request("/api/admin/settings/orders", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: "Bearer admin-token" }, body: JSON.stringify(body) });
     await patch({ ordersEnabled: false });
-    assert.equal((await json(await app.request("/api/public/products"))).products.length, 1, "los productos se siguen viendo");
+    assert.equal((await json(await app.request("/api/public/products"))).products.length, 2, "los productos se siguen viendo (también el sin stock)");
     const rejected = await app.request(order({ items: [{ productId: "chips", quantity: 2 }], customer: { name: "Ana", deliveryMethod: "PICKUP" } }));
     assert.equal(rejected.status, 409);
     assert.deepEqual(await json(rejected), { error: "orders_paused" });

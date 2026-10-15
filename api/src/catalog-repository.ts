@@ -3,9 +3,9 @@ import { centsToDecimalString, decimalToCents } from "./money.ts";
 import { duplicateData, type ProductData, type ProductRecord } from "./products.ts";
 
 export type ProductRepository = {
-  /** Catálogo del comprador: ACTIVE, con stock y con precio. Destacados primero. */
+  /** Catálogo del comprador: ACTIVE y con precio (también sin stock). Orden manual del panel. */
   listPublic(): Promise<ProductRecord[]>;
-  /** Todos (admin), destacados primero y después el orden del catálogo. */
+  /** Todos (admin), en el orden manual del catálogo. */
   listAll(): Promise<ProductRecord[]>;
   /** null si no existe. */
   get(id: string): Promise<ProductRecord | null>;
@@ -15,6 +15,8 @@ export type ProductRepository = {
   /** false si no existe. Los pedidos conservan su snapshot (product_id queda en null). */
   remove(id: string): Promise<boolean>;
   duplicate(id: string): Promise<ProductRecord | null>;
+  /** Orden manual: sortOrder = posición en `ids` (1, 2, 3…). Solo toca sortOrder. Ids inexistentes se ignoran. */
+  reorder(ids: string[]): Promise<void>;
 };
 
 type ProductRow = {
@@ -83,7 +85,8 @@ function toCreateColumns(data: ProductData, sortOrder: number) {
   return { ...rest, price: centsToDecimalString(priceCents), cost: centsToDecimalString(costCents), sortOrder };
 }
 
-const CATALOG_ORDER = [{ featured: "desc" as const }, { sortOrder: "asc" as const }, { createdAt: "asc" as const }];
+/** Orden manual del panel; tiene prioridad sobre "destacado" (ver compareCatalogOrder). */
+const CATALOG_ORDER = [{ sortOrder: "asc" as const }, { createdAt: "asc" as const }];
 
 const isNotFound = (error: unknown) => (error as { code?: string })?.code === "P2025";
 
@@ -93,7 +96,7 @@ export function createProductRepository(prisma: PrismaClient): ProductRepository
   return {
     async listPublic() {
       const rows = await prisma.product.findMany({
-        where: { status: "ACTIVE", stock: { gt: 0 }, price: { gt: 0 } },
+        where: { status: "ACTIVE", price: { gt: 0 } },
         orderBy: CATALOG_ORDER,
       });
       return rows.map(toProductRecord);
@@ -142,6 +145,11 @@ export function createProductRepository(prisma: PrismaClient): ProductRepository
         data: toCreateColumns(data, await nextSortOrder()),
       });
       return toProductRecord(row);
+    },
+
+    async reorder(ids) {
+      // Todo junto o nada; updateMany no falla si el id ya no existe.
+      await prisma.$transaction(ids.map((id, i) => prisma.product.updateMany({ where: { id }, data: { sortOrder: i + 1 } })));
     },
   };
 }

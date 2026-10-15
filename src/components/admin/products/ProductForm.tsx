@@ -298,7 +298,7 @@ export function ProductForm({ productId }: { productId: string | null }) {
             </div>
             <div className={styles.switchRow}>
               <span id={id("featured-label")} className={styles.label}>
-                Destacado <span className={styles.help}>(aparece primero en la web)</span>
+                Destacado <span className={styles.help}>(muestra la marca “Destacada” en la web; el orden se elige en la lista de productos)</span>
               </span>
               <button type="button" role="switch" aria-checked={values.featured} aria-labelledby={id("featured-label")} className={styles.miniSwitch} onClick={() => update("featured", !values.featured)}>
                 <span className={styles.miniThumb} aria-hidden="true" />

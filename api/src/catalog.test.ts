@@ -17,11 +17,13 @@ import {
   compareCatalogOrder,
   displayStatus,
   duplicateData,
+  isListedPublicly,
   isPurchasable,
   normalizeImageUrl,
   toAdminProduct,
   toPublicProduct,
   validateProductInput,
+  validateReorderInput,
   type ProductRecord,
 } from "./products.ts";
 
@@ -89,9 +91,21 @@ describe("productos", () => {
     assert.equal(admin.unitProfit, "2500.00");
     assert.equal(admin.displayStatus, "ACTIVE");
   });
-  it("destacados primero, después el orden del catálogo", () => {
+  it("el orden manual tiene prioridad sobre destacado", () => {
     const list = [product({ id: "b", sortOrder: 1 }), product({ id: "c", sortOrder: 2, featured: true }), product({ id: "a", sortOrder: 0 })];
-    assert.deepEqual(list.sort(compareCatalogOrder).map((p) => p.id), ["c", "a", "b"]);
+    assert.deepEqual(list.sort(compareCatalogOrder).map((p) => p.id), ["a", "b", "c"]);
+  });
+  it("catálogo público: activos con precio, también sin stock (pero no se pueden comprar)", () => {
+    assert.equal(isListedPublicly(product({ stock: 0 })), true);
+    assert.equal(isPurchasable(product({ stock: 0 })), false);
+    assert.equal(isListedPublicly(product({ status: "PAUSED" })), false);
+    assert.equal(isListedPublicly(product({ priceCents: 0 })), false);
+  });
+  it("valida el orden manual", () => {
+    assert.deepEqual(validateReorderInput({ ids: ["b", "a"] }), { ok: true, ids: ["b", "a"] });
+    for (const body of [null, {}, { ids: [] }, { ids: ["a", "a"] }, { ids: ["a", 3] }, { ids: ["../x"] }, { ids: "a" }]) {
+      assert.equal(validateReorderInput(body).ok, false, JSON.stringify(body));
+    }
   });
   it("valida la creación completa", () => {
     const ok = validateProductInput({ name: "  Double  Chocolate ", price: "6000", cost: 3000, stock: 12, featured: true }, false);

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { CookieImage } from "@/components/ui/CookieImage";
-import { availabilityLabel, formatPrice, productAlt, type Product } from "@/lib/catalog";
+import { availabilityLabel, formatPrice, isOutOfStock, productAlt, type Product } from "@/lib/catalog";
 import styles from "./CookieCard.module.css";
 
 type CookieCardProps = {
@@ -15,7 +15,8 @@ type CookieCardProps = {
 export function CookieCard({ product, onAdded }: CookieCardProps) {
   const { addItem, items } = useCart();
   const inCart = items[product.id] ?? 0;
-  const soldOut = inCart >= product.stock;
+  const outOfStock = isOutOfStock(product);
+  const soldOut = outOfStock || inCart >= product.stock;
   const availability = availabilityLabel(product.stock);
   const [added, setAdded] = useState(false);
   const timer = useRef<number | undefined>(undefined);
@@ -42,7 +43,8 @@ export function CookieCard({ product, onAdded }: CookieCardProps) {
           className={styles.image}
           framing={{ scale: product.imageScale, x: product.imageX, y: product.imageY }}
         />
-        {product.featured && <span className={styles.featured}>Destacada</span>}
+        {product.featured && !outOfStock && <span className={styles.featured}>Destacada</span>}
+        {outOfStock && <span className={styles.outOfStock}>Sin stock</span>}
       </div>
 
       <div className={styles.body}>
@@ -60,7 +62,7 @@ export function CookieCard({ product, onAdded }: CookieCardProps) {
           className={[styles.add, added ? styles.added : ""].join(" ")}
           onClick={handleAdd}
           disabled={soldOut}
-          aria-label={soldOut ? `${product.name}: ya tenés todo el stock disponible` : `Agregar ${product.name}`}
+          aria-label={outOfStock ? `${product.name}: sin stock` : soldOut ? `${product.name}: ya tenés todo el stock disponible` : `Agregar ${product.name}`}
         >
           <span className={styles.addLabel} aria-hidden="true">
             <span className={styles.addDefault}>
