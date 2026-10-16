@@ -74,8 +74,18 @@ const SITE_IMAGE_KEYS: readonly SiteImageKey[] = ["BOX_IMAGE"];
 /** Solo rutas de imágenes subidas desde el panel (se sirven desde la API). */
 const UPLOADED_IMAGE = /^\/api\/public\/images\/[a-z0-9]{10,40}$/;
 
-/** Encuadre de una foto del sitio: zoom 1–4 (siempre cubre el recuadro) y punto central 0–100 %. */
+/**
+ * Encuadre de una foto del sitio. El recuadro y la foto son independientes:
+ * - scale: tamaño respecto de la foto ENTERA dentro del recuadro (1 = completa;
+ *   0,2–1 más chica, con el fondo del sitio alrededor; hasta 3 más grande).
+ * - x, y: dónde queda el centro de la foto, en % del recuadro (50/50 = centrada; −50 a 150).
+ */
 export type ImageFraming = { scale: number; x: number; y: number };
+
+export const IMAGE_FRAMING_LIMITS = { minScale: 0.2, maxScale: 3, minPosition: -50, maxPosition: 150 } as const;
+
+/** Transformación de la foto (con object-fit: contain) para un encuadre: la usan la web y la vista previa del panel. */
+export const imageFramingTransform = ({ scale, x, y }: ImageFraming) => `translate(${x - 50}%, ${y - 50}%) scale(${scale})`;
 /** Celular/tablet (< 1024 px) y computadora (≥ 1024 px). */
 export type ResponsiveFraming = { mobile: ImageFraming; desktop: ImageFraming };
 export type SiteImageFramings = Partial<Record<SiteImageKey, ResponsiveFraming>>;
@@ -86,7 +96,8 @@ function parseFraming(raw: unknown): ImageFraming | null {
   if (typeof raw !== "object" || raw === null) return null;
   const { scale, x, y } = raw as Record<string, unknown>;
   const ok = (v: unknown, min: number, max: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
-  return ok(scale, 1, 4) && ok(x, 0, 100) && ok(y, 0, 100) ? { scale, x, y } : null;
+  const L = IMAGE_FRAMING_LIMITS;
+  return ok(scale, L.minScale, L.maxScale) && ok(x, L.minPosition, L.maxPosition) && ok(y, L.minPosition, L.maxPosition) ? { scale, x, y } : null;
 }
 
 /** Encuadres que vinieron de la API (los inválidos se ignoran: queda centrada, como siempre). */

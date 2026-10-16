@@ -52,7 +52,8 @@ export function buildOrderMessage(lines: OrderLine[], customer: CustomerDetails,
   const lineText = (line: OrderLine) => `${line.quantity} × ${line.name}${line.subtotal ? ` — ${formatPrice(line.subtotal)}` : ""}`;
   const sections: string[] = [];
   if (boxLines.length) sections.push(`BOX DE ${cookies.toUpperCase()}:`, ...boxLines.map(lineText), "");
-  if (extraLines.length) sections.push("PRODUCTOS ADICIONALES:", ...extraLines.map(lineText), "");
+  // Sin cookies no hay caja: es un pedido normal de productos.
+  if (extraLines.length) sections.push(boxLines.length ? "PRODUCTOS ADICIONALES:" : "PRODUCTOS:", ...extraLines.map(lineText), "");
 
   const name = cleanText(`${customer.name} ${customer.lastName ?? ""}`);
   const phone = cleanText(customer.phone);

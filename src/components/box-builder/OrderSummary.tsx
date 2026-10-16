@@ -14,7 +14,7 @@ type OrderSummaryProps = {
   /** Total estimado en centavos (el definitivo lo calcula el servidor al confirmar). */
   totalCents: number;
   onRemove?: (id: string) => void;
-  /** Cambiar la cantidad de un producto adicional desde el resumen. */
+  /** Cambiar cantidades desde el resumen (cookies y otros productos). */
   onIncrement?: (id: string) => void;
   onDecrement?: (id: string) => void;
   /** Sin acciones: solo el listado (usado en la confirmación). */
@@ -26,15 +26,15 @@ type OrderSummaryProps = {
 const units = (lines: CartLine[]) => lines.reduce((sum, l) => sum + l.quantity, 0);
 const cents = (lines: CartLine[]) => lines.reduce((sum, l) => sum + toCents(l.product.price) * l.quantity, 0);
 
-/** Resumen del pedido con importes del catálogo real: el box y, aparte, los productos adicionales. */
+/** Resumen del pedido con importes del catálogo real: cookies y, aparte, los otros productos; total general. */
 export function OrderSummary({ boxLines, extraLines, totalCents, onRemove, onIncrement, onDecrement, onKeepChoosing, onContinue, compact }: OrderSummaryProps) {
   const cookieCount = units(boxLines);
   const extraCount = units(extraLines);
   const empty = boxLines.length === 0 && extraLines.length === 0;
 
-  const line = ({ product, quantity }: CartLine, editable: boolean) => (
+  const line = ({ product, quantity }: CartLine) => (
     <li key={product.id} className={styles.line}>
-      {editable && onIncrement && onDecrement ? (
+      {onIncrement && onDecrement ? (
         <span className={styles.stepper} role="group" aria-label={`Cantidad de ${product.name}`}>
           <button type="button" className={styles.step} onClick={() => onDecrement(product.id)} aria-label={`Quitar un ${product.name}`}>
             −
@@ -70,25 +70,26 @@ export function OrderSummary({ boxLines, extraLines, totalCents, onRemove, onInc
       <p className="kicker">Tu pedido</p>
 
       {empty ? (
-        <p className={styles.empty}>Todavía no agregaste cookies ni otros productos.</p>
+        <p className={styles.empty}>Todavía no agregaste productos.</p>
       ) : (
         <>
+          {/* Cookies (van en la caja) y otros productos (se compran sueltos), separados. */}
           {boxLines.length > 0 && (
             <div className={styles.group}>
               <p className={styles.groupTitle}>
-                <span>Tu box · {formatCookieCount(cookieCount)}</span>
+                <span>Cookies · {formatCookieCount(cookieCount)}</span>
                 {extraLines.length > 0 && <span>{formatCents(cents(boxLines))}</span>}
               </p>
-              <ul className={styles.lines}>{boxLines.map((l) => line(l, false))}</ul>
+              <ul className={styles.lines}>{boxLines.map(line)}</ul>
             </div>
           )}
           {extraLines.length > 0 && (
             <div className={styles.group}>
               <p className={styles.groupTitle}>
-                <span>Productos adicionales</span>
+                <span>{boxLines.length > 0 ? "Otros productos" : "Productos"}</span>
                 {boxLines.length > 0 && <span>{formatCents(cents(extraLines))}</span>}
               </p>
-              <ul className={styles.lines}>{extraLines.map((l) => line(l, true))}</ul>
+              <ul className={styles.lines}>{extraLines.map(line)}</ul>
             </div>
           )}
         </>

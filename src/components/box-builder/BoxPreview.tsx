@@ -23,6 +23,8 @@ type BoxPreviewProps = {
   compact?: boolean;
   /** Total estimado, para la versión compacta. */
   totalCents?: number;
+  /** Solo la caja (sin título ni contador): la usa la vista previa del pedido. */
+  bare?: boolean;
 };
 
 /**
@@ -31,7 +33,7 @@ type BoxPreviewProps = {
  * Al agregar, la cookie entra en el primer lugar libre; al quitar, se libera
  * su lugar sin mover a las demás. Nunca se superponen.
  */
-export function BoxPreview({ lines, totalCount, compact = false, totalCents }: BoxPreviewProps) {
+export function BoxPreview({ lines, totalCount, compact = false, totalCents, bare = false }: BoxPreviewProps) {
   const quantities = lines.map(({ product, quantity }) => ({ id: product.id, quantity }));
 
   // Lugares estables: se ajustan durante el render cuando cambian las cantidades
@@ -107,6 +109,14 @@ export function BoxPreview({ lines, totalCount, compact = false, totalCents }: B
       </div>
     </div>
   );
+
+  if (bare) {
+    return (
+      <div className={styles.box} role="img" aria-label={description}>
+        {box}
+      </div>
+    );
+  }
 
   if (compact) {
     return (

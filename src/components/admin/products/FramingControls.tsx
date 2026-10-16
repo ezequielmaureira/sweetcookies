@@ -43,14 +43,11 @@ export function FramingControls({
   onChange,
   disabled,
   withRotation = false,
-  minScale = MIN_SCALE,
 }: {
   value: Framing;
   onChange: (patch: Partial<Framing>) => void;
   disabled: boolean;
   withRotation?: boolean;
-  /** Zoom mínimo (por defecto 0,3; la foto del box usa 1 para no dejar espacios vacíos). */
-  minScale?: number;
 }) {
   const uid = useId();
   const slider = (field: keyof Framing, label: string, min: number, max: number, step: number, display: string) => (
@@ -76,7 +73,7 @@ export function FramingControls({
 
   return (
     <div className={styles.sliders}>
-      {slider("scale", "Zoom", minScale, 4, 0.05, `${Math.round(value.scale * 100)}%`)}
+      {slider("scale", "Zoom", MIN_SCALE, 4, 0.05, `${Math.round(value.scale * 100)}%`)}
       {slider("x", "Horizontal", 0, 100, 0.5, `${Math.round(value.x)}%`)}
       {slider("y", "Vertical", 0, 100, 0.5, `${Math.round(value.y)}%`)}
       {withRotation && slider("rotation", "Rotación", -180, 180, 1, `${value.rotation ?? 0}°`)}

@@ -106,10 +106,10 @@ describe("buildOrderMessage: box + productos adicionales", () => {
       /BOX DE 6 COOKIES:\n2 × Ferrero — \$\s?9\.000\n2 × Nutella — \$\s?9\.000\n2 × Chocolate — \$\s?8\.000\n\nPRODUCTOS ADICIONALES:\n1 × Budín de limón — \$\s?8\.000\n1 × Torta — \$\s?20\.000\n\nTOTAL: \$\s?54\.000 \(6 cookies \+ 2 productos\)/,
     );
   });
-  it("solo productos adicionales: sin sección de box", () => {
+  it("solo otros productos: sin caja, como un pedido normal", () => {
     const message = buildOrderMessage([{ name: "Brownie", quantity: 1, kind: "OTHER" }], customer);
     assert.doesNotMatch(message, /BOX/);
-    assert.match(message, /PRODUCTOS ADICIONALES:\n1 × Brownie\n\nTotal: 1 producto\n/);
+    assert.match(message, /PRODUCTOS:\n1 × Brownie\n\nTotal: 1 producto\n/);
   });
 });
 

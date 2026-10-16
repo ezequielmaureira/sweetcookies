@@ -63,18 +63,19 @@ function setup() {
 }
 
 describe("fotos del sitio: encuadre", () => {
-  const framing = { mobile: { scale: 1.5, x: 30, y: 70 }, desktop: { scale: 1, x: 50, y: 20 } };
-  it("acepta encuadres para celular y computadora dentro de rango", () => {
+  const framing = { mobile: { scale: 0.45, x: 30, y: 70 }, desktop: { scale: 2.5, x: 140, y: -20 } };
+  it("acepta achicar (hasta 20 %), agrandar (hasta 300 %) y mover libremente, por dispositivo", () => {
     assert.deepEqual(validateSiteImageInput({ url: IMG, framing }), { ok: true, url: IMG, framing });
-    // El encuadre centrado no se guarda (es el de siempre).
     const centered = { mobile: { scale: 1, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } };
-    assert.deepEqual(validateSiteImageInput({ url: null, framing: centered }), { ok: true, url: null, framing: null });
+    assert.deepEqual(validateSiteImageInput({ url: null, framing: centered }), { ok: true, url: null, framing: centered });
+    assert.deepEqual(validateSiteImageInput({ url: IMG, framing: null }), { ok: true, url: IMG, framing: null });
   });
-  it("rechaza zoom menor a 100 % (dejaría espacios vacíos), fuera de rango o incompleto", () => {
+  it("rechaza tamaño o posición fuera de rango, o encuadre incompleto", () => {
     for (const bad of [
-      { mobile: { scale: 0.5, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
-      { mobile: { scale: 5, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
-      { mobile: { scale: 1, x: 150, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
+      { mobile: { scale: 0.1, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
+      { mobile: { scale: 3.5, x: 50, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
+      { mobile: { scale: 1, x: 151, y: 50 }, desktop: { scale: 1, x: 50, y: 50 } },
+      { mobile: { scale: 1, x: 50, y: -51 }, desktop: { scale: 1, x: 50, y: 50 } },
       { mobile: { scale: 1, x: 50, y: 50 } },
       "x",
     ]) {

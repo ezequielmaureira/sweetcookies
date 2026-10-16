@@ -2,23 +2,20 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useId, useRef, useState } from "react";
-import { FramingArea, FramingControls, type Framing } from "@/components/admin/products/FramingControls";
 import { Button } from "@/components/ui/Button";
 import { AdminApiError, adminErrorMessage, uploadImage } from "@/lib/admin/admin-api";
 import { ACCEPTED_IMAGE_TYPES, ImagePrepareError, prepareImage } from "@/lib/admin/image-resize";
 import { getAdminSiteImages, saveAdminSiteImage, type SiteImageField } from "@/lib/admin/site-content-api";
-import { boxImageStyle } from "@/lib/box-view";
 import { resolveImageSrc } from "@/lib/catalog";
-import { DEFAULT_IMAGE_FRAMING, type ResponsiveFraming } from "@/lib/site-content";
+import { IMAGE_FRAMING_LIMITS as L, imageFramingTransform, type ImageFraming, type ResponsiveFraming } from "@/lib/site-content";
 import styles from "./Admin.module.css";
 import own from "./BoxImageForm.module.css";
 
 const KEY = "BOX_IMAGE";
 /** Lado mayor de la foto subida: nítida en pantallas grandes sin pesar de más. */
 const MAX_SIDE = 1600;
-/** Zoom mínimo 100 %: la foto siempre cubre el recuadro (sin espacios vacíos ni deformación). */
-const MIN_SCALE = 1;
-const MAX_SCALE = 4;
+/** Proporción del recuadro en la web (BuildBoxSection: 5:4 en celular y en computadora). */
+const FRAME_RATIO = 5 / 4;
 
 type Device = "mobile" | "desktop";
 const DEVICES: Record<Device, { label: string; help: string }> = {
@@ -29,10 +26,18 @@ const DEVICES: Record<Device, { label: string; help: string }> = {
 type LoadState = "loading" | "ready" | "error";
 type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved"; text: string } | { kind: "error"; message: string };
 
-const CENTERED: ResponsiveFraming = { mobile: DEFAULT_IMAGE_FRAMING, desktop: DEFAULT_IMAGE_FRAMING };
-const sameFraming = (a: ResponsiveFraming, b: ResponsiveFraming) =>
-  (["mobile", "desktop"] as const).every((d) => a[d].scale === b[d].scale && a[d].x === b[d].x && a[d].y === b[d].y);
-const clampScale = (scale: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.round(scale * 100) / 100));
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const round = (value: number, digits = 1) => Math.round(value * 10 ** digits) / 10 ** digits;
+const normalize = (f: ImageFraming): ImageFraming => ({
+  scale: round(clamp(f.scale, L.minScale, L.maxScale), 2),
+  x: round(clamp(f.x, L.minPosition, L.maxPosition)),
+  y: round(clamp(f.y, L.minPosition, L.maxPosition)),
+});
+const sameFraming = (a: ResponsiveFraming | null, b: ResponsiveFraming | null) =>
+  Boolean(a && b) && (["mobile", "desktop"] as const).every((d) => a![d].scale === b![d].scale && a![d].x === b![d].x && a![d].y === b![d].y);
+
+/** Tamaño con el que la foto ENTERA llena justo el recuadro (como se ve sin encuadre propio). */
+const fillScale = (naturalRatio: number) => round(clamp(Math.max(FRAME_RATIO / naturalRatio, naturalRatio / FRAME_RATIO), L.minScale, L.maxScale), 2);
 
 type BoxImageFormProps = {
   /** Foto original del sitio (public/images/cookies/), o null si no existe. */
@@ -42,11 +47,12 @@ type BoxImageFormProps = {
 /**
  * Foto del bloque “Armá tu box” del inicio, con editor de encuadre.
  *
- * - Se elige la foto (o se usa la actual) y se encuadra arrastrando y con zoom.
- * - Encuadre propio para celular/tablet y para computadora (los recuadros de la web
- *   son 5:4; cada uno puede recortar distinto).
- * - La vista previa usa exactamente el mismo cálculo que la web (object-position +
- *   zoom desde el punto elegido), así que se ve igual que en la tienda.
+ * El recuadro y la foto son independientes: la foto se dibuja ENTERA (sin
+ * deformarse) y se achica (hasta 20 %), se agranda (hasta 300 %) y se mueve
+ * libremente; lo que no cubre muestra el fondo beige del sitio.
+ * - Arrastrar con mouse o dedo mueve la foto; pellizcar con dos dedos cambia el tamaño.
+ * - Encuadre propio para celular/tablet y para computadora.
+ * - La vista previa usa exactamente la misma transformación que la web.
  * - Nada se sube hasta tocar “Guardar”: cancelar deja todo como estaba.
  */
 export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
@@ -56,13 +62,21 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [field, setField] = useState<SiteImageField | null>(null);
   const [pending, setPending] = useState<{ file: File; previewUrl: string } | null>(null);
-  const [framing, setFraming] = useState<ResponsiveFraming>(CENTERED);
+  /** Encuadre en edición (null hasta conocer la proporción de la foto, si nunca se encuadró). */
+  const [framing, setFraming] = useState<ResponsiveFraming | null>(null);
+  /** Encuadre con el que se compara para saber si hay cambios (el guardado, o "llenar" si no había). */
+  const [baseline, setBaseline] = useState<ResponsiveFraming | null>(null);
+  /** Proporción (ancho/alto) de la foto que se está mostrando. */
+  const [ratio, setRatio] = useState<number | null>(null);
   const [device, setDevice] = useState<Device>("mobile");
+  /** Cambia al cancelar o restaurar: vuelve a montar la foto para leer su proporción otra vez. */
+  const [photoVersion, setPhotoVersion] = useState(0);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
 
   const applySaved = (saved: SiteImageField | null) => {
     setField(saved);
-    setFraming(saved?.framing ?? CENTERED);
+    setFraming(saved?.framing ?? null);
+    setBaseline(saved?.framing ?? null);
   };
 
   useEffect(() => {
@@ -92,19 +106,73 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
     if (save.kind !== "saving") setSave({ kind: "idle" });
   };
 
-  const updateFraming = (patch: Partial<Framing>) => {
-    setFraming((prev) => {
-      const current = prev[device];
-      const next = {
-        scale: patch.scale !== undefined ? clampScale(patch.scale) : current.scale,
-        x: patch.x ?? current.x,
-        y: patch.y ?? current.y,
-      };
-      return { ...prev, [device]: next };
-    });
+  /** Encuadre que "llena" el recuadro: igual a cómo se ve la foto sin encuadre propio. */
+  const filled = (r: number): ResponsiveFraming => {
+    const f = { scale: fillScale(r), x: 50, y: 50 };
+    return { mobile: f, desktop: f };
+  };
+
+  // Al conocer la proporción: si no hay encuadre (foto nueva o nunca encuadrada), arranca llenando.
+  const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = event.currentTarget;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const r = img.naturalWidth / img.naturalHeight;
+    setRatio(r);
+    setFraming((prev) => prev ?? filled(r));
+    setBaseline((prev) => prev ?? (pending ? null : filled(r)));
+  };
+
+  const setActive = (next: ImageFraming) => {
+    setFraming((prev) => (prev ? { ...prev, [device]: normalize(next) } : prev));
     touch();
   };
 
+  /* ---------- Arrastrar (1 dedo / mouse) y pellizcar (2 dedos) ---------- */
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<{ start: ImageFraming; points: { x: number; y: number }[]; width: number; height: number } | null>(null);
+
+  const beginGesture = (el: HTMLElement) => {
+    const current = framing?.[device];
+    if (!current) return;
+    const rect = el.getBoundingClientRect();
+    gesture.current = { start: current, points: [...pointers.current.values()].slice(0, 2), width: rect.width, height: rect.height };
+  };
+
+  const onPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (!framing || saving) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    beginGesture(event.currentTarget);
+  };
+
+  const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    if (!pointers.current.has(event.pointerId)) return;
+    pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const g = gesture.current;
+    if (!g) return;
+    const now = [...pointers.current.values()].slice(0, 2);
+    const mid = (pts: { x: number; y: number }[]) => ({ x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length });
+    const a = mid(g.points);
+    const b = mid(now);
+    // Mover: el desplazamiento en píxeles, en % del recuadro (la foto se mueve con el dedo).
+    const next = { ...g.start, x: g.start.x + ((b.x - a.x) / g.width) * 100, y: g.start.y + ((b.y - a.y) / g.height) * 100 };
+    // Pellizcar: la distancia entre los dos dedos cambia el tamaño.
+    if (g.points.length === 2 && now.length === 2) {
+      const dist = (pts: { x: number; y: number }[]) => Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const from = dist(g.points);
+      if (from > 0) next.scale = g.start.scale * (dist(now) / from);
+    }
+    setActive(next);
+  };
+
+  const onPointerEnd = (event: React.PointerEvent<HTMLElement>) => {
+    pointers.current.delete(event.pointerId);
+    // Con los dedos que quedan, el gesto sigue desde el encuadre actual.
+    if (pointers.current.size > 0) beginGesture(event.currentTarget);
+    else gesture.current = null;
+  };
+
+  /* ---------- Archivo, guardar, cancelar ---------- */
   const handleFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -118,18 +186,22 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
       return;
     }
     setPending({ file, previewUrl: URL.createObjectURL(file) });
-    // Foto nueva: se empieza centrada.
-    setFraming(CENTERED);
+    // Foto nueva: el encuadre se arma al cargarla (llenando el recuadro).
+    setRatio(null);
+    setFraming(null);
     setSave({ kind: "idle" });
   };
 
   const cancel = () => {
     setPending(null);
-    setFraming(field?.framing ?? CENTERED);
+    setRatio(null);
+    setFraming(field?.framing ?? null);
+    setBaseline(field?.framing ?? null);
+    setPhotoVersion((v) => v + 1);
     setSave({ kind: "idle" });
   };
 
-  const persist = async (url: string | null, next: ResponsiveFraming, text: string) => {
+  const persist = async (url: string | null, next: ResponsiveFraming | null, text: string) => {
     const { images } = await saveAdminSiteImage(await getToken(), KEY, url, next);
     applySaved(images.find((i) => i.key === KEY) ?? null);
     setPending(null);
@@ -137,7 +209,7 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
   };
 
   const handleSave = async () => {
-    if (save.kind === "saving") return;
+    if (save.kind === "saving" || !framing) return;
     setSave({ kind: "saving" });
     try {
       let url = field?.url ?? null;
@@ -157,7 +229,9 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
     if (save.kind === "saving") return;
     setSave({ kind: "saving" });
     try {
-      await persist(null, CENTERED, "Volvió la foto original, centrada. La web se actualiza en unos segundos.");
+      await persist(null, null, "Volvió la foto original. La web se actualiza en unos segundos.");
+      setRatio(null);
+      setPhotoVersion((v) => v + 1);
     } catch (error) {
       setSave({ kind: "error", message: adminErrorMessage(error, "No pudimos restaurar la foto original.") });
     }
@@ -184,48 +258,84 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
   const saving = save.kind === "saving";
   const currentSrc = field?.url ? resolveImageSrc(field.url) : defaultSrc;
   const shownSrc = pending?.previewUrl ?? currentSrc;
-  const dirty = Boolean(pending) || !sameFraming(framing, field?.framing ?? CENTERED);
-  const active = framing[device];
+  const dirty = Boolean(pending) || (framing !== null && !sameFraming(framing, baseline));
+  const active = framing?.[device] ?? null;
   const other: Device = device === "mobile" ? "desktop" : "mobile";
+  const editable = Boolean(shownSrc && active) && !saving;
+  const sliderId = (name: string) => `${uid}-${name}`;
+
+  const photo = (d: Device) =>
+    shownSrc ? (
+      // eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:) o foto de la API
+      <img
+        key={`${shownSrc}-${photoVersion}`}
+        src={shownSrc}
+        alt=""
+        className={own.image}
+        // Mismo dibujo que la web: foto entera (contain) + tamaño y posición del encuadre.
+        style={framing ? { transform: imageFramingTransform(framing[d]) } : { objectFit: "cover" }}
+        onLoad={d === "mobile" ? handleImageLoad : undefined}
+        draggable={false}
+      />
+    ) : (
+      <span className={own.empty}>Sin foto</span>
+    );
 
   const preview = (d: Device) => {
-    const f = framing[d];
     const isActive = d === device;
     return (
-      <figure key={d} className={[own.preview, own[d], isActive ? own.previewActive : ""].join(" ")}>
+      <figure key={d} className={[own.preview, isActive ? own.previewActive : ""].join(" ")}>
         {isActive ? (
-          <FramingArea value={f} onChange={updateFraming} enabled={Boolean(shownSrc) && !saving} className={[own.frame, own.drag].join(" ")}>
-            {shownSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:) o foto de la API
-              <img src={shownSrc} alt="" className={own.image} style={boxImageStyle({ ...f, rotation: 0 })} draggable={false} />
-            ) : (
-              <span className={own.empty}>Sin foto</span>
-            )}
-          </FramingArea>
+          <div
+            className={[own.frame, own.drag].join(" ")}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
+            aria-hidden="true"
+          >
+            {photo(d)}
+          </div>
         ) : (
           <button type="button" className={own.frame} onClick={() => setDevice(d)} aria-label={`Editar el encuadre de ${DEVICES[d].label.toLowerCase()}`}>
-            {shownSrc ? (
-              // eslint-disable-next-line @next/next/no-img-element -- vista previa local (blob:) o foto de la API
-              <img src={shownSrc} alt="" className={own.image} style={boxImageStyle({ ...f, rotation: 0 })} draggable={false} />
-            ) : (
-              <span className={own.empty}>Sin foto</span>
-            )}
+            {photo(d)}
           </button>
         )}
         <figcaption className={own.caption}>
           {DEVICES[d].label}
-          {isActive ? " · arrastrá para encuadrar" : " · tocá para editar"}
+          {isActive ? " · arrastrá o pellizcá" : " · tocá para editar"}
         </figcaption>
       </figure>
     );
   };
+
+  const slider = (name: "scale" | "x" | "y", label: string, min: number, max: number, step: number, display: string) => (
+    <div className={own.slider}>
+      <label htmlFor={sliderId(name)} className={own.sliderLabel}>
+        <span>{label}</span>
+        <output htmlFor={sliderId(name)}>{display}</output>
+      </label>
+      <input
+        id={sliderId(name)}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={name === "scale" ? Math.round((active?.scale ?? 1) * 100) : (active?.[name] ?? 50)}
+        disabled={!editable}
+        onChange={(e) => active && setActive({ ...active, [name]: name === "scale" ? Number(e.target.value) / 100 : Number(e.target.value) })}
+      />
+    </div>
+  );
 
   return (
     <section className={styles.section} aria-labelledby={titleId} aria-busy={saving}>
       <h2 id={titleId} className={styles.sectionTitle}>
         Foto de “Armá tu box”
       </h2>
-      <p className={styles.sectionLead}>La foto del bloque “Armá tu box” del inicio. Elegila y encuadrala como querés que se vea.</p>
+      <p className={styles.sectionLead}>
+        La foto del bloque “Armá tu box” del inicio. Achicala, agrandala y movela como quieras: lo que no cubra se ve con el fondo de la web.
+      </p>
 
       <div className={own.tabs} role="radiogroup" aria-label="Encuadre a editar">
         {(Object.keys(DEVICES) as Device[]).map((d) => (
@@ -238,24 +348,42 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
       <div className={own.previews}>{(["mobile", "desktop"] as const).map(preview)}</div>
 
       <div className={own.zoomRow}>
-        <button type="button" className={own.zoomButton} onClick={() => updateFraming({ scale: active.scale - 0.1 })} disabled={!shownSrc || saving || active.scale <= MIN_SCALE} aria-label="Alejar">
+        <button type="button" className={own.zoomButton} onClick={() => active && setActive({ ...active, scale: active.scale - 0.1 })} disabled={!editable || (active?.scale ?? 1) <= L.minScale} aria-label="Achicar">
           −
         </button>
         <span className={own.zoomValue} aria-live="polite">
-          Zoom {Math.round(active.scale * 100)} %
+          Tamaño {Math.round((active?.scale ?? 1) * 100)} %
         </span>
-        <button type="button" className={own.zoomButton} onClick={() => updateFraming({ scale: active.scale + 0.1 })} disabled={!shownSrc || saving || active.scale >= MAX_SCALE} aria-label="Acercar">
+        <button type="button" className={own.zoomButton} onClick={() => active && setActive({ ...active, scale: active.scale + 0.1 })} disabled={!editable || (active?.scale ?? 1) >= L.maxScale} aria-label="Agrandar">
           +
         </button>
       </div>
 
-      <FramingControls value={active} onChange={updateFraming} disabled={!shownSrc || saving} minScale={MIN_SCALE} />
+      <div className={own.sliders}>
+        {slider("scale", "Tamaño", L.minScale * 100, L.maxScale * 100, 1, `${Math.round((active?.scale ?? 1) * 100)} %`)}
+        {slider("x", "Horizontal", L.minPosition, L.maxPosition, 0.5, `${Math.round(active?.x ?? 50)} %`)}
+        {slider("y", "Vertical", L.minPosition, L.maxPosition, 0.5, `${Math.round(active?.y ?? 50)} %`)}
+      </div>
 
       <div className={own.linkRow}>
-        <button type="button" className={own.linkButton} onClick={() => {
-            setFraming((prev) => ({ ...prev, [other]: prev[device] }));
+        <button type="button" className={own.linkButton} onClick={() => active && setActive({ ...active, x: 50, y: 50 })} disabled={!editable}>
+          Centrar
+        </button>
+        <button type="button" className={own.linkButton} onClick={() => active && setActive({ scale: 1, x: 50, y: 50 })} disabled={!editable}>
+          Ver la foto entera
+        </button>
+        <button type="button" className={own.linkButton} onClick={() => ratio && setActive(filled(ratio)[device])} disabled={!editable || !ratio}>
+          Restablecer (llenar el recuadro)
+        </button>
+        <button
+          type="button"
+          className={own.linkButton}
+          onClick={() => {
+            setFraming((prev) => (prev ? { ...prev, [other]: prev[device] } : prev));
             touch();
-          }} disabled={!shownSrc || saving}>
+          }}
+          disabled={!editable}
+        >
           Usar este encuadre también en {DEVICES[other].label.toLowerCase()}
         </button>
       </div>
@@ -266,13 +394,13 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
           : field?.url
             ? "Foto actual: la que subiste desde el panel."
             : "Foto actual: la original del sitio."}{" "}
-        {DEVICES[device].help} JPG, PNG o WebP. La foto nunca se deforma y siempre cubre todo el recuadro.
+        {DEVICES[device].help} JPG, PNG o WebP. La foto nunca se deforma.
       </p>
 
       <input ref={fileRef} type="file" accept={ACCEPTED_IMAGE_TYPES.join(",")} className="visually-hidden" tabIndex={-1} aria-hidden="true" onChange={handleFile} />
 
       <div className={styles.actions}>
-        <Button onClick={handleSave} disabled={!dirty || saving}>
+        <Button onClick={handleSave} disabled={!dirty || saving || !framing}>
           {saving ? "Guardando…" : "Guardar"}
         </Button>
         {dirty && (
@@ -283,7 +411,7 @@ export function BoxImageForm({ defaultSrc }: BoxImageFormProps) {
         <Button variant="ghost" onClick={() => fileRef.current?.click()} disabled={saving}>
           {shownSrc ? "Cambiar foto" : "Elegir foto"}
         </Button>
-        {field?.url && !dirty && (
+        {(field?.url || field?.framing) && !dirty && (
           <Button variant="ghost" onClick={handleReset} disabled={saving}>
             Volver a la original
           </Button>

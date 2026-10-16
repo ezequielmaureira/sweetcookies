@@ -2,37 +2,33 @@
 
 import { useCart } from "@/components/cart/CartProvider";
 import { CookieImage } from "@/components/ui/CookieImage";
-import { availabilityLabel, formatPrice, isCookie, isOutOfStock, productAlt, type ProductKind } from "@/lib/catalog";
+import { availabilityLabel, formatPrice, isOutOfStock, productAlt } from "@/lib/catalog";
 import { QuantityStepper } from "./QuantityStepper";
 import styles from "./FlavorSelector.module.css";
 
 type FlavorSelectorProps = {
-  /** COOKIE (por defecto): sabores del box. OTHER: productos adicionales (no muestra nada si no hay). */
-  kind?: ProductKind;
   quantities: Readonly<Record<string, number>>;
   onIncrement: (id: string) => void;
   onDecrement: (id: string) => void;
 };
 
-/** Paso 1: catálogo real (PostgreSQL) con selector de cantidad limitado al stock. */
-export function FlavorSelector({ kind = "COOKIE", quantities, onIncrement, onDecrement }: FlavorSelectorProps) {
-  const { products: catalog, catalogStatus, refreshCatalog } = useCart();
-  const products = catalog.filter((p) => (kind === "COOKIE" ? isCookie(p) : !isCookie(p)));
+/** Todos los productos (cookies y otros, en el orden del catálogo) con selector de cantidad limitado al stock. */
+export function FlavorSelector({ quantities, onIncrement, onDecrement }: FlavorSelectorProps) {
+  const { products, catalogStatus, refreshCatalog } = useCart();
 
   if (products.length === 0) {
-    if (kind === "OTHER") return null;
     // Distinguir "cargando" / "no se pudo cargar" de "no hay productos disponibles".
     if (catalogStatus === "loading") {
       return (
         <p className={styles.empty} role="status">
-          Cargando sabores…
+          Cargando productos…
         </p>
       );
     }
     if (catalogStatus === "error") {
       return (
         <div className={styles.empty} role="alert">
-          <p>No pudimos cargar los sabores. Revisá tu conexión.</p>
+          <p>No pudimos cargar los productos. Revisá tu conexión.</p>
           <button type="button" className={styles.retry} onClick={() => void refreshCatalog()}>
             Reintentar
           </button>
@@ -41,7 +37,7 @@ export function FlavorSelector({ kind = "COOKIE", quantities, onIncrement, onDec
     }
     return (
       <p className={styles.empty} role="status">
-        No hay sabores disponibles en este momento. Volvé a intentar en un rato.
+        No hay productos disponibles en este momento. Volvé a intentar en un rato.
       </p>
     );
   }

@@ -2,7 +2,7 @@
   padding-bottom: 24px;
 }
 
-/* ---------- Intro (compacta en mobile: la caja tiene que verse enseguida) ---------- */
+/* ---------- Intro (compacta en mobile: los productos tienen que verse enseguida) ---------- */
 .intro {
   padding-block: 12px 24px;
   animation: enterUp 800ms var(--ease-out) both;
@@ -23,113 +23,57 @@
   color: var(--color-muted);
 }
 
-/* ---------- Indicador de pasos ---------- */
-.steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
+.pausedNotice {
+  margin-top: 18px;
 }
 
-.step {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  padding-top: 12px;
-  border-top: 2px solid var(--color-line);
-  color: var(--color-muted);
-  transition:
-    border-color var(--dur-med) var(--ease-out),
-    color var(--dur-med) var(--ease-out);
-}
-
-.stepNumber {
-  font-size: 0.6875rem;
-  font-weight: 500;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.stepLabel {
-  font-size: 0.875rem;
-  line-height: 1.3;
-}
-
-.stepDone {
-  border-color: var(--color-beige-deep);
-  color: var(--color-chocolate-soft);
-}
-
-.stepActive {
-  border-color: var(--color-terracotta);
-  color: var(--color-chocolate);
-}
-
-.stepActive .stepNumber {
-  color: var(--color-terracotta);
-}
-
-/* ---------- Títulos de paso ---------- */
-.stepHeading {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
+/* ---------- Títulos de sección ---------- */
+.sectionTitle {
   margin-bottom: 16px;
-}
-
-.stepHeadingNumber {
-  font-size: 0.875rem;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--color-terracotta);
-}
-
-.stepHeadingTitle {
   font-size: clamp(1.75rem, 3vw + 0.5rem, 2.5rem);
   scroll-margin-top: calc(var(--header-h) + 24px);
 }
 
-.stepHeadingTitle:focus {
+.sectionTitle:focus {
   outline: none;
 }
 
-.stepHeadingTitle:focus-visible {
+.sectionTitle:focus-visible {
   outline: 2px solid var(--color-terracotta);
   outline-offset: 6px;
 }
 
-/* ---------- Layout principal ---------- */
+/* ---------- Selección de productos ---------- */
 .layout {
   display: flex;
   flex-direction: column;
   gap: 40px;
 }
 
-/*
- * Caja en vivo (mobile/tablet): fija debajo del header mientras se eligen
- * sabores. Fondo del sitio + sombra suave abajo para separarla de la lista.
- */
-.liveBox {
-  position: sticky;
-  top: var(--header-h);
-  z-index: 20;
-  margin: 0 calc(var(--gutter) * -1) 16px;
-  padding: 10px var(--gutter) 12px;
-  background: var(--color-cream);
-  box-shadow: 0 10px 16px -14px rgba(58, 36, 25, 0.45);
-}
-
-.boxDesktop {
-  display: none;
-}
-
-.flavors,
-.boxColumn {
+.products {
   min-width: 0;
   scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+/*
+ * Celular/tablet: vista previa chica arriba de los productos. NO queda fija:
+ * se va al bajar y no tapa tarjetas ni botones (el seguimiento lo da la barra de abajo).
+ */
+.previewMobile {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: #fffdf9;
+}
+
+.summaryMobile {
+  margin-top: 32px;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.orderColumn {
+  display: none;
 }
 
 .sticky {
@@ -138,10 +82,10 @@
   gap: 28px;
 }
 
-/* ---------- Paso 3 ---------- */
+/* ---------- Confirmación ---------- */
 .confirm {
-  margin-top: 80px;
-  padding-block: 64px 72px;
+  margin-top: 64px;
+  padding-block: 56px 72px;
   background: var(--color-cream-deep);
   scroll-margin-top: var(--header-h);
 }
@@ -201,22 +145,26 @@
   }
 }
 
-/* ---------- Desktop ---------- */
+/* Celular/tablet: lugar para la barra fija de abajo (no tapa el final de la página). */
+@media (max-width: 1023px) {
+  .builder {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ---------- Computadora: productos a la izquierda, pedido fijo a la derecha ---------- */
 @media (min-width: 1024px) {
   .intro {
-    padding-block: 40px 64px;
+    padding-block: 40px 56px;
   }
 
-  .stepHeading {
+  .sectionTitle {
     margin-bottom: 24px;
   }
 
-  .liveBox {
+  .previewMobile,
+  .summaryMobile {
     display: none;
-  }
-
-  .boxDesktop {
-    display: block;
   }
 
   .layout {
@@ -226,14 +174,21 @@
     gap: clamp(40px, 5vw, 80px);
   }
 
-  /* La columna ocupa todo el alto de la fila: así la caja puede quedar fija mientras se baja. */
-  .boxColumn {
+  /* La columna ocupa todo el alto de la fila: así el pedido queda fijo mientras se baja. */
+  .orderColumn {
+    display: block;
     align-self: stretch;
+    min-width: 0;
   }
 
   .sticky {
     position: sticky;
     top: calc(var(--header-h) + 24px);
+    /* Con un pedido largo, la columna se desplaza sola en vez de quedar cortada. */
+    max-height: calc(100vh - var(--header-h) - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 4px 8px;
   }
 
   .confirm {
@@ -254,32 +209,4 @@
   .formColumn {
     animation: none;
   }
-
-  .step {
-    transition: none;
-  }
-}
-
-.pausedNotice {
-  margin-top: 18px;
-}
-
-/* "Sumá algo más": productos que no son cookies (fuera del box). */
-.extras {
-  margin-top: 48px;
-  padding-top: 32px;
-  border-top: 1px solid var(--color-line);
-}
-
-.extrasTitle {
-  font-family: var(--font-display);
-  font-size: clamp(1.5rem, 2vw + 1rem, 2rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--color-chocolate);
-}
-
-.extrasLead {
-  margin: 6px 0 20px;
-  color: var(--color-muted);
 }

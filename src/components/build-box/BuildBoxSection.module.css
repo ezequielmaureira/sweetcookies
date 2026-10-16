@@ -26,11 +26,14 @@
 }
 
 /* Encuadre elegido en el panel (Configuración → Foto de “Armá tu box”).
-   Celular y tablet usan uno; computadora (≥ 1024 px) el otro. Zoom ≥ 100 %: siempre cubre. */
-.framed {
-  object-position: var(--frame-m-x) var(--frame-m-y);
-  transform-origin: var(--frame-m-x) var(--frame-m-y);
-  transform: scale(var(--frame-m-scale));
+   La foto se dibuja ENTERA (contain, nunca se deforma) y después se achica/agranda y
+   se mueve; lo que no cubre muestra el fondo beige del recuadro.
+   Celular y tablet usan un encuadre; computadora (≥ 1024 px) el otro. */
+.photo .framed {
+  object-fit: contain;
+  object-position: 50% 50%;
+  transform-origin: 50% 50%;
+  transform: var(--frame-m);
 }
 
 .copy {
@@ -80,9 +83,7 @@
     aspect-ratio: 5 / 4;
   }
 
-  .framed {
-    object-position: var(--frame-d-x) var(--frame-d-y);
-    transform-origin: var(--frame-d-x) var(--frame-d-y);
-    transform: scale(var(--frame-d-scale));
+  .photo .framed {
+    transform: var(--frame-d);
   }
 }

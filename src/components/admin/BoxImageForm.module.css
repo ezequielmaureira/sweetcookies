@@ -1,5 +1,6 @@
 /* Editor de la foto de “Armá tu box”. Los recuadros tienen la misma proporción
-   que en la web (BuildBoxSection: 5:4 en celular y en computadora). */
+   que en la web (BuildBoxSection: 5:4 en celular y en computadora) y el mismo
+   fondo beige: lo que la foto no cubre se ve igual que en la tienda. */
 .tabs {
   display: inline-flex;
   align-self: flex-start;
@@ -49,7 +50,7 @@
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   background: var(--color-beige);
   outline: 2px solid transparent;
   outline-offset: 3px;
@@ -60,7 +61,7 @@
   outline-color: var(--color-terracotta);
 }
 
-/* Arrastrar con mouse o dedo sin que la página se desplace. */
+/* Arrastrar y pellizcar con el dedo sin que la página se desplace ni haga zoom. */
 .drag {
   cursor: grab;
   touch-action: none;
@@ -71,11 +72,14 @@
   cursor: grabbing;
 }
 
+/* La foto entera dentro del recuadro (nunca se deforma); el encuadre la achica/agranda y mueve. */
 .image {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: contain;
+  transform-origin: 50% 50%;
   pointer-events: none;
 }
 
@@ -111,18 +115,49 @@
 }
 
 .zoomValue {
-  min-width: 7em;
+  min-width: 8em;
   font-size: 0.9375rem;
   font-variant-numeric: tabular-nums;
   text-align: center;
   color: var(--color-chocolate);
 }
 
+.sliders {
+  display: grid;
+  gap: 14px;
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.slider input {
+  width: 100%;
+  accent-color: var(--color-terracotta);
+}
+
+.sliderLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9375rem;
+  color: var(--color-chocolate);
+}
+
+.sliderLabel output {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
 .linkRow {
-  margin-top: -8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
 }
 
 .linkButton {
+  min-height: 32px;
   padding: 0;
   border: 0;
   background: none;
@@ -137,6 +172,12 @@
 .linkButton:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+@media (min-width: 640px) {
+  .sliders {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* Celular: un recuadro debajo del otro, el que se edita bien grande. */

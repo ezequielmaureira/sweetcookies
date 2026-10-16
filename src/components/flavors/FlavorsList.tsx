@@ -3,17 +3,13 @@
 import { useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
 import { useSiteTexts } from "@/components/site-content/SiteTextsProvider";
-import { isCookie, type Product } from "@/lib/catalog";
+import type { Product } from "@/lib/catalog";
 import { CookieCard } from "./CookieCard";
 import styles from "./FlavorsSection.module.css";
 
-/**
- * Lista del catálogo real (CartProvider lo refresca contra la API).
- * kind "COOKIE" (por defecto): los sabores. kind "OTHER": "Sumá algo más" (no muestra nada si no hay).
- */
-export function FlavorsList({ kind = "COOKIE" }: { kind?: Product["kind"] }) {
-  const { products: catalog, catalogStatus, refreshCatalog } = useCart();
-  const products = catalog.filter((p) => (kind === "COOKIE" ? isCookie(p) : !isCookie(p)));
+/** Lista del catálogo real: todos los productos juntos, en el orden del catálogo (CartProvider lo refresca contra la API). */
+export function FlavorsList() {
+  const { products, catalogStatus, refreshCatalog } = useCart();
   const [announcement, setAnnouncement] = useState("");
   const texts = useSiteTexts();
 
@@ -23,7 +19,6 @@ export function FlavorsList({ kind = "COOKIE" }: { kind?: Product["kind"] }) {
   };
 
   if (products.length === 0) {
-    if (kind === "OTHER") return null;
     return (
       <div className="container">
         {catalogStatus === "error" ? (

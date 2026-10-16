@@ -59,7 +59,7 @@ export function MobileBoxBar({ totalCount, label, totalCents, boxTargetId, hideW
           document.getElementById(boxTargetId)?.scrollIntoView({ block: "start" });
         }}
       >
-        Continuar
+        Ver pedido
       </a>
     </div>
   );

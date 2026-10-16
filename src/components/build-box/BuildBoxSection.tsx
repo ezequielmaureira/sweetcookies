@@ -2,7 +2,7 @@ import { ButtonLink } from "@/components/ui/Button";
 import { CookieImage } from "@/components/ui/CookieImage";
 import { Parallax } from "@/components/ui/Parallax";
 import { routes, sectionIds } from "@/data/site";
-import type { ResponsiveFraming } from "@/lib/site-content";
+import { imageFramingTransform, type ResponsiveFraming } from "@/lib/site-content";
 import styles from "./BuildBoxSection.module.css";
 
 type BuildBoxSectionProps = {
@@ -60,14 +60,10 @@ export function BuildBoxSection({
   );
 }
 
-/** Mismo cálculo que la vista previa del panel: el punto (x, y) queda al centro y el zoom crece desde ahí. */
+/** Mismo cálculo que la vista previa del panel (imageFramingTransform), uno por breakpoint. */
 function framingVars({ mobile, desktop }: ResponsiveFraming) {
   return {
-    "--frame-m-x": `${mobile.x}%`,
-    "--frame-m-y": `${mobile.y}%`,
-    "--frame-m-scale": mobile.scale,
-    "--frame-d-x": `${desktop.x}%`,
-    "--frame-d-y": `${desktop.y}%`,
-    "--frame-d-scale": desktop.scale,
+    "--frame-m": imageFramingTransform(mobile),
+    "--frame-d": imageFramingTransform(desktop),
   } as React.CSSProperties;
 }

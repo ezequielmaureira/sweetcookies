@@ -1,6 +1,5 @@
 import { BuildBoxSection } from "@/components/build-box/BuildBoxSection";
 import { FinalCTA } from "@/components/final-cta/FinalCTA";
-import { ExtrasSection } from "@/components/flavors/ExtrasSection";
 import { FlavorsSection } from "@/components/flavors/FlavorsSection";
 import { Footer } from "@/components/footer/Footer";
 import { Header } from "@/components/header/Header";
@@ -21,7 +20,6 @@ export default async function HomePage() {
       <main id="contenido">
         <Hero cookieSrc={heroCookie.src} isCutout={heroCookie.isCutout} imageAlt={heroCookie.alt} texts={texts} />
         <FlavorsSection title={texts.FLAVORS_TITLE} subtitle={texts.FLAVORS_DESCRIPTION} />
-        <ExtrasSection />
         <BuildBoxSection
           imageSrc={images.BOX_IMAGE ?? resolveImage(brandImages.box)}
           imageFraming={framings.BOX_IMAGE}

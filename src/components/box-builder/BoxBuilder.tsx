@@ -2,44 +2,47 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/cart/CartProvider";
-import { formatCartCount, formatCookieCount } from "@/lib/cart";
+import { formatCartCount } from "@/lib/cart";
 import { usePublicSettings } from "@/lib/use-public-settings";
-import { BoxPreview } from "./BoxPreview";
 import { CustomerForm } from "./CustomerForm";
 import { FlavorSelector } from "./FlavorSelector";
 import { MobileBoxBar } from "./MobileBoxBar";
+import { OrderPreview } from "./OrderPreview";
 import { OrderSummary } from "./OrderSummary";
 import { OrdersPausedNotice } from "./OrdersPausedNotice";
 import { useSiteTexts } from "@/components/site-content/SiteTextsProvider";
 import styles from "./BoxBuilder.module.css";
 
 const SECTION = {
-  flavors: "paso-sabores",
-  box: "paso-caja",
+  /** Los ids anteriores se conservan para no romper enlaces. */
+  products: "paso-sabores",
+  summary: "resumen-pedido",
   confirm: "paso-confirmar",
 } as const;
 
 /**
- * Armá tu caja: 1) sabores, 2) caja + resumen, 3) datos y WhatsApp. Todo en una pantalla.
- * La caja se ve MIENTRAS se eligen los sabores: en mobile, una caja compacta
- * fija arriba de la lista; en desktop, la columna derecha fija.
+ * Página de compra (ruta /arma-tu-caja): una sola selección con TODOS los
+ * productos (cookies y otros, en el orden del catálogo), una vista previa
+ * dinámica del pedido, el resumen y después los datos + WhatsApp.
+ *
+ * La caja no es un paso aparte: aparece sola cuando hay al menos una cookie;
+ * los otros productos se muestran al lado, nunca adentro.
  */
 export function BoxBuilder() {
-  const { products, items, boxLines, extraLines, totalCount, cookieCount, extraCount, boxCents, totalCents, productsById, incrementItem, decrementItem, removeItem, clearCart } = useCart();
-  const hasExtras = products.some((p) => p.kind === "OTHER");
+  const { items, boxLines, extraLines, totalCount, cookieCount, extraCount, totalCents, productsById, incrementItem, decrementItem, removeItem, clearCart } = useCart();
   const texts = useSiteTexts();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [announcement, setAnnouncement] = useState("");
   const confirmHeadingRef = useRef<HTMLHeadingElement>(null);
-  const flavorsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const productsHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusConfirm = useRef(false);
 
   // Configuración de pedidos (interruptor maestro): se pide apenas se abre la página.
   const publicSettings = usePublicSettings();
   const ordersPaused = publicSettings.settings?.ordersEnabled === false;
 
-  // Al abrir el paso 3, llevar la vista y el foco a su título.
+  // Al abrir los datos del pedido, llevar la vista y el foco a su título.
   useEffect(() => {
     if (!checkoutOpen || !shouldFocusConfirm.current) return;
     shouldFocusConfirm.current = false;
@@ -49,11 +52,8 @@ export function BoxBuilder() {
   }, [checkoutOpen]);
 
   const announce = (id: string, quantity: number) => {
-    const product = productsById[id];
-    const name = product?.name ?? "";
-    // Los adicionales no van en el box: se anuncian como parte del pedido.
-    const where = product?.kind === "OTHER" ? "tu pedido" : "tu box";
-    const text = quantity === 0 ? `${name}: quitado de ${where}.` : `${name}: ${quantity} en ${where}.`;
+    const name = productsById[id]?.name ?? "";
+    const text = quantity === 0 ? `${name}: quitado de tu pedido.` : `${name}: ${quantity} en tu pedido.`;
     // Alterna un carácter invisible para que se repita el anuncio aunque el texto sea igual.
     setAnnouncement((prev) => (prev.endsWith("​") ? text : `${text}​`));
   };
@@ -71,8 +71,8 @@ export function BoxBuilder() {
     announce(id, 0);
   };
 
-  const goToFlavors = () => {
-    const heading = flavorsHeadingRef.current;
+  const goToProducts = () => {
+    const heading = productsHeadingRef.current;
     heading?.scrollIntoView({ block: "start" });
     heading?.focus({ preventScroll: true });
   };
@@ -91,42 +91,34 @@ export function BoxBuilder() {
     clearCart();
     setFormKey((k) => k + 1);
     setCheckoutOpen(false);
-    setAnnouncement("Pedido vacío. Podés armar un box nuevo.");
-    goToFlavors();
+    setAnnouncement("Pedido vacío. Podés empezar uno nuevo.");
+    goToProducts();
   };
 
-  const activeStep = checkoutOpen ? 3 : totalCount > 0 ? 2 : 1;
+  const preview = (compact: boolean) => (
+    <OrderPreview boxLines={boxLines} extraLines={extraLines} cookieCount={cookieCount} extraCount={extraCount} totalCents={totalCents} compact={compact} />
+  );
+
+  const summary = (
+    <OrderSummary
+      boxLines={boxLines}
+      extraLines={extraLines}
+      totalCents={totalCents}
+      onRemove={handleRemove}
+      onIncrement={handleIncrement}
+      onDecrement={handleDecrement}
+      onKeepChoosing={goToProducts}
+      onContinue={openCheckout}
+    />
+  );
 
   return (
     <div className={styles.builder}>
       <header className={`container ${styles.intro}`}>
         <p className="kicker">{texts.BUILDER_EYEBROW}</p>
-        <h1 className={styles.title}>
-          {texts.BUILDER_TITLE}
-        </h1>
+        <h1 className={styles.title}>{texts.BUILDER_TITLE}</h1>
         <p className={styles.lead}>{texts.BUILDER_DESCRIPTION}</p>
-
-        <ol className={styles.steps} aria-label="Pasos del pedido">
-          {[
-            { n: 1, label: "Elegí tus sabores", href: SECTION.flavors },
-            { n: 2, label: "Armá tu box", href: SECTION.box },
-            { n: 3, label: "Confirmá tu pedido", href: SECTION.confirm },
-          ].map((step) => (
-            <li
-              key={step.n}
-              className={[
-                styles.step,
-                step.n === activeStep ? styles.stepActive : "",
-                step.n < activeStep ? styles.stepDone : "",
-              ].join(" ")}
-              aria-current={step.n === activeStep ? "step" : undefined}
-            >
-              <span className={styles.stepNumber}>Paso {step.n}</span>
-              <span className={styles.stepLabel}>{step.label}</span>
-            </li>
-          ))}
-        </ol>
-        {/* Pedidos pausados por el negocio: se puede mirar y armar, pero no confirmar. */}
+        {/* Pedidos pausados por el negocio: se puede mirar y elegir, pero no confirmar. */}
         {ordersPaused && (
           <OrdersPausedNotice
             className={styles.pausedNotice}
@@ -137,51 +129,27 @@ export function BoxBuilder() {
       </header>
 
       <div className={`container ${styles.layout}`}>
-        <section id={SECTION.flavors} className={styles.flavors} aria-labelledby={`${SECTION.flavors}-title`}>
-          <StepHeading id={`${SECTION.flavors}-title`} n={1} ref={flavorsHeadingRef}>
-            Elegí tus sabores
-          </StepHeading>
-          {/* Mobile/tablet: la caja en vivo queda fija arriba mientras se recorre la lista. */}
-          <div className={styles.liveBox}>
-            <BoxPreview lines={boxLines} totalCount={cookieCount} totalCents={boxCents} compact />
-          </div>
-          <FlavorSelector
-            quantities={items}
-            onIncrement={handleIncrement}
-            onDecrement={handleDecrement}
-          />
+        <section id={SECTION.products} className={styles.products} aria-labelledby={`${SECTION.products}-title`}>
+          <SectionHeading id={`${SECTION.products}-title`} ref={productsHeadingRef}>
+            Elegí tus productos
+          </SectionHeading>
 
-          {/* Productos que no son cookies: se suman al pedido, NO ocupan lugar en el box. */}
-          {hasExtras && (
-            <div className={styles.extras} aria-labelledby="sumar-algo-mas-title">
-              <h3 id="sumar-algo-mas-title" className={styles.extrasTitle}>
-                Sumá algo más
-              </h3>
-              <p className={styles.extrasLead}>Budines, tortas y más. Van aparte: no ocupan lugar en tu box.</p>
-              <FlavorSelector kind="OTHER" quantities={items} onIncrement={handleIncrement} onDecrement={handleDecrement} />
-            </div>
-          )}
+          {/* Celular/tablet: vista previa chica arriba (no queda fija: no tapa los productos). */}
+          <div className={styles.previewMobile}>{preview(true)}</div>
+
+          <FlavorSelector quantities={items} onIncrement={handleIncrement} onDecrement={handleDecrement} />
+
+          {/* Celular/tablet: el resumen va debajo de los productos. */}
+          <div id={SECTION.summary} className={styles.summaryMobile}>
+            {summary}
+          </div>
         </section>
 
-        <aside id={SECTION.box} className={styles.boxColumn} aria-labelledby={`${SECTION.box}-title`}>
+        {/* Computadora: vista previa grande + resumen, fijos al costado mientras se baja. */}
+        <aside className={styles.orderColumn} aria-label="Tu pedido">
           <div className={styles.sticky}>
-            <StepHeading id={`${SECTION.box}-title`} n={2}>
-              Armá tu box
-            </StepHeading>
-            {/* Desktop: caja grande en la columna fija (en mobile ya está arriba, en vivo). */}
-            <div className={styles.boxDesktop}>
-              <BoxPreview lines={boxLines} totalCount={cookieCount} />
-            </div>
-            <OrderSummary
-              boxLines={boxLines}
-              extraLines={extraLines}
-              totalCents={totalCents}
-              onRemove={handleRemove}
-              onIncrement={handleIncrement}
-              onDecrement={handleDecrement}
-              onKeepChoosing={goToFlavors}
-              onContinue={openCheckout}
-            />
+            {preview(false)}
+            {summary}
           </div>
         </aside>
       </div>
@@ -189,20 +157,16 @@ export function BoxBuilder() {
       <section id={SECTION.confirm} className={styles.confirm} aria-labelledby={`${SECTION.confirm}-title`}>
         <div className={`container ${styles.confirmInner}`}>
           <div className={styles.confirmIntro}>
-            <StepHeading id={`${SECTION.confirm}-title`} n={3} ref={confirmHeadingRef}>
+            <SectionHeading id={`${SECTION.confirm}-title`} ref={confirmHeadingRef}>
               Confirmá tu pedido
-            </StepHeading>
+            </SectionHeading>
             {checkoutOpen ? (
-              <>
-                <OrderSummary boxLines={boxLines} extraLines={extraLines} totalCents={totalCents} compact />
-              </>
+              <OrderSummary boxLines={boxLines} extraLines={extraLines} totalCents={totalCents} compact />
             ) : (
               <p className={styles.confirmHint}>
-                {cookieCount > 0
-                  ? `Tu box tiene ${formatCookieCount(cookieCount)}${extraCount > 0 ? ` y sumaste ${formatCartCount(0, extraCount)}` : ""}. Cuando esté listo, continuá tu pedido.`
-                  : extraCount > 0
-                    ? `Tu pedido tiene ${formatCartCount(0, extraCount)}. Podés sumar un box o continuar tu pedido.`
-                    : "Cuando tengas tu box listo, completá tus datos y envianos el pedido por WhatsApp."}
+                {totalCount > 0
+                  ? `Tu pedido tiene ${formatCartCount(cookieCount, extraCount)}. Cuando esté listo, completá tus datos.`
+                  : "Cuando tengas tu pedido listo, completá tus datos y envianos el pedido por WhatsApp."}
               </p>
             )}
           </div>
@@ -223,7 +187,13 @@ export function BoxBuilder() {
         </div>
       </section>
 
-      <MobileBoxBar totalCount={totalCount} label={formatCartCount(cookieCount, extraCount)} totalCents={totalCents} boxTargetId={SECTION.box} hideWhenVisibleIds={[SECTION.box, SECTION.confirm]} />
+      <MobileBoxBar
+        totalCount={totalCount}
+        label={formatCartCount(cookieCount, extraCount)}
+        totalCents={totalCents}
+        boxTargetId={SECTION.summary}
+        hideWhenVisibleIds={[SECTION.summary, SECTION.confirm]}
+      />
 
       <p className="visually-hidden" aria-live="polite">
         {announcement}
@@ -232,23 +202,16 @@ export function BoxBuilder() {
   );
 }
 
-type StepHeadingProps = {
+type SectionHeadingProps = {
   id: string;
-  n: number;
   children: React.ReactNode;
   ref?: React.Ref<HTMLHeadingElement>;
 };
 
-function StepHeading({ id, n, children, ref }: StepHeadingProps) {
+function SectionHeading({ id, children, ref }: SectionHeadingProps) {
   return (
-    <div className={styles.stepHeading}>
-      <span className={styles.stepHeadingNumber} aria-hidden="true">
-        0{n}
-      </span>
-      <h2 id={id} ref={ref} tabIndex={-1} className={styles.stepHeadingTitle}>
-        <span className="visually-hidden">Paso {n}: </span>
-        {children}
-      </h2>
-    </div>
+    <h2 id={id} ref={ref} tabIndex={-1} className={styles.sectionTitle}>
+      {children}
+    </h2>
   );
 }
