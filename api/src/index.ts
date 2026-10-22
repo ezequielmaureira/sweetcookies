@@ -28,7 +28,7 @@ const auth = createClerkAuth({
   adminEmails: env.adminEmails,
 });
 
-const challengeConfig = { official: env.challengeOfficial, ipSecret: env.challengeIpSecret, trustProxy: env.trustFlyProxy ? ("fly" as const) : ("socket" as const) };
+const challengeConfig = { ipSecret: env.challengeIpSecret, trustProxy: env.trustFlyProxy ? ("fly" as const) : ("socket" as const) };
 
 const app = createApp({ repo, products, orders, images, vouchers, content, management, challenge, challengeConfig, auth, allowedOrigins: env.allowedOrigins });
 
@@ -38,7 +38,7 @@ const server = serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, 
     `sweetcookies-api escuchando en :${info.port} · orígenes admin: ${env.allowedOrigins.join(", ")} · admins configurados: ${env.adminEmails.size}`,
   );
   if (env.adminEmails.size === 0) console.warn("ADMIN_EMAILS vacío: nadie puede usar /api/admin.");
-  console.log(`campeonato: modo ${env.challengeOfficial ? "OFICIAL" : "prueba"} · HMAC de IP ${env.challengeIpSecret ? "activo" : "desactivado (falta CHALLENGE_IP_SECRET)"}`);
+  console.log(`campeonato: torneos reales · HMAC de IP ${env.challengeIpSecret ? "activo" : "desactivado (falta CHALLENGE_IP_SECRET)"}`);
 });
 
 const shutdown = () => {

@@ -7,7 +7,6 @@ import { adminErrorMessage } from "@/lib/admin/admin-api";
 import {
   TournamentApiError,
   createTournament,
-  scheduleTournament,
   updateTournament,
   type AdminEdition,
   type TournamentForm as Form,
@@ -19,7 +18,6 @@ import styles from "./ChallengeAdmin.module.css";
 type TournamentFormProps = {
   /** null = torneo nuevo. */
   edition: AdminEdition | null;
-  officialAllowed: boolean;
   limits: { minAttempts: number; maxAttempts: number };
   serverNow: number;
   onDone: (edition: AdminEdition) => void;
@@ -36,7 +34,6 @@ const fromEdition = (e: AdminEdition): Form => ({
   prize: e.prize,
   prizeDescription: e.prizeDescription ?? "",
   attempts: e.attempts,
-  mode: e.isTest ? "test" : "official",
 });
 
 const EMPTY: Form = {
@@ -49,7 +46,6 @@ const EMPTY: Form = {
   prize: "",
   prizeDescription: "",
   attempts: 3,
-  mode: "test",
 };
 
 /** Fecha y hora del formulario como instante (solo para la vista previa; el servidor valida en hora de Córdoba). */
@@ -61,7 +57,7 @@ const previewDate = (date: string, time: string) => (date && time ? new Date(`${
  * servidor valida todo (fechas, superposición y reglas de edición) y responde
  * con el motivo si algo no se puede.
  */
-export function TournamentForm({ edition, officialAllowed, limits, serverNow, onDone, onCancel }: TournamentFormProps) {
+export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }: TournamentFormProps) {
   const { getToken } = useAuth();
   const id = useId();
   const [form, setForm] = useState<Form>(edition ? fromEdition(edition) : EMPTY);
@@ -71,28 +67,25 @@ export function TournamentForm({ edition, officialAllowed, limits, serverNow, on
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const isDraft = !edition || edition.status === "DRAFT";
+  // Borrador o despublicado: no visible al público.
+  const isDraft = !edition || edition.status === "DRAFT" || edition.status === "UNPUBLISHED";
   // Ya empezó (o tiene partidas: el servidor lo vuelve a comprobar): inicio y modo fijos.
   const started = !!edition && !isDraft && (Date.parse(edition.startsAt) <= serverNow || edition.status === "ACTIVE" || edition.status === "PAUSED");
   const prizeChanged = !!edition && (form.prize.trim() !== edition.prize || form.prizeDescription.trim() !== (edition.prizeDescription ?? ""));
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
 
-  const submit = async (schedule: boolean) => {
+  // Guardar NUNCA publica: el torneo nuevo queda en borrador y se publica aparte.
+  const submit = async () => {
     if (busy) return;
-    if (schedule && !window.confirm("¿Programar el torneo? Quedará visible en /campeonato y se activará solo en su fecha de inicio.")) return;
     setBusy(true);
     setMessage(null);
     setErrors({});
     try {
       const token = await getToken();
       let saved: AdminEdition;
-      if (!edition) {
-        saved = await createTournament(token, form, schedule);
-      } else {
-        saved = await updateTournament(token, edition.id, form, { reason: reason.trim() || undefined, confirmPrizeChange: confirmPrize });
-        if (schedule && saved.status === "DRAFT") saved = await scheduleTournament(token, edition.id);
-      }
+      if (!edition) saved = await createTournament(token, form);
+      else saved = await updateTournament(token, edition.id, form, { reason: reason.trim() || undefined, confirmPrizeChange: confirmPrize });
       onDone(saved);
     } catch (e) {
       if (e instanceof TournamentApiError) {
@@ -131,7 +124,7 @@ export function TournamentForm({ edition, officialAllowed, limits, serverNow, on
         </div>
         {started && (
           <p className={styles.alertText}>
-            Este torneo ya empezó: el inicio y el modo quedan fijos, el cierre solo se puede extender, los intentos solo pueden aumentar y cambiar el premio exige
+            Este torneo ya empezó: el inicio queda fijo, el cierre solo se puede extender, los intentos solo pueden aumentar y cambiar el premio exige
             confirmación. Cada cambio pide un motivo y queda registrado.
           </p>
         )}
@@ -190,28 +183,8 @@ export function TournamentForm({ edition, officialAllowed, limits, serverNow, on
             `Entre ${limits.minAttempts} y ${limits.maxAttempts}. Son para todo el torneo (no se renuevan por día).`,
           )}
 
-          <fieldset className={styles.modeRow} disabled={!isDraft}>
-            <legend className={admin.label}>Modo</legend>
-            <label className={styles.radio}>
-              <input type="radio" name={`${id}-mode`} checked={form.mode === "test"} onChange={() => set("mode", "test")} />
-              <span>
-                <strong>Prueba</strong> · sin premio real; resultados separados de los oficiales
-              </span>
-            </label>
-            <label className={styles.radio}>
-              <input type="radio" name={`${id}-mode`} checked={form.mode === "official"} onChange={() => set("mode", "official")} />
-              <span>
-                <strong>Oficial</strong> · premio real
-              </span>
-            </label>
-            {errors.mode && <p className={admin.error}>{errors.mode}</p>}
-            {form.mode === "official" && !officialAllowed && (
-              <p className={styles.alertText}>El servidor todavía no permite publicar torneos oficiales (CHALLENGE_MODE=official). Podés guardarlo como borrador.</p>
-            )}
-            {!isDraft && <p className={admin.help}>El modo solo se cambia en borrador.</p>}
-          </fieldset>
 
-          {edition && !isDraft && (
+          {edition && edition.status !== "DRAFT" && (
             <div className={admin.field}>
               <label htmlFor={`${id}-reason`} className={admin.label}>
                 Motivo del cambio{started ? "" : " (opcional)"}
@@ -234,22 +207,21 @@ export function TournamentForm({ edition, officialAllowed, limits, serverNow, on
           )}
 
           <div className={styles.actions}>
-            {isDraft && (
-              <Button variant="secondary" disabled={busy} onClick={() => void submit(false)}>
-                {busy ? "Guardando…" : "Guardar borrador"}
-              </Button>
-            )}
-            <Button disabled={busy} onClick={() => void submit(isDraft)}>
-              {busy ? "Guardando…" : isDraft ? "Programar torneo" : "Guardar cambios"}
+            <Button disabled={busy} onClick={() => void submit()}>
+              {busy ? "Guardando…" : !edition ? "Guardar borrador" : "Guardar cambios"}
             </Button>
           </div>
+          <p className={admin.help}>
+            {!edition || isDraft
+              ? "Guardar no publica: el torneo queda sin mostrarse. Cuando quieras, tocá “Publicar torneo” en su administración o en el listado."
+              : "El torneo está publicado: los cambios se ven enseguida en /campeonato."}
+          </p>
         </form>
       </section>
 
       <aside className={styles.previewWrap} aria-label="Vista previa para el jugador">
         <p className={admin.help}>Vista previa: así lo verá el jugador en /campeonato.</p>
         <div className={styles.preview}>
-          {form.mode === "test" && <p className={styles.previewTest}>Torneo de prueba: los resultados no son oficiales y no hay premio real.</p>}
           <p className={styles.previewLead}>¡Competí por {form.prize.trim() ? form.prize.trim().charAt(0).toLowerCase() + form.prize.trim().slice(1) : "…"}!</p>
           <p className={styles.previewLabel}>{form.name.trim() || "Nombre del torneo"}</p>
           <p className={styles.previewPrize}>

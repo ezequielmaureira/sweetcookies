@@ -34,7 +34,7 @@ type Deps = {
   management?: ManagementRepository;
   /** Sweet Click Challenge (opcional: sin él, las rutas del campeonato no existen). */
   challenge?: ChallengeRepository;
-  /** Modo (prueba/oficial), clave del HMAC de IP y proxy confiable del campeonato. */
+  /** Clave del HMAC de IP y proxy confiable del campeonato. */
   challengeConfig?: ChallengeConfig;
   auth: AuthService;
   allowedOrigins: string[];
@@ -70,7 +70,7 @@ export function createApp({
   content,
   management,
   challenge,
-  challengeConfig = { official: false, ipSecret: null, trustProxy: "socket" },
+  challengeConfig = { ipSecret: null, trustProxy: "socket" },
   auth,
   allowedOrigins,
   orderLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60 * 1000 }),

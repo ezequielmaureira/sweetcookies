@@ -11,14 +11,14 @@
  */
 import { apiUrl, fetchWithTimeout } from "@/lib/api";
 
-export type ChallengeStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED" | "CANCELLED";
+export type ChallengeStatus = "DRAFT" | "UNPUBLISHED" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED" | "CANCELLED";
 
 /** Torneo tal como lo ve el jugador. El estado lo calcula el servidor con su hora. */
 export type Tournament = {
   id: string;
   name: string;
   description: string | null;
-  /** Torneo de prueba: sin premio real. */
+  /** Torneo histórico de prueba (anterior a los torneos reales): sin premio. */
   isTest: boolean;
   startsAt: string;
   endsAt: string;

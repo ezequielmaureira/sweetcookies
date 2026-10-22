@@ -159,7 +159,7 @@ export function PlayerPanel(props: PlayerPanelProps) {
       ) : exhausted ? (
         <p className={styles.small}>
           Premio del torneo: <strong>{tournament.prize}</strong>
-          {tournament.isTest ? " (prueba: no es real)" : ""}
+          {tournament.isTest ? " (histórico: sin premio)" : ""}
         </p>
       ) : null}
 

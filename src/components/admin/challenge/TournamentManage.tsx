@@ -7,7 +7,6 @@ import { AdminApiError, adminErrorMessage } from "@/lib/admin/admin-api";
 import {
   ACTION_LABELS,
   CLAIM_LABELS,
-  cancelTournament,
   FLAG_LABELS,
   STATUS_LABELS,
   connectionLabel,
@@ -17,10 +16,8 @@ import {
   getInviteStats,
   listGames,
   listParticipants,
-  pauseEdition,
   publishResults,
   reinstate,
-  resumeEdition,
   reviewGame,
   rhythm,
   setClaimStatus,
@@ -33,12 +30,13 @@ import {
 } from "@/lib/admin/challenge-admin-api";
 import { formatCordobaDateTime } from "@/lib/challenge/challenge-format";
 import admin from "@/components/admin/Admin.module.css";
+import { TournamentActions } from "./TournamentActions";
 import styles from "./ChallengeAdmin.module.css";
 
 const REVIEW_LABELS: Record<Review, string> = { NONE: "Sin marcas", PENDING: "Pendiente", APPROVED: "Aprobada", REJECTED: "Rechazada" };
 
 const when = (iso: string | null) => (iso ? formatCordobaDateTime(iso) : "—");
-const modeName = (e: AdminEdition) => (e.isTest ? "Prueba" : "Oficial");
+const kindName = (e: AdminEdition) => (e.legacy ? "Histórico de prueba" : e.deletedAt ? "Eliminado" : e.published ? "Publicado" : "No visible");
 const igLink = (instagram: string) => (
   <a href={`https://www.instagram.com/${encodeURIComponent(instagram)}/`} target="_blank" rel="noreferrer">
     @{instagram}
@@ -63,6 +61,8 @@ type TournamentManageProps = {
   onEdit: (edition: AdminEdition) => void;
   /** Avisa al listado que algo cambió (estado, ganador…). */
   onChanged: () => void;
+  /** Se eliminó el torneo: se vuelve al listado con el mensaje. */
+  onDeleted: (message: string) => void;
 };
 
 /**
@@ -72,7 +72,7 @@ type TournamentManageProps = {
  * historial. Toda acción pide motivo y queda registrada. No se puede editar un
  * puntaje: solo aprobar o rechazar partidas.
  */
-export function TournamentManage({ id, onBack, onEdit, onChanged }: TournamentManageProps) {
+export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: TournamentManageProps) {
   const { getToken } = useAuth();
   const selected = id;
   const [detail, setDetail] = useState<EditionDetail | null>(null);
@@ -163,8 +163,8 @@ export function TournamentManage({ id, onBack, onEdit, onChanged }: TournamentMa
   const leader = ranking[0] ?? null;
   const winnerHandle = claim ? (ranking.find((r) => r.participantId === claim.participantId)?.instagram ?? null) : null;
   const published = edition.status === "RESULTS_PUBLISHED";
-  const closed = published || edition.status === "CANCELLED";
-  const editable = edition.status === "DRAFT" || edition.status === "SCHEDULED" || edition.status === "ACTIVE" || edition.status === "PAUSED";
+  // Eliminado o histórico de prueba: solo lectura (no se aprueban, descalifican ni publican resultados).
+  const closed = published || edition.status === "CANCELLED" || edition.deletedAt !== null || edition.legacy;
 
   return (
     <div className={styles.stack}>
@@ -172,17 +172,12 @@ export function TournamentManage({ id, onBack, onEdit, onChanged }: TournamentMa
         <button type="button" className={styles.backLink} onClick={onBack}>
           ← Volver a los torneos
         </button>
-        {editable && (
-          <Button variant="secondary" onClick={() => onEdit(edition)}>
-            Editar torneo
-          </Button>
-        )}
       </div>
 
-      <section className={`${admin.section} ${edition.isTest ? styles.testMode : ""}`}>
+      <section className={`${admin.section} ${edition.legacy || edition.deletedAt ? styles.testMode : ""}`}>
         <div>
           <p className={styles.kicker}>
-            {modeName(edition)} · <span className={styles[`status${edition.status}`]}>{STATUS_LABELS[edition.status]}</span>
+            {kindName(edition)} · <span className={styles[`status${edition.status}`]}>{STATUS_LABELS[edition.status]}</span>
           </p>
           <h2 className={admin.sectionTitle}>{edition.name}</h2>
           {edition.description && <p className={styles.preLine}>{edition.description}</p>}
@@ -204,12 +199,31 @@ export function TournamentManage({ id, onBack, onEdit, onChanged }: TournamentMa
             <dt>Premio del 1.º puesto</dt>
             <dd>
               {edition.prize}
-              {edition.isTest ? " (prueba: no es real)" : ""}
+              {edition.legacy ? " (histórico de prueba: sin premio)" : ""}
             </dd>
           </div>
         </dl>
         {edition.prizeDescription && <p className={styles.preLine}>{edition.prizeDescription}</p>}
-        <p className={styles.muted}>Hora de Córdoba. El torneo se activa y finaliza solo según estas fechas.</p>
+        <p className={styles.muted}>
+          Hora de Córdoba. {edition.published ? "Publicado: se ve en /campeonato y se puede jugar entre estas fechas." : "No visible al público."}
+        </p>
+        {edition.legacy && <p className={styles.alertText}>Torneo histórico de prueba: sus resultados no son oficiales, no tiene ganador con premio y no se reactiva. Podés eliminarlo.</p>}
+        {edition.deletedAt && (
+          <p className={styles.alertText}>
+            Eliminado {when(edition.deletedAt)}
+            {edition.deleteReason ? `: ${edition.deleteReason}` : ""}. Solo lectura: no acepta partidas ni reclamos.
+          </p>
+        )}
+        <TournamentActions
+          edition={edition}
+          onEdit={() => onEdit(edition)}
+          onDone={(message, deleted) => {
+            if (deleted) return onDeleted(message);
+            setNotice(message);
+            void load();
+            onChanged();
+          }}
+        />
         {edition.pauseReason && <p className={styles.muted}>Pausa: {edition.pauseReason}</p>}
         {edition.cancelReason && <p className={styles.alertText}>Cancelado {when(edition.cancelledAt)}: {edition.cancelReason}</p>}
 
@@ -237,30 +251,7 @@ export function TournamentManage({ id, onBack, onEdit, onChanged }: TournamentMa
         </dl>
 
         <div className={styles.actions}>
-          {edition.status === "ACTIVE" && (
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                const reason = askReason("Motivo de la pausa (queda registrado):");
-                if (reason) void run((t) => pauseEdition(t, edition.id, reason), "Torneo pausado: no se aceptan partidas oficiales nuevas.", "El torneo ya no está activo.");
-              }}
-            >
-              Pausar torneo
-            </Button>
-          )}
-          {edition.status === "PAUSED" && (
-            <Button
-              disabled={busy}
-              onClick={() => {
-                const reason = askReason("Motivo para reanudar (opcional):", false);
-                if (reason !== null) void run((t) => resumeEdition(t, edition.id, reason), "Torneo reanudado.", "El torneo no está pausado.");
-              }}
-            >
-              Reanudar torneo
-            </Button>
-          )}
-          {edition.status === "FINISHED" && (
+          {edition.status === "FINISHED" && !closed && (
             <Button
               disabled={busy}
               onClick={() => {
@@ -276,19 +267,6 @@ export function TournamentManage({ id, onBack, onEdit, onChanged }: TournamentMa
               }}
             >
               Confirmar y publicar ganador
-            </Button>
-          )}
-          {!closed && (
-            <Button
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                if (!window.confirm(`¿Cancelar «${edition.name}»? Deja de aceptar partidas y no se puede deshacer. Se conserva todo el historial.`)) return;
-                const reason = askReason("Motivo de la cancelación (queda registrado):");
-                if (reason) void run((t) => cancelTournament(t, edition.id, reason), "Torneo cancelado. Se conservan sus resultados.", "Este torneo ya no se puede cancelar.");
-              }}
-            >
-              Cancelar torneo
             </Button>
           )}
         </div>

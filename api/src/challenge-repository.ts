@@ -69,8 +69,10 @@ const toClaim = ({ edition, ...claim }: ClaimRow): ClaimRecord => ({
   isTest: edition.isTest,
 });
 
-/** Publicado = visible para los jugadores (no borrador ni cancelado). */
-const published = { status: { in: [...PUBLISHED_STATUSES] } };
+/** Publicado = visible para los jugadores (no borrador, despublicado, cancelado ni eliminado). */
+const published = { status: { in: [...PUBLISHED_STATUSES] }, deletedAt: null };
+/** Torneos reales publicados (los históricos de prueba nunca bloquean ni tienen prioridad). */
+const realPublished = { ...published, isTest: false };
 
 /** Clave del bloqueo de Postgres que serializa altas/ediciones de torneos (evita superposiciones simultáneas). */
 const TOURNAMENT_LOCK = 20261023;
@@ -118,13 +120,13 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
     tx.challengeAdminAction.create({ data });
 
   /**
-   * Dentro de una transacción con bloqueo: otro torneo PUBLICADO que se superponga
-   * con estas fechas (null = libre). Prueba y oficial también se excluyen entre
-   * sí: la página muestra un solo torneo a la vez.
+   * Dentro de una transacción con bloqueo: otro torneo real PUBLICADO que se
+   * superponga con estas fechas (null = libre). Borradores, despublicados,
+   * cancelados, eliminados e históricos de prueba nunca bloquean.
    */
   const conflictFor = async (tx: Prisma.TransactionClient, range: { startsAt: Date; endsAt: Date }, excludeId: string | null) => {
     const others = await tx.challengeEdition.findMany({
-      where: { ...published, ...(excludeId ? { id: { not: excludeId } } : {}), startsAt: { lt: range.endsAt }, endsAt: { gt: range.startsAt } },
+      where: { ...realPublished, status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] }, ...(excludeId ? { id: { not: excludeId } } : {}), startsAt: { lt: range.endsAt }, endsAt: { gt: range.startsAt } },
       select: { id: true, name: true, startsAt: true, endsAt: true },
       take: 1,
     });
@@ -138,19 +140,24 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
 
   return {
     async publicTournaments(now) {
-      const [live, lastEnded, next] = await Promise.all([
-        prisma.challengeEdition.findFirst({ where: { ...published, startsAt: { lte: now }, endsAt: { gte: now } }, orderBy: { startsAt: "desc" } }),
-        prisma.challengeEdition.findFirst({ where: { ...published, endsAt: { lt: now } }, orderBy: { endsAt: "desc" } }),
-        prisma.challengeEdition.findFirst({ where: { ...published, startsAt: { gt: now } }, orderBy: { startsAt: "asc" } }),
+      const [live, lastEnded, next, legacy] = await Promise.all([
+        prisma.challengeEdition.findFirst({ where: { ...realPublished, status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] }, startsAt: { lte: now }, endsAt: { gte: now } }, orderBy: { startsAt: "desc" } }),
+        prisma.challengeEdition.findFirst({
+          where: { ...realPublished, OR: [{ endsAt: { lt: now } }, { status: { in: ["FINISHED", "RESULTS_PUBLISHED"] } }] },
+          orderBy: { endsAt: "desc" },
+        }),
+        prisma.challengeEdition.findFirst({ where: { ...realPublished, status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] }, startsAt: { gt: now } }, orderBy: { startsAt: "asc" } }),
+        // Histórico de prueba: solo se muestra si no hay ningún torneo real que mostrar.
+        prisma.challengeEdition.findFirst({ where: { ...published, isTest: true }, orderBy: { startsAt: "desc" } }),
       ]);
-      return { live, lastEnded, next };
+      return { live, lastEnded, next, legacy };
     },
 
     getEdition: (id) => prisma.challengeEdition.findUnique({ where: { id } }),
 
     async listEditions() {
       const [rows, counts] = await Promise.all([
-        prisma.challengeEdition.findMany({ orderBy: [{ startsAt: "desc" }], take: 100 }),
+        prisma.challengeEdition.findMany({ orderBy: [{ startsAt: "desc" }], take: 200 }),
         prisma.$queryRaw<{ edition_id: string; participants: bigint; games: bigint }[]>`
           SELECT edition_id, COUNT(DISTINCT participant_id) AS participants, COUNT(*) AS games
           FROM challenge_games GROUP BY edition_id`,
@@ -161,17 +168,14 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
       });
     },
 
-    async createEdition({ status, ...data }, adminUserId): Promise<SaveResult> {
+    async createEdition(data, adminUserId): Promise<SaveResult> {
       return prisma.$transaction(async (tx) => {
         await lock(tx);
-        if (status === "SCHEDULED") {
-          const conflict = await conflictFor(tx, data, null);
-          if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
-        }
+        // Crear nunca publica: el torneo nace en borrador.
         const edition = await tx.challengeEdition.create({
-          data: { ...tournamentData(data), status, number: await nextNumber(tx, data.isTest), gameDurationMs: GAME_DURATION_MS, createdBy: adminUserId },
+          data: { ...tournamentData(data), isTest: false, status: "DRAFT", number: await nextNumber(tx, false), gameDurationMs: GAME_DURATION_MS, createdBy: adminUserId },
         });
-        await log(tx, { editionId: edition.id, action: status === "SCHEDULED" ? "CREATE_SCHEDULED" : "CREATE_DRAFT", reason: null, adminUserId });
+        await log(tx, { editionId: edition.id, action: "CREATE_DRAFT", reason: null, adminUserId });
         return { ok: true, edition };
       });
     },
@@ -181,29 +185,106 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
         await lock(tx);
         const current = await tx.challengeEdition.findUnique({ where: { id } });
         if (!current) return { ok: false, conflict: null };
-        if (current.status !== "DRAFT") {
+        // Solo un torneo publicado ocupa fechas.
+        if (["SCHEDULED", "ACTIVE", "PAUSED"].includes(current.status)) {
           const conflict = await conflictFor(tx, data, id);
           if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
         }
-        // Cambiar de modo (solo en borrador) pasa a la numeración del otro modo.
-        const number = current.isTest !== data.isTest ? await nextNumber(tx, data.isTest) : current.number;
-        const edition = await tx.challengeEdition.update({ where: { id }, data: { ...tournamentData(data), number } });
+        // El tipo (real / histórico) nunca cambia al editar.
+        const edition = await tx.challengeEdition.update({ where: { id }, data: { ...tournamentData(data), isTest: current.isTest } });
         const detail = `Cambios: ${changes.join(", ") || "ninguno"}${reason ? ` · ${reason}` : ""}`;
         await log(tx, { editionId: id, action: changes.includes("prize") || changes.includes("prizeDescription") ? "UPDATE_PRIZE" : "UPDATE", reason: detail.slice(0, 300), adminUserId });
         return { ok: true, edition };
       });
     },
 
-    async scheduleEdition(id, adminUserId): Promise<SaveResult> {
+    async publishEdition(id, adminUserId): Promise<SaveResult> {
       return prisma.$transaction(async (tx) => {
         await lock(tx);
         const current = await tx.challengeEdition.findUnique({ where: { id } });
-        if (!current || current.status !== "DRAFT") return { ok: false, conflict: null };
+        if (!current || current.deletedAt || current.isTest || (current.status !== "DRAFT" && current.status !== "UNPUBLISHED")) return { ok: false, conflict: null };
         const conflict = await conflictFor(tx, current, id);
         if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
         const edition = await tx.challengeEdition.update({ where: { id }, data: { status: "SCHEDULED" } });
-        await log(tx, { editionId: id, action: "SCHEDULE", reason: null, adminUserId });
+        await log(tx, { editionId: id, action: current.status === "UNPUBLISHED" ? "REPUBLISH" : "PUBLISH", reason: null, adminUserId });
         return { ok: true, edition };
+      });
+    },
+
+    async unpublishEdition(id, reason, adminUserId) {
+      return prisma.$transaction(async (tx) => {
+        const { count } = await tx.challengeEdition.updateMany({
+          where: { id, deletedAt: null, status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] } },
+          data: { status: "UNPUBLISHED", pausedAt: null, pausedBy: null, pauseReason: null },
+        });
+        if (count === 0) return null;
+        await log(tx, { editionId: id, action: "UNPUBLISH", reason, adminUserId });
+        return tx.challengeEdition.findUnique({ where: { id } });
+      });
+    },
+
+    async finishEdition(id, now, reason, adminUserId) {
+      return prisma.$transaction(async (tx) => {
+        const current = await tx.challengeEdition.findUnique({ where: { id } });
+        // Solo un torneo publicado que ya empezó (si no empezó, se despublica).
+        if (!current || current.deletedAt || !["SCHEDULED", "ACTIVE", "PAUSED"].includes(current.status) || current.startsAt.getTime() >= now.getTime()) return null;
+        const endsAt = current.endsAt.getTime() > now.getTime() ? now : current.endsAt;
+        const { count } = await tx.challengeEdition.updateMany({
+          where: { id, status: current.status },
+          data: { status: "FINISHED", endsAt, pausedAt: null, pausedBy: null, pauseReason: null },
+        });
+        if (count === 0) return null;
+        await log(tx, { editionId: id, action: "FINISH", reason, adminUserId });
+        return tx.challengeEdition.findUnique({ where: { id } });
+      });
+    },
+
+    async deletionInfo(id) {
+      const edition = await prisma.challengeEdition.findUnique({ where: { id }, select: { id: true, winnerParticipantId: true, status: true } });
+      if (!edition) return null;
+      const [participants, games, invites, referrals, disqualifications, claim] = await Promise.all([
+        prisma.challengeGame.groupBy({ by: ["participantId"], where: { editionId: id } }).then((rows) => rows.length),
+        prisma.challengeGame.count({ where: { editionId: id } }),
+        prisma.challengeInvite.count({ where: { editionId: id } }),
+        prisma.challengeReferral.count({ where: { editionId: id } }),
+        prisma.challengeDisqualification.count({ where: { editionId: id } }),
+        prisma.challengePrizeClaim.findUnique({ where: { editionId: id }, select: { status: true } }),
+      ]);
+      const active = games + invites + referrals + disqualifications > 0 || claim !== null || edition.winnerParticipantId !== null;
+      return {
+        participants,
+        games,
+        invites,
+        referrals,
+        winnerPublished: edition.status === "RESULTS_PUBLISHED",
+        claimStatus: claim?.status ?? null,
+        mode: active ? "soft" : "hard",
+      };
+    },
+
+    async deleteEdition(id, reason, adminUserId) {
+      return prisma.$transaction(async (tx) => {
+        await lock(tx);
+        const current = await tx.challengeEdition.findUnique({ where: { id } });
+        if (!current || current.deletedAt) return null;
+        const [games, invites, referrals, disqualifications, claims] = await Promise.all([
+          tx.challengeGame.count({ where: { editionId: id } }),
+          tx.challengeInvite.count({ where: { editionId: id } }),
+          tx.challengeReferral.count({ where: { editionId: id } }),
+          tx.challengeDisqualification.count({ where: { editionId: id } }),
+          tx.challengePrizeClaim.count({ where: { editionId: id } }),
+        ]);
+        if (games + invites + referrals + disqualifications + claims === 0 && !current.winnerParticipantId) {
+          // Sin actividad: se borra definitivamente (con su historial de altas y ediciones,
+          // que no tiene datos de jugadores). La acción queda en el log del servidor.
+          await tx.challengeAdminAction.deleteMany({ where: { editionId: id } });
+          await tx.challengeEdition.delete({ where: { id } });
+          return { mode: "hard" as const };
+        }
+        // Con actividad: eliminación lógica. Nada se borra en cascada.
+        await tx.challengeEdition.update({ where: { id }, data: { deletedAt: new Date(), deletedBy: adminUserId, deleteReason: reason } });
+        await log(tx, { editionId: id, action: "DELETE", reason, adminUserId });
+        return { mode: "soft" as const };
       });
     },
 
@@ -211,7 +292,7 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
       return prisma.$transaction(async (tx) => {
         // Se conserva todo el historial (partidas, ranking, participantes); solo deja de estar disponible.
         const { count } = await tx.challengeEdition.updateMany({
-          where: { id, status: { notIn: ["CANCELLED", "RESULTS_PUBLISHED"] } },
+          where: { id, deletedAt: null, status: { notIn: ["CANCELLED", "RESULTS_PUBLISHED"] } },
           data: { status: "CANCELLED", cancelledAt: new Date(), cancelledBy: adminUserId, cancelReason: reason },
         });
         if (count === 0) return null;
@@ -220,7 +301,10 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
       });
     },
 
-    countPendingWinners: (now) => prisma.challengeEdition.count({ where: { status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] }, endsAt: { lt: now } } }),
+    countPendingWinners: (now) =>
+      prisma.challengeEdition.count({
+        where: { deletedAt: null, isTest: false, OR: [{ status: "FINISHED" }, { status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] }, endsAt: { lt: now } }] },
+      }),
 
     countGames: (editionId) => prisma.challengeGame.count({ where: { editionId } }),
 
@@ -374,14 +458,19 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
     },
 
     async claimsOf(participantId) {
-      const rows = await prisma.challengePrizeClaim.findMany({ where: { participantId }, orderBy: { createdAt: "desc" }, take: 5, select: claimSelect });
+      const rows = await prisma.challengePrizeClaim.findMany({
+        where: { participantId, edition: { isTest: false, deletedAt: null } },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: claimSelect,
+      });
       return rows.map(toClaim);
     },
 
     async submitClaim(editionId, participantId, { name, phone }, now) {
       // Solo el ganador (su participante) y una sola vez: PENDING → CLAIMED.
       const { count } = await prisma.challengePrizeClaim.updateMany({
-        where: { editionId, participantId, status: "PENDING" },
+        where: { editionId, participantId, status: "PENDING", edition: { isTest: false, deletedAt: null } },
         data: { status: "CLAIMED", name, phone, claimedAt: now },
       });
       if (count === 0) return null;
@@ -512,7 +601,7 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
       return prisma.$transaction(async (tx) => {
         // Solo se pausa un torneo publicado (en curso), y solo se reanuda uno pausado.
         const { count } = await tx.challengeEdition.updateMany({
-          where: { id: editionId, status: paused ? { in: ["SCHEDULED", "ACTIVE"] } : "PAUSED" },
+          where: { id: editionId, deletedAt: null, status: paused ? { in: ["SCHEDULED", "ACTIVE"] } : "PAUSED" },
           data: paused
             ? { status: "PAUSED", pausedAt: new Date(), pausedBy: adminUserId, pauseReason: reason }
             : { status: "SCHEDULED", pausedAt: null, pausedBy: null, pauseReason: null },
@@ -561,7 +650,7 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
     async publishResults(editionId, winner, adminUserId, reason) {
       return prisma.$transaction(async (tx) => {
         const { count } = await tx.challengeEdition.updateMany({
-          where: { id: editionId, status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] } },
+          where: { id: editionId, deletedAt: null, isTest: false, status: { in: ["SCHEDULED", "ACTIVE", "PAUSED", "FINISHED"] } },
           data: {
             status: "RESULTS_PUBLISHED",
             winnerParticipantId: winner?.participantId ?? null,

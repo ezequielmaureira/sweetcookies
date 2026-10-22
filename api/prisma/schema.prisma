@@ -379,11 +379,13 @@ model RecipeExtraCost {
  * Módulo independiente: no se relaciona con productos, pedidos ni vouchers.
  */
 
-/// Estado GUARDADO de un torneo. Lo pone el admin: DRAFT (borrador),
-/// SCHEDULED (publicado), PAUSED, RESULTS_PUBLISHED y CANCELLED. ACTIVE y
-/// FINISHED se CALCULAN con la hora del servidor y las fechas del torneo (ver
+/// Estado GUARDADO de un torneo. Lo pone el admin: DRAFT (borrador, nunca
+/// visible), SCHEDULED (publicado), UNPUBLISHED (despublicado: oculto, conserva
+/// sus datos), PAUSED, FINISHED (finalizado a mano), RESULTS_PUBLISHED y
+/// CANCELLED (histórico). Con un torneo publicado, PROGRAMADO / ACTIVO /
+/// FINALIZADO se CALCULAN con la hora del servidor y sus fechas (ver
 /// api/src/challenge-time.ts → effectiveStatus). ACTIVE guardado = publicado
-/// (lo usan los torneos creados antes de este cambio).
+/// (torneos anteriores a este cambio).
 enum ChallengeStatus {
   SCHEDULED
   ACTIVE
@@ -392,6 +394,7 @@ enum ChallengeStatus {
   RESULTS_PUBLISHED
   DRAFT
   CANCELLED
+  UNPUBLISHED
 }
 
 /// Torneo (tabla histórica "challenge_editions"). Lo crea y programa el admin
@@ -402,8 +405,9 @@ enum ChallengeStatus {
 /// publicados.
 model ChallengeEdition {
   id                  String          @id @default(cuid()) @db.VarChar(40)
-  /// true = prueba (sin premio real). Publicar uno oficial requiere CHALLENGE_MODE=official.
-  isTest              Boolean         @default(true) @map("is_test")
+  /// true = torneo HISTÓRICO de prueba (anterior a los torneos reales): nunca genera
+  /// premios ni reclamos y no bloquea fechas. Todos los torneos nuevos son reales (false).
+  isTest              Boolean         @default(false) @map("is_test")
   /// Número interno, independiente para prueba y oficial.
   number              Int
   name                String          @db.VarChar(80)
@@ -424,6 +428,11 @@ model ChallengeEdition {
   cancelledAt         DateTime?       @map("cancelled_at")
   cancelledBy         String?         @map("cancelled_by") @db.VarChar(64)
   cancelReason        String?         @map("cancel_reason") @db.VarChar(300)
+  /// Eliminación lógica (torneos con actividad): sale del listado y de la página, no
+  /// bloquea fechas ni acepta partidas o reclamos, pero conserva su historial.
+  deletedAt           DateTime?       @map("deleted_at")
+  deletedBy           String?         @map("deleted_by") @db.VarChar(64)
+  deleteReason        String?         @map("delete_reason") @db.VarChar(300)
   pausedAt            DateTime?       @map("paused_at")
   pausedBy            String?         @map("paused_by") @db.VarChar(64)
   pauseReason         String?         @map("pause_reason") @db.VarChar(300)
@@ -446,6 +455,7 @@ model ChallengeEdition {
   @@unique([isTest, number])
   @@index([startsAt])
   @@index([status, startsAt])
+  @@index([deletedAt])
   @@map("challenge_editions")
 }
 

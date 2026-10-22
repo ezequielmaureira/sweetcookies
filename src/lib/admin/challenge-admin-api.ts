@@ -18,6 +18,12 @@ export type AdminEdition = {
   end: { date: string; time: string };
   status: ChallengeStatus;
   storedStatus: ChallengeStatus;
+  /** Visible al público (no es lo mismo que activo). */
+  published: boolean;
+  /** Torneo histórico de prueba: no se edita, no se reactiva, no tiene premio. */
+  legacy: boolean;
+  deletedAt: string | null;
+  deleteReason: string | null;
   attempts: number;
   prize: string;
   prizeDescription: string | null;
@@ -35,8 +41,6 @@ export type AdminEdition = {
 export type EditionListItem = AdminEdition & { participants: number; games: number };
 
 export type Overview = {
-  /** El servidor permite publicar torneos oficiales (CHALLENGE_MODE=official). */
-  officialAllowed: boolean;
   ipTracking: boolean;
   limits: { minAttempts: number; maxAttempts: number };
   live: AdminEdition | null;
@@ -58,7 +62,6 @@ export type TournamentForm = {
   prize: string;
   prizeDescription: string;
   attempts: number;
-  mode: "test" | "official";
 };
 
 export type Suspicion = "NONE" | "LOW" | "HIGH";
@@ -150,6 +153,11 @@ export const FLAG_LABELS: Record<string, string> = {
 
 export const ACTION_LABELS: Record<string, string> = {
   CREATE_DRAFT: "Creó el torneo como borrador",
+  PUBLISH: "Publicó el torneo",
+  REPUBLISH: "Volvió a publicar el torneo",
+  UNPUBLISH: "Despublicó el torneo",
+  FINISH: "Finalizó el torneo",
+  DELETE: "Eliminó el torneo",
   CREATE_SCHEDULED: "Creó y programó el torneo",
   SCHEDULE: "Programó el torneo",
   UPDATE: "Editó el torneo",
@@ -178,6 +186,7 @@ export const connectionLabel = (ipHash: string | null) => (ipHash ? ipHash.slice
 
 export const STATUS_LABELS: Record<ChallengeStatus, string> = {
   DRAFT: "Borrador",
+  UNPUBLISHED: "Despublicado",
   SCHEDULED: "Programado",
   ACTIVE: "Activo",
   PAUSED: "Pausado",
@@ -204,7 +213,7 @@ export class TournamentApiError extends AdminApiError {
   }
 }
 
-async function tournamentRequest<T>(path: string, token: string | null, method: "POST" | "PUT", body: unknown): Promise<T> {
+async function tournamentRequest<T>(path: string, token: string | null, method: "POST" | "PUT" | "DELETE", body: unknown): Promise<T> {
   const url = apiUrl(path);
   if (!url) throw new TournamentApiError(0, {});
   if (!token) throw new TournamentApiError(401, {});
@@ -227,12 +236,29 @@ async function tournamentRequest<T>(path: string, token: string | null, method: 
 
 const tournamentPath = (id: string) => `/api/admin/challenge/editions/${encodeURIComponent(id)}`;
 
-export const createTournament = (token: string | null, form: TournamentForm, schedule: boolean) =>
-  tournamentRequest<AdminEdition>("/api/admin/challenge/editions", token, "POST", { ...form, schedule });
+/** Crear siempre guarda un BORRADOR (no visible). Publicar es otra acción. */
+export const createTournament = (token: string | null, form: TournamentForm) => tournamentRequest<AdminEdition>("/api/admin/challenge/editions", token, "POST", form);
 export const updateTournament = (token: string | null, id: string, form: TournamentForm, extra: { reason?: string; confirmPrizeChange?: boolean }) =>
   tournamentRequest<AdminEdition>(tournamentPath(id), token, "PUT", { ...form, ...extra });
-export const scheduleTournament = (token: string | null, id: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/schedule`, token, "POST", {});
-export const cancelTournament = (token: string | null, id: string, reason: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/cancel`, token, "POST", { reason });
+export const publishTournament = (token: string | null, id: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/publish-tournament`, token, "POST", {});
+export const unpublishTournament = (token: string | null, id: string, reason: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/unpublish`, token, "POST", { reason });
+export const finishTournament = (token: string | null, id: string, reason: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/finish`, token, "POST", { reason });
+export const pauseTournament = (token: string | null, id: string, reason: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/pause`, token, "POST", { reason });
+export const resumeTournament = (token: string | null, id: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/resume`, token, "POST", {});
+
+/** Qué tiene un torneo antes de eliminarlo. "hard" = se borra definitivamente; "soft" = eliminación lógica. */
+export type DeletionInfo = {
+  participants: number;
+  games: number;
+  invites: number;
+  referrals: number;
+  winnerPublished: boolean;
+  claimStatus: ClaimStatus | null;
+  mode: "hard" | "soft";
+};
+export const getDeletionInfo = (token: string | null, id: string) => adminRequest<DeletionInfo>(`${tournamentPath(id)}/deletion`, token);
+export const deleteTournament = (token: string | null, id: string, reason: string) =>
+  tournamentRequest<{ ok: true; mode: "hard" | "soft" }>(tournamentPath(id), token, "DELETE", { confirm: "ELIMINAR", reason: reason || undefined });
 export const getEdition = (token: string | null, id: string) => adminRequest<EditionDetail>(`/api/admin/challenge/editions/${encodeURIComponent(id)}`, token);
 export const listGames = async (token: string | null, id: string, filter: "all" | "suspicious") =>
   (await adminRequest<{ games: AdminGame[] }>(`/api/admin/challenge/editions/${encodeURIComponent(id)}/games?filter=${filter}`, token)).games;

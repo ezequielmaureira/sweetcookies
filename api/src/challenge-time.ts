@@ -80,19 +80,24 @@ export function parseCordobaDateTime(date: string, time: string, endOfMinute = f
   return cordobaToUtc(year, month, day, hour, minute, endOfMinute ? 59 : 0, endOfMinute ? 999 : 0);
 }
 
-export type ChallengeStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED" | "CANCELLED";
+export type ChallengeStatus = "DRAFT" | "UNPUBLISHED" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED" | "CANCELLED";
 
-/** Estados guardados que significan "publicado" (ACTIVE = torneos anteriores a este cambio). */
-export const PUBLISHED_STATUSES = ["SCHEDULED", "ACTIVE", "PAUSED", "RESULTS_PUBLISHED"] as const;
+/**
+ * Estados guardados que significan "publicado" = visible al público (ACTIVE =
+ * torneos anteriores a este cambio; FINISHED = finalizado a mano por el admin).
+ * Publicado NO es lo mismo que activo: activo es publicado + dentro de sus fechas.
+ */
+export const PUBLISHED_STATUSES = ["SCHEDULED", "ACTIVE", "PAUSED", "FINISHED", "RESULTS_PUBLISHED"] as const;
 
 /**
  * Estado real de un torneo: el guardado + la hora del servidor.
- * - Borrador, cancelado y ganador publicado los decide el admin.
+ * - Borrador, despublicado, finalizado a mano, ganador publicado y cancelado
+ *   los decide el admin.
  * - Publicado: antes del inicio = PROGRAMADO; entre inicio y fin = ACTIVO (o
  *   PAUSADO); después del fin = FINALIZADO, aunque nadie lo haya cerrado.
  */
 export function effectiveStatus(edition: { status: ChallengeStatus; startsAt: Date; endsAt: Date }, now: Date): ChallengeStatus {
-  if (edition.status === "DRAFT" || edition.status === "CANCELLED" || edition.status === "RESULTS_PUBLISHED") return edition.status;
+  if (["DRAFT", "UNPUBLISHED", "FINISHED", "CANCELLED", "RESULTS_PUBLISHED"].includes(edition.status)) return edition.status;
   if (now.getTime() > edition.endsAt.getTime()) return "FINISHED";
   if (now.getTime() < edition.startsAt.getTime()) return "SCHEDULED";
   if (edition.status === "PAUSED") return "PAUSED";

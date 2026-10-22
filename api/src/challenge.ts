@@ -223,7 +223,7 @@ export type TournamentInput = {
   isTest: boolean;
 };
 
-export type TournamentErrors = Partial<Record<"name" | "description" | "start" | "end" | "prize" | "prizeDescription" | "attempts" | "mode" | "body", string>>;
+export type TournamentErrors = Partial<Record<"name" | "description" | "start" | "end" | "prize" | "prizeDescription" | "attempts" | "body", string>>;
 
 const cleanText = (raw: unknown) => (typeof raw === "string" ? raw.normalize("NFC").replace(/\s+/g, " ").trim() : "");
 const cleanLong = (raw: unknown) => (typeof raw === "string" ? raw.normalize("NFC").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim() : "");
@@ -250,7 +250,6 @@ export function validateTournament(body: unknown): { ok: true; data: TournamentI
   if (!Number.isInteger(attempts) || (attempts as number) < MIN_ATTEMPTS || (attempts as number) > MAX_ATTEMPTS) {
     errors.attempts = `Elegí entre ${MIN_ATTEMPTS} y ${MAX_ATTEMPTS} intentos.`;
   }
-  if (input.mode !== "test" && input.mode !== "official") errors.mode = "Elegí prueba u oficial.";
 
   const text = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : "");
   const startsAt = parseCordobaDateTime(text("startDate"), text("startTime"));
@@ -275,7 +274,8 @@ export function validateTournament(body: unknown): { ok: true; data: TournamentI
       prize,
       prizeDescription: prizeDescription || null,
       attempts: attempts as number,
-      isTest: input.mode !== "official",
+      // No hay modo prueba: todos los torneos nuevos son reales.
+      isTest: false,
     },
   };
 }
@@ -290,7 +290,6 @@ export function tournamentChanges(current: EditionRecord, next: TournamentInput)
   if (current.prize !== next.prize) changes.push("prize");
   if ((current.prizeDescription ?? null) !== next.prizeDescription) changes.push("prizeDescription");
   if (current.attempts !== next.attempts) changes.push("attempts");
-  if (current.isTest !== next.isTest) changes.push("mode");
   return changes;
 }
 
@@ -298,8 +297,8 @@ export type EditCheck = { ok: true; changes: string[] } | { ok: false; error: st
 
 /**
  * Reglas de edición que protegen la competencia:
- * - Borrador, o publicado sin empezar y sin partidas: se puede cambiar todo (el
- *   modo prueba/oficial solo en borrador).
+ * - Borrador, o publicado/despublicado sin empezar y sin partidas: se puede
+ *   cambiar todo.
  * - Ya empezado o con partidas: el inicio y el modo quedan fijos; el cierre
  *   solo se puede extender; los intentos solo pueden subir; cambiar el premio
  *   exige confirmación explícita; todo cambio exige motivo y queda registrado.
@@ -312,11 +311,10 @@ export function checkTournamentEdit(
   ctx: { games: number; reason: string | null; confirmPrizeChange: boolean; now: Date },
 ): EditCheck {
   const changes = tournamentChanges(current, next);
+  if (current.deletedAt) return { ok: false, error: "deleted", message: "Este torneo fue eliminado: no se puede editar." };
+  if (current.isTest) return { ok: false, error: "legacy", message: "Los torneos históricos de prueba no se editan. Podés eliminarlo y crear uno nuevo." };
   if (status === "FINISHED" || status === "RESULTS_PUBLISHED" || status === "CANCELLED") {
-    return { ok: false, error: "locked", message: "Este torneo ya terminó o fue cancelado: no se puede editar." };
-  }
-  if (changes.includes("mode") && status !== "DRAFT") {
-    return { ok: false, error: "mode_locked", message: "El modo prueba/oficial solo se puede cambiar en borrador." };
+    return { ok: false, error: "locked", message: "Este torneo ya terminó: no se puede editar." };
   }
   const started = status !== "DRAFT" && (ctx.games > 0 || current.startsAt.getTime() <= ctx.now.getTime());
   if (!started) return { ok: true, changes };
@@ -419,6 +417,8 @@ export type EditionRecord = {
   prizeDescription: string | null;
   cancelledAt: Date | null;
   cancelReason: string | null;
+  deletedAt: Date | null;
+  deleteReason: string | null;
   pausedAt: Date | null;
   pauseReason: string | null;
   winnerParticipantId: string | null;
@@ -535,6 +535,17 @@ export type EditionStats = { participants: number; games: number; finished: numb
 /** Torneo + cuántos participantes y partidas tiene (listado del panel). */
 export type EditionSummary = EditionRecord & { participants: number; games: number };
 
+export type DeletionInfo = {
+  participants: number;
+  games: number;
+  invites: number;
+  referrals: number;
+  winnerPublished: boolean;
+  claimStatus: ClaimStatus | null;
+  /** "hard" = sin actividad (se borra definitivamente); "soft" = eliminación lógica. */
+  mode: "hard" | "soft";
+};
+
 export type SaveResult = { ok: true; edition: EditionRecord } | { ok: false; conflict: { id: string; name: string } } | { ok: false; conflict: null };
 
 /** El @ ya tiene una sesión en otro navegador. */
@@ -545,18 +556,32 @@ export class DuplicateParticipantError extends Error {
 }
 
 export type ChallengeRepository = {
-  /** Torneos publicados para la página: el que está en curso, el último terminado y el próximo. */
-  publicTournaments(now: Date): Promise<{ live: EditionRecord | null; lastEnded: EditionRecord | null; next: EditionRecord | null }>;
+  /**
+   * Torneos reales publicados para la página: el que está en curso, el último
+   * terminado y el próximo. `legacy` = el histórico de prueba (solo se muestra si
+   * no hay ningún torneo real que mostrar).
+   */
+  publicTournaments(now: Date): Promise<{ live: EditionRecord | null; lastEnded: EditionRecord | null; next: EditionRecord | null; legacy: EditionRecord | null }>;
   getEdition(id: string): Promise<EditionRecord | null>;
   listEditions(): Promise<EditionSummary[]>;
   /**
    * Alta, edición y publicación. Si el resultado queda publicado, se verifica
    * (con bloqueo) que no se superponga con otro torneo publicado.
    */
-  createEdition(data: TournamentInput & { status: "DRAFT" | "SCHEDULED" }, adminUserId: string): Promise<SaveResult>;
+  /** Crear SIEMPRE deja el torneo en borrador: publicarlo es otra decisión del admin. */
+  createEdition(data: TournamentInput, adminUserId: string): Promise<SaveResult>;
   updateEdition(id: string, data: TournamentInput, changes: string[], reason: string | null, adminUserId: string): Promise<SaveResult>;
-  scheduleEdition(id: string, adminUserId: string): Promise<SaveResult>;
+  /** Publicar (borrador o despublicado → visible). Verifica superposición con bloqueo. */
+  publishEdition(id: string, adminUserId: string): Promise<SaveResult>;
+  /** Despublicar: deja de verse y de aceptar partidas; conserva todo. */
+  unpublishEdition(id: string, reason: string | null, adminUserId: string): Promise<EditionRecord | null>;
+  /** Finalizar ahora: no acepta más partidas; el cierre pasa a ser este momento. */
+  finishEdition(id: string, now: Date, reason: string | null, adminUserId: string): Promise<EditionRecord | null>;
   cancelEdition(id: string, reason: string, adminUserId: string): Promise<EditionRecord | null>;
+  /** Qué tiene el torneo antes de eliminarlo (para advertir y decidir definitiva o lógica). */
+  deletionInfo(id: string): Promise<DeletionInfo | null>;
+  /** Sin actividad: se borra de verdad. Con actividad: eliminación lógica (conserva el historial). */
+  deleteEdition(id: string, reason: string | null, adminUserId: string): Promise<{ mode: "hard" | "soft" } | null>;
   /** Torneos cerrados (fin vencido) que esperan confirmar el ganador. */
   countPendingWinners(now: Date): Promise<number>;
 

@@ -84,11 +84,11 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
         <Link href="/" className={styles.homeLink} aria-label="Ir a Sweet Cookies">
           <Brand logoSrc={logoSrc} size="sm" decorative />
         </Link>
-        <span className={styles.demoTag}>{tournament?.isTest ? "Torneo de prueba" : "Río Cuarto"}</span>
+        <span className={styles.demoTag}>{tournament?.isTest ? "Histórico" : "Río Cuarto"}</span>
       </header>
       {tournament?.isTest && (
         <p className={styles.testBanner} role="note">
-          Torneo de prueba: los resultados no son oficiales y no hay premio real.
+          Torneo histórico de prueba: sus resultados no son oficiales y no tiene premio.
         </p>
       )}
 
@@ -159,7 +159,7 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
               {status !== "RESULTS_PUBLISHED" && status !== "CANCELLED" && (
                 <p className={styles.prize}>
                   🏆 Premio para el 1.º puesto: <strong>{tournament.prize}</strong>
-                  {tournament.isTest && <span className={styles.statusSub}> (prueba: no es real)</span>}
+                  {tournament.isTest && <span className={styles.statusSub}> (histórico: sin premio)</span>}
                 </p>
               )}
               {tournament.prizeDescription && status !== "RESULTS_PUBLISHED" && status !== "FINISHED" && <p className={styles.statusSub}>{tournament.prizeDescription}</p>}
@@ -192,7 +192,7 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
                       Ganador confirmado: <strong>{info.winner.handle}</strong>
                       <span className={styles.statusSub}>
                         Con {bitesText(info.winner.score)} · Premio: {tournament.prize}
-                        {tournament.isTest ? " (prueba: no es real)" : ""}
+                        {tournament.isTest ? " (histórico: sin premio)" : ""}
                       </span>
                     </>
                   ) : (
@@ -272,6 +272,7 @@ const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1
 
 const STATUS_LABELS = {
   DRAFT: "Borrador",
+  UNPUBLISHED: "No disponible",
   SCHEDULED: "Programado",
   ACTIVE: "En juego",
   PAUSED: "En pausa",

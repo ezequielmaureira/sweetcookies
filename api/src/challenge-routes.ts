@@ -50,12 +50,6 @@ type Variables = { userId: string };
 type AppContext = Context<{ Variables: Variables }>;
 
 export type ChallengeConfig = {
-  /**
-   * Seguro del servidor: sin CHALLENGE_MODE=official solo se pueden PUBLICAR
-   * torneos de prueba (los oficiales quedan en borrador). El modo de cada
-   * torneo lo elige el admin.
-   */
-  official: boolean;
   /** Clave del HMAC de IP (CHALLENGE_IP_SECRET). null = no se guarda ningún dato de IP. */
   ipSecret: string | null;
   /**
@@ -155,9 +149,11 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   const current = async (fresh = false) => {
     const t = now();
     if (fresh || !tournamentCache || Date.now() - tournamentCache.at >= RANKING_CACHE_MS) {
-      const { live, lastEnded, next } = await challenge.publicTournaments(t);
+      const { live, lastEnded, next, legacy } = await challenge.publicTournaments(t);
       const recent = lastEnded && t.getTime() - lastEnded.endsAt.getTime() <= SHOW_ENDED_MS ? lastEnded : null;
-      const main = live ?? recent ?? next;
+      // El histórico de prueba solo se ve si no hay ningún torneo real publicado que mostrar.
+      const legacyVisible = legacy && t.getTime() - legacy.endsAt.getTime() <= SHOW_ENDED_MS ? legacy : null;
+      const main = live ?? recent ?? next ?? legacyVisible;
       tournamentCache = { at: Date.now(), value: { main, next: main && next && main.id !== next.id ? next : null } };
     }
     const { main, next } = tournamentCache.value;
@@ -178,7 +174,8 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const base = await current();
     if (!requested) return { ...base, linkStatus: null as "ok" | "invalid" | null };
     const linked = /^[A-Za-z0-9_-]{1,40}$/.test(requested) ? await challenge.getEdition(requested) : null;
-    if (!linked || linked.status === "DRAFT") return { ...base, linkStatus: "invalid" as const };
+    // Borradores, despublicados y eliminados no se muestran (sin revelar que existen).
+    if (!linked || linked.deletedAt || linked.status === "DRAFT" || linked.status === "UNPUBLISHED") return { ...base, linkStatus: "invalid" as const };
     if (base.edition?.id === linked.id) return { ...base, linkStatus: "ok" as const };
     const other = base.edition && (base.status === "ACTIVE" || base.status === "SCHEDULED" || base.status === "PAUSED") ? base.edition : base.next;
     return { edition: linked, status: effectiveStatus(linked, base.t), next: other, t: base.t, linkStatus: "ok" as const };
@@ -296,7 +293,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
       const invite = await challenge.findInviteByCode(ref);
       if (!invite || invite.participantId === referredId) return;
       const edition = await challenge.getEdition(invite.editionId);
-      if (!edition || edition.status === "DRAFT" || edition.status === "CANCELLED") return;
+      if (!edition || edition.deletedAt || edition.status === "DRAFT" || edition.status === "UNPUBLISHED" || edition.status === "CANCELLED") return;
       const sameConnection = ipHash !== null && ipHash === invite.ipHash;
       await challenge.recordReferral({ editionId: invite.editionId, inviteId: invite.id, referrerId: invite.participantId, referredId, sameConnection });
     } catch (error) {
@@ -377,7 +374,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const participant = await participantOf(c);
     if (!participant) return c.json({ error: "no_session" }, 401);
     const { edition, status, t } = await current(true);
-    if (!edition || status !== "ACTIVE") return c.json({ error: "edition_not_active", status }, 409);
+    if (!edition || status !== "ACTIVE" || edition.isTest || edition.deletedAt) return c.json({ error: "edition_not_active", status }, 409);
     if (await challenge.isDisqualified(edition.id, participant.id)) return c.json({ error: "disqualified" }, 403);
 
     // Idempotencia: el navegador manda un id por cada toque de "Jugar". Un doble
@@ -488,6 +485,9 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const editionId = c.req.param("editionId") ?? "";
     const claim = await challenge.getClaim(editionId);
     if (!claim || claim.participantId !== participant.id) return c.json({ error: "not_winner" }, 403);
+    // Un torneo eliminado o histórico de prueba nunca habilita reclamos.
+    const claimEdition = await challenge.getEdition(editionId);
+    if (!claimEdition || claimEdition.deletedAt || claimEdition.isTest) return c.json({ error: "not_winner" }, 403);
     if (claim.status !== "PENDING") return c.json({ error: "already_claimed", claim: publicClaim(claim) }, 409);
     const parsed = await readJson(c);
     if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
@@ -508,8 +508,14 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     start: cordobaDateTime(edition.startsAt),
     end: cordobaDateTime(edition.endsAt),
     storedStatus: edition.status,
+    /** Publicado = visible al público (distinto de activo). */
+    published: !edition.deletedAt && ["SCHEDULED", "ACTIVE", "PAUSED", "FINISHED", "RESULTS_PUBLISHED"].includes(edition.status),
+    /** Torneo histórico de prueba (anterior a los torneos reales). */
+    legacy: edition.isTest,
     cancelledAt: edition.cancelledAt?.toISOString() ?? null,
     cancelReason: edition.cancelReason,
+    deletedAt: edition.deletedAt?.toISOString() ?? null,
+    deleteReason: edition.deleteReason,
     pausedAt: edition.pausedAt?.toISOString() ?? null,
     pauseReason: edition.pauseReason,
     winnerParticipantId: edition.winnerParticipantId,
@@ -530,7 +536,6 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
       challenge.countPendingWinners(t),
     ]);
     return c.json({
-      officialAllowed: config.official,
       ipTracking: config.ipSecret !== null,
       limits: { minAttempts: MIN_ATTEMPTS, maxAttempts: MAX_ATTEMPTS },
       live: live ? adminEdition(live, t) : null,
@@ -553,25 +558,18 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
       ? c.json({ error: "overlap", message: `Las fechas se superponen con "${result.conflict.name}". Solo puede haber un torneo a la vez.`, conflictId: result.conflict.id }, 409)
       : c.json({ error: "not_found" }, 404);
 
-  const officialLocked = (c: Context) =>
-    c.json({ error: "official_locked", message: "Los torneos oficiales todavía no están habilitados en el servidor (CHALLENGE_MODE=official). Guardalo como borrador o en modo prueba." }, 409);
-
-  /** Programar exige que el torneo no haya terminado ya. */
+  /** Publicar exige que el torneo no haya terminado ya. */
   const endedAlready = (endsAt: Date) => endsAt.getTime() <= now().getTime();
 
-  // Crear torneo: borrador o programado ("schedule": true).
+  // Crear torneo: SIEMPRE en borrador (no visible). Publicarlo es un paso aparte.
   app.post("/api/admin/challenge/editions", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }), async (c: AppContext) => {
     const parsed = await readJson(c);
     if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
     const input = validateTournament(parsed.body);
     if (!input.ok) return c.json({ error: "validation_error", fields: input.errors }, 422);
-    const schedule = (parsed.body as Record<string, unknown>).schedule === true;
-    if (schedule && !input.data.isTest && !config.official) return officialLocked(c);
-    if (schedule && endedAlready(input.data.endsAt)) return c.json({ error: "validation_error", fields: { end: "La finalización ya pasó." } }, 422);
-    const result = await challenge.createEdition({ ...input.data, status: schedule ? "SCHEDULED" : "DRAFT" }, c.get("userId"));
+    const result = await challenge.createEdition(input.data, c.get("userId"));
     if (!result.ok) return saveError(c, result);
-    tournamentCache = null;
-    log(`[admin] challenge tournament ${result.edition.id} created (${schedule ? "scheduled" : "draft"}) by ${c.get("userId")}`);
+    log(`[admin] challenge tournament ${result.edition.id} created as draft by ${c.get("userId")}`);
     return c.json(adminEdition(result.edition, now()), 201);
   });
 
@@ -595,7 +593,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
       now: t,
     });
     if (!check.ok) return c.json({ error: check.error, message: check.message }, 409);
-    if (status !== "DRAFT" && endedAlready(input.data.endsAt)) return c.json({ error: "validation_error", fields: { end: "La finalización ya pasó." } }, 422);
+    if (status !== "DRAFT" && status !== "UNPUBLISHED" && endedAlready(input.data.endsAt)) return c.json({ error: "validation_error", fields: { end: "La finalización ya pasó." } }, 422);
     const result = await challenge.updateEdition(edition.id, input.data, check.changes, reason.reason, c.get("userId"));
     if (!result.ok) return saveError(c, result);
     forgetEdition(edition.id);
@@ -603,18 +601,82 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     return c.json(adminEdition(result.edition, now()));
   });
 
-  // Publicar/programar un borrador: queda visible y se activa solo en su fecha.
-  app.post("/api/admin/challenge/editions/:id/schedule", async (c: AppContext) => {
+  /** Error claro (409) con mensaje para el panel. */
+  const refuse = (c: Context, error: string, message: string) => c.json({ error, message }, 409);
+
+  // PUBLICAR (borrador o despublicado → visible). Antes de su inicio queda
+  // PROGRAMADO; entre sus fechas, ACTIVO. Lo decide siempre el admin.
+  const publish = async (c: AppContext) => {
     const edition = await editionParam(c);
-    if (!edition) return c.json({ error: "not_found" }, 404);
-    if (edition.status !== "DRAFT") return c.json({ error: "not_draft" }, 409);
-    if (!edition.isTest && !config.official) return officialLocked(c);
-    if (endedAlready(edition.endsAt)) return c.json({ error: "ended", message: "La finalización ya pasó: editá las fechas antes de programarlo." }, 409);
-    const result = await challenge.scheduleEdition(edition.id, c.get("userId"));
+    if (!edition || edition.deletedAt) return c.json({ error: "not_found" }, 404);
+    if (edition.isTest) return refuse(c, "legacy", "Los torneos históricos de prueba no se pueden volver a publicar.");
+    if (edition.status !== "DRAFT" && edition.status !== "UNPUBLISHED") return refuse(c, "already_published", "Este torneo ya está publicado.");
+    if (endedAlready(edition.endsAt)) return refuse(c, "ended", "La finalización ya pasó: editá las fechas antes de publicarlo.");
+    const result = await challenge.publishEdition(edition.id, c.get("userId"));
     if (!result.ok) return saveError(c, result);
     forgetEdition(edition.id);
-    log(`[admin] challenge tournament ${edition.id} scheduled by ${c.get("userId")}`);
+    log(`[admin] challenge tournament ${edition.id} published by ${c.get("userId")}`);
     return c.json(adminEdition(result.edition, now()));
+  };
+  app.post("/api/admin/challenge/editions/:id/schedule", publish);
+  app.post("/api/admin/challenge/editions/:id/publish-tournament", publish);
+
+  // DESPUBLICAR: deja de verse y de aceptar partidas; conserva participantes y resultados.
+  app.post("/api/admin/challenge/editions/:id/unpublish", bodyLimit({ maxSize: 2 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const edition = await editionParam(c);
+    if (!edition || edition.deletedAt) return c.json({ error: "not_found" }, 404);
+    const input = await reasonOf(c, false);
+    if (!input) return reasonError(c);
+    const status = effectiveStatus(edition, now());
+    if (status !== "SCHEDULED" && status !== "ACTIVE" && status !== "PAUSED") return refuse(c, "not_published", "Solo se despublica un torneo programado, activo o pausado.");
+    const updated = await challenge.unpublishEdition(edition.id, input.reason, c.get("userId"));
+    if (!updated) return refuse(c, "not_published", "El torneo cambió: recargá.");
+    forgetEdition(edition.id);
+    log(`[admin] challenge tournament ${edition.id} unpublished by ${c.get("userId")}`);
+    return c.json(adminEdition(updated, now()));
+  });
+
+  // FINALIZAR ahora: no acepta más partidas y queda listo para confirmar el ganador.
+  app.post("/api/admin/challenge/editions/:id/finish", bodyLimit({ maxSize: 2 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const edition = await editionParam(c);
+    if (!edition || edition.deletedAt) return c.json({ error: "not_found" }, 404);
+    const input = await reasonOf(c, false);
+    if (!input) return reasonError(c);
+    const t = now();
+    const status = effectiveStatus(edition, t);
+    if (status === "SCHEDULED") return refuse(c, "not_started", "El torneo todavía no empezó: si no querés que se vea, despublicalo.");
+    if (status !== "ACTIVE" && status !== "PAUSED") return refuse(c, "not_running", "Solo se finaliza un torneo activo o pausado.");
+    const updated = await challenge.finishEdition(edition.id, t, input.reason, c.get("userId"));
+    if (!updated) return refuse(c, "not_running", "El torneo cambió: recargá.");
+    forgetEdition(edition.id);
+    log(`[admin] challenge tournament ${edition.id} finished by ${c.get("userId")}`);
+    return c.json(adminEdition(updated, now()));
+  });
+
+  // Qué tiene el torneo antes de eliminarlo (para la advertencia del panel).
+  app.get("/api/admin/challenge/editions/:id/deletion", async (c) => {
+    const edition = await editionParam(c);
+    if (!edition || edition.deletedAt) return c.json({ error: "not_found" }, 404);
+    const info = await challenge.deletionInfo(edition.id);
+    return info ? c.json(info) : c.json({ error: "not_found" }, 404);
+  });
+
+  // ELIMINAR: exige escribir "ELIMINAR". Sin actividad se borra definitivamente;
+  // con participantes, partidas o resultados es una eliminación lógica que
+  // conserva el historial (nada se borra en cascada) y deja de bloquear fechas.
+  app.delete("/api/admin/challenge/editions/:id", bodyLimit({ maxSize: 2 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const edition = await editionParam(c);
+    if (!edition || edition.deletedAt) return c.json({ error: "not_found" }, 404);
+    const parsed = await readJson(c);
+    const body = parsed.ok && parsed.body && typeof parsed.body === "object" ? (parsed.body as Record<string, unknown>) : {};
+    if (body.confirm !== "ELIMINAR") return c.json({ error: "validation_error", fields: { confirm: "Escribí ELIMINAR para confirmar." } }, 422);
+    const reason = parseReason(body, false);
+    if (!reason.ok) return reasonError(c);
+    const result = await challenge.deleteEdition(edition.id, reason.reason, c.get("userId"));
+    if (!result) return c.json({ error: "not_found" }, 404);
+    forgetEdition(edition.id);
+    log(`[admin] challenge tournament ${edition.id} deleted (${result.mode}) by ${c.get("userId")}`);
+    return c.json({ ok: true, mode: result.mode });
   });
 
   app.get("/api/admin/challenge/editions/:id", async (c) => {
@@ -708,6 +770,8 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const input = await reasonOf(c, false);
     if (!input) return reasonError(c);
     if (effectiveStatus(edition, now()) !== "PAUSED") return c.json({ error: "not_paused" }, 409);
+    // Un histórico de prueba no se reactiva: no se convierte en competencia real.
+    if (edition.isTest) return refuse(c, "legacy", "Los torneos históricos de prueba no se reanudan. Podés eliminarlo y crear un torneo nuevo.");
     const updated = await challenge.setPaused(edition.id, false, input.reason, c.get("userId"));
     if (!updated) return c.json({ error: "not_paused" }, 409);
     forgetEdition(edition.id);
@@ -759,6 +823,9 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const edition = await editionParam(c);
     if (!edition) return c.json({ error: "not_found" }, 404);
     const status = effectiveStatus(edition, now());
+    if (edition.deletedAt) return c.json({ error: "not_found" }, 404);
+    // Los históricos de prueba nunca generan ganador con premio.
+    if (edition.isTest) return refuse(c, "legacy", "Los torneos históricos de prueba no tienen ganador con premio.");
     if (status === "RESULTS_PUBLISHED") return c.json({ error: "already_published" }, 409);
     if (status !== "FINISHED") return c.json({ error: "not_finished" }, 409);
     const input = await reasonOf(c, false);

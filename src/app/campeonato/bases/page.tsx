@@ -105,7 +105,7 @@ export default async function ChallengeRulesPage() {
             premio no se puede cambiar por dinero. Una vez confirmado, el ganador lo reclama desde el mismo navegador con el que jugó, dejando su nombre y su celular para que Sweet Cookies
             lo contacte. Si perdió el acceso, puede escribir por Instagram a {instagram} desde la cuenta ganadora para recuperarlo.
           </p>
-          <p>Los torneos marcados como de prueba no entregan premios reales.</p>
+          <p>Los torneos históricos de prueba (anteriores a los torneos reales) no entregan premios.</p>
           <p className={styles.pending}>A definir: forma de entrega en Río Cuarto y plazo para reclamar el premio.</p>
         </section>
 

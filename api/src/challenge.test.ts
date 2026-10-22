@@ -111,7 +111,9 @@ describe("torneos: validación del formulario", () => {
     if (!bad.ok) assert.ok(bad.errors.end && bad.errors.name && bad.errors.prize && bad.errors.attempts);
     for (const attempts of [0, 21, 2.5, "3", null]) assert.equal(validateTournament(form({ attempts })).ok, false, String(attempts));
     assert.equal(validateTournament(form({ endDate: "2026-10-30", endTime: "18:05" })).ok, false); // menos de 15 min
-    assert.equal(validateTournament(form({ mode: "otro" })).ok, false);
+    // Ya no hay modo prueba: cualquier "mode" se ignora y el torneo es real.
+    const anyMode = validateTournament(form({ mode: "test" }));
+    assert.ok(anyMode.ok && anyMode.data.isTest === false);
   });
 
   it("acepta torneos de distinta duración: horas, un día, quince días", () => {
@@ -145,6 +147,8 @@ function edition(over: Partial<EditionRecord> = {}): EditionRecord {
     prizeDescription: "Surtidas, para retirar en Río Cuarto.",
     cancelledAt: null,
     cancelReason: null,
+    deletedAt: null,
+    deleteReason: null,
     pausedAt: null,
     pauseReason: null,
     winnerParticipantId: null,
@@ -164,11 +168,12 @@ describe("torneos: reglas de edición", () => {
   const before = new Date("2026-10-29T12:00:00Z");
   const during = new Date("2026-10-31T12:00:00Z");
 
-  it("antes del inicio y sin partidas se puede cambiar todo (menos el modo fuera de borrador)", () => {
-    const r = checkTournamentEdit(edition(), "SCHEDULED", input({ attempts: 2, startTime: "20:00", prize: "Combo" }), { games: 0, reason: null, confirmPrizeChange: false, now: before });
-    assert.ok(r.ok);
-    assert.equal(checkTournamentEdit(edition(), "SCHEDULED", input({ mode: "test" }), { games: 0, reason: null, confirmPrizeChange: false, now: before }).ok, false);
-    assert.ok(checkTournamentEdit(edition({ status: "DRAFT" }), "DRAFT", input({ mode: "test" }), { games: 0, reason: null, confirmPrizeChange: false, now: before }).ok);
+  it("antes del inicio y sin partidas se puede cambiar todo; históricos de prueba y eliminados no se editan", () => {
+    const ctx = { games: 0, reason: null, confirmPrizeChange: false, now: before };
+    assert.ok(checkTournamentEdit(edition(), "SCHEDULED", input({ attempts: 2, startTime: "20:00", prize: "Combo" }), ctx).ok);
+    assert.ok(checkTournamentEdit(edition({ status: "UNPUBLISHED" }), "UNPUBLISHED", input({ attempts: 2 }), ctx).ok);
+    assert.equal((checkTournamentEdit(edition({ isTest: true }), "SCHEDULED", input(), ctx) as { error: string }).error, "legacy");
+    assert.equal((checkTournamentEdit(edition({ deletedAt: new Date() }), "DRAFT", input(), ctx) as { error: string }).error, "deleted");
   });
 
   it("ya empezado: inicio fijo, cierre solo se extiende, intentos solo suben, premio con confirmación y motivo", () => {
@@ -270,7 +275,8 @@ function memoryChallenge() {
   const invites: InviteRecord[] = [];
   const visits: { inviteId: string; visitorHash: string; ipHash: string | null }[] = [];
   const referrals: { editionId: string; inviteId: string; referrerId: string; referredId: string; sameConnection: boolean }[] = [];
-  const isPublished = (e: EditionRecord) => (PUBLISHED_STATUSES as readonly string[]).includes(e.status);
+  const isPublished = (e: EditionRecord) => !e.deletedAt && (PUBLISHED_STATUSES as readonly string[]).includes(e.status);
+  const occupiesDates = (e: EditionRecord) => isPublished(e) && !e.isTest && ["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status);
   const strip = (p: MemoryParticipant): ParticipantRecord => ({
     id: p.id,
     instagram: p.instagram,
@@ -284,18 +290,20 @@ function memoryChallenge() {
     return { ...c, editionNumber: e.number, editionName: e.name, prize: e.prize, prizeDescription: e.prizeDescription, isTest: e.isTest };
   };
   const conflictFor = (range: { startsAt: Date; endsAt: Date }, excludeId: string | null) =>
-    editions.find((e) => e.id !== excludeId && isPublished(e) && overlaps(e, range)) ?? null;
+    editions.find((e) => e.id !== excludeId && occupiesDates(e) && overlaps(e, range)) ?? null;
   const nextNumber = (isTest: boolean) => editions.filter((e) => e.isTest === isTest).length + 1;
   const unused = async (): Promise<never> => {
     throw new Error("no usado en estos tests");
   };
   const repo: ChallengeRepository = {
     publicTournaments: async (now) => {
-      const pub = editions.filter(isPublished);
-      const live = pub.filter((e) => e.startsAt <= now && e.endsAt >= now).sort((a, b) => +b.startsAt - +a.startsAt)[0] ?? null;
-      const lastEnded = pub.filter((e) => e.endsAt < now).sort((a, b) => +b.endsAt - +a.endsAt)[0] ?? null;
-      const next = pub.filter((e) => e.startsAt > now).sort((a, b) => +a.startsAt - +b.startsAt)[0] ?? null;
-      return { live, lastEnded, next };
+      const real = editions.filter((e) => isPublished(e) && !e.isTest);
+      const open = real.filter((e) => ["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status));
+      const live = open.filter((e) => e.startsAt <= now && e.endsAt >= now).sort((a, b) => +b.startsAt - +a.startsAt)[0] ?? null;
+      const lastEnded = real.filter((e) => e.endsAt < now || ["FINISHED", "RESULTS_PUBLISHED"].includes(e.status)).sort((a, b) => +b.endsAt - +a.endsAt)[0] ?? null;
+      const next = open.filter((e) => e.startsAt > now).sort((a, b) => +a.startsAt - +b.startsAt)[0] ?? null;
+      const legacy = editions.filter((e) => isPublished(e) && e.isTest).sort((a, b) => +b.startsAt - +a.startsAt)[0] ?? null;
+      return { live, lastEnded, next, legacy };
     },
     getEdition: async (id) => editions.find((e) => e.id === id) ?? null,
     listEditions: async () =>
@@ -303,34 +311,75 @@ function memoryChallenge() {
         const own = games.filter((g) => g.editionId === e.id);
         return { ...e, games: own.length, participants: new Set(own.map((g) => g.participantId)).size };
       }),
-    createEdition: async ({ status, ...data }): Promise<SaveResult> => {
-      if (status === "SCHEDULED") {
-        const conflict = conflictFor(data, null);
-        if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
-      }
-      const e = edition({ ...data, id: `t${editions.length + 1}`, number: nextNumber(data.isTest), status });
+    createEdition: async (data): Promise<SaveResult> => {
+      const e = edition({ ...data, isTest: false, id: `t${editions.length + 1}`, number: nextNumber(false), status: "DRAFT" });
       editions.push(e);
-      actions.push(status === "SCHEDULED" ? "CREATE_SCHEDULED" : "CREATE_DRAFT");
+      actions.push("CREATE_DRAFT");
       return { ok: true, edition: e };
     },
     updateEdition: async (id, data, changes): Promise<SaveResult> => {
       const e = editions.find((x) => x.id === id);
       if (!e) return { ok: false, conflict: null };
-      if (e.status !== "DRAFT") {
+      if (occupiesDates(e)) {
         const conflict = conflictFor(data, id);
         if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
       }
-      Object.assign(e, data);
+      Object.assign(e, { ...data, isTest: e.isTest });
       actions.push(`UPDATE:${changes.join(",")}`);
       return { ok: true, edition: e };
     },
-    scheduleEdition: async (id): Promise<SaveResult> => {
+    publishEdition: async (id): Promise<SaveResult> => {
       const e = editions.find((x) => x.id === id);
-      if (!e || e.status !== "DRAFT") return { ok: false, conflict: null };
+      if (!e || e.deletedAt || e.isTest || (e.status !== "DRAFT" && e.status !== "UNPUBLISHED")) return { ok: false, conflict: null };
       const conflict = conflictFor(e, id);
       if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
       e.status = "SCHEDULED";
+      actions.push("PUBLISH");
       return { ok: true, edition: e };
+    },
+    unpublishEdition: async (id) => {
+      const e = editions.find((x) => x.id === id);
+      if (!e || e.deletedAt || !["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status)) return null;
+      e.status = "UNPUBLISHED";
+      actions.push("UNPUBLISH");
+      return e;
+    },
+    finishEdition: async (id, now) => {
+      const e = editions.find((x) => x.id === id);
+      if (!e || e.deletedAt || !["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status) || e.startsAt >= now) return null;
+      Object.assign(e, { status: "FINISHED", endsAt: e.endsAt > now ? now : e.endsAt });
+      actions.push("FINISH");
+      return e;
+    },
+    deletionInfo: async (id) => {
+      const e = editions.find((x) => x.id === id);
+      if (!e) return null;
+      const own = games.filter((g) => g.editionId === id);
+      const claim = claims.find((c) => c.editionId === id) ?? null;
+      const invitesCount = invites.filter((i) => i.editionId === id).length;
+      const referralsCount = referrals.filter((r) => r.editionId === id).length;
+      const active = own.length + invitesCount + referralsCount > 0 || claim !== null || e.winnerParticipantId !== null;
+      return {
+        participants: new Set(own.map((g) => g.participantId)).size,
+        games: own.length,
+        invites: invitesCount,
+        referrals: referralsCount,
+        winnerPublished: e.status === "RESULTS_PUBLISHED",
+        claimStatus: claim?.status ?? null,
+        mode: active ? "soft" : "hard",
+      };
+    },
+    deleteEdition: async (id, reason) => {
+      const e = editions.find((x) => x.id === id);
+      if (!e || e.deletedAt) return null;
+      const info = (await repo.deletionInfo(id))!;
+      if (info.mode === "hard") {
+        editions.splice(editions.indexOf(e), 1);
+        return { mode: "hard" };
+      }
+      Object.assign(e, { deletedAt: new Date(), deleteReason: reason });
+      actions.push("DELETE");
+      return { mode: "soft" };
     },
     cancelEdition: async (id, reason) => {
       const e = editions.find((x) => x.id === id);
@@ -339,7 +388,8 @@ function memoryChallenge() {
       actions.push("CANCEL");
       return e;
     },
-    countPendingWinners: async (now) => editions.filter((e) => ["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status) && e.endsAt < now).length,
+    countPendingWinners: async (now) =>
+      editions.filter((e) => !e.deletedAt && !e.isTest && (e.status === "FINISHED" || (["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status) && e.endsAt < now))).length,
     countGames: async (editionId) => games.filter((g) => g.editionId === editionId).length,
     createParticipant: async (d) => {
       if (people.some((p) => p.instagram === d.instagram)) throw new DuplicateParticipantError();
@@ -464,7 +514,14 @@ function memoryChallenge() {
         .map((g): RankingRow => ({ participantId: g.participantId, instagram: people.find((p) => p.id === g.participantId)!.instagram, score: g.score!, achievedAt: g.finishedAt!, gameId: g.id }));
     },
     isDisqualified: async (editionId, pid) => disqualified.has(`${editionId}:${pid}`),
-    claimsOf: async (pid) => claims.filter((c) => c.participantId === pid).map(toClaim),
+    claimsOf: async (pid) =>
+      claims
+        .filter((c) => c.participantId === pid)
+        .filter((c) => {
+          const e = editions.find((x) => x.id === c.editionId);
+          return e && !e.isTest && !e.deletedAt;
+        })
+        .map(toClaim),
     submitClaim: async (editionId, pid, data, now) => {
       const c = claims.find((x) => x.editionId === editionId && x.participantId === pid && x.status === "PENDING");
       if (!c) return null;
@@ -515,7 +572,7 @@ function memoryChallenge() {
     reinstate: async (editionId, pid) => disqualified.delete(`${editionId}:${pid}`),
     publishResults: async (editionId, winner) => {
       const e = editions.find((x) => x.id === editionId);
-      if (!e || !["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status)) return null;
+      if (!e || e.deletedAt || e.isTest || !["SCHEDULED", "ACTIVE", "PAUSED", "FINISHED"].includes(e.status)) return null;
       Object.assign(e, { status: "RESULTS_PUBLISHED", winnerParticipantId: winner?.participantId ?? null, winnerGameId: winner?.gameId ?? null, winnerScore: winner?.score ?? null });
       if (winner) claims.push({ editionId, participantId: winner.participantId, gameId: winner.gameId, status: "PENDING", name: null, phone: null, claimedAt: null, contactedAt: null, deliveredAt: null });
       return e;
@@ -527,7 +584,7 @@ function memoryChallenge() {
 const ORIGIN = "https://sweetcookies-seven.vercel.app";
 const IP_SECRET = "clave-de-prueba-para-el-hmac-de-ip!!";
 
-function setup(options: { official?: boolean } = {}) {
+function setup() {
   let clock = new Date("2026-10-28T15:00:00Z"); // miércoles 28/10 12:00 en Córdoba
   const settings: SettingsRepository = {
     get: async () => ({ ...DEFAULT_SETTINGS, instagramHandle: "@sweet.cookies.rio4", updatedAt: null }),
@@ -552,7 +609,7 @@ function setup(options: { official?: boolean } = {}) {
     allowedOrigins: [ORIGIN],
     log: () => undefined,
     now: () => clock,
-    config: { official: options.official ?? true, ipSecret: IP_SECRET, trustProxy: "fly" },
+    config: { ipSecret: IP_SECRET, trustProxy: "fly" },
   });
   const call = (path: string, init: { method?: string; token?: string; body?: unknown; ip?: string } = {}) =>
     app.request(path, {
@@ -577,10 +634,13 @@ function setup(options: { official?: boolean } = {}) {
     clock = new Date(clock.getTime() + 17_000);
     return call(`/api/challenge/games/${game.id}/finish`, { method: "POST", token, ip, body: { taps: taps.flatMap((t) => [t.t, t.x, t.y]), untrusted: 0 } });
   };
-  /** Crea un torneo desde el "panel". */
-  const create = async (over: Record<string, unknown> = {}, schedule = true) => {
-    const res = await call("/api/admin/challenge/editions", { method: "POST", body: { ...form(), ...over, schedule } });
-    return { status: res.status, data: await json(res) };
+  /** Crea un torneo desde el "panel" (siempre borrador) y, si se pide, lo PUBLICA (paso aparte). */
+  const create = async (over: Record<string, unknown> = {}, publish = true) => {
+    const res = await call("/api/admin/challenge/editions", { method: "POST", body: { ...form(), ...over } });
+    const created = { status: res.status, data: await json(res) };
+    if (!publish || res.status !== 201) return created;
+    const published = await call(`/api/admin/challenge/editions/${created.data.id}/schedule`, { method: "POST" });
+    return { status: published.status === 200 ? 201 : published.status, data: { ...(await json(published)), id: created.data.id } };
   };
   const advance = (ms: number) => (clock = new Date(clock.getTime() + ms));
   const setClock = (iso: string) => (clock = new Date(iso));
@@ -643,19 +703,29 @@ describe("torneos: creación, programación y estados", () => {
     assert.equal((await create({ name: "Borrador" }, false)).status, 201);
   });
 
-  it("rechaza fechas inválidas y un torneo que ya terminó", async () => {
+  it("rechaza fechas inválidas y no publica un torneo que ya terminó", async () => {
     const { create } = setup();
     assert.equal((await create({ endDate: "2026-10-29" })).status, 422);
-    assert.equal((await create({ startDate: "2026-10-01", endDate: "2026-10-02" })).status, 422);
+    const ended = await create({ startDate: "2026-10-01", endDate: "2026-10-02" });
+    assert.equal(ended.status, 409);
+    assert.equal(ended.data.error, "ended");
   });
 
-  it("los oficiales solo se publican con CHALLENGE_MODE=official; los de prueba siempre", async () => {
-    const { create } = setup({ official: false });
-    const locked = await create({ mode: "official" });
-    assert.equal(locked.status, 409);
-    assert.equal(locked.data.error, "official_locked");
-    assert.equal((await create({ mode: "official" }, false)).status, 201); // borrador sí
-    assert.equal((await create({ mode: "test", name: "Prueba", startDate: "2026-11-05", endDate: "2026-11-06" })).status, 201);
+  it("crear NO publica; no hay modo prueba ni bloqueo por CHALLENGE_MODE: todo torneo nuevo es real y se publica desde el panel", async () => {
+    const { call, create } = setup();
+    const draft = await create({ mode: "test" }, false);
+    assert.equal(draft.status, 201);
+    assert.equal(draft.data.status, "DRAFT");
+    assert.equal(draft.data.isTest, false);
+    assert.equal(draft.data.published, false);
+    assert.equal((await json(await call("/api/public/challenge"))).tournament, null);
+    // Aunque el cuerpo pida "schedule", crear sigue siendo borrador.
+    const sneaky = await json(await call("/api/admin/challenge/editions", { method: "POST", body: { ...form({ name: "Otro", startDate: "2026-11-05", endDate: "2026-11-06" }), schedule: true } }));
+    assert.equal(sneaky.status, "DRAFT");
+    const published = await json(await call(`/api/admin/challenge/editions/${draft.data.id}/publish-tournament`, { method: "POST" }));
+    assert.equal(published.status, "SCHEDULED");
+    assert.equal(published.published, true);
+    assert.equal((await json(await call("/api/public/challenge"))).tournament.isTest, false);
   });
 
   it("cancelación con motivo: conserva el historial y deja de aceptar partidas", async () => {
@@ -686,7 +756,7 @@ describe("torneos: creación, programación y estados", () => {
     assert.ok(memory.actions.some((a) => a === "UPDATE:attempts"));
   });
 
-  it("compatibilidad: la edición semanal anterior (estado ACTIVE guardado) sigue como torneo de prueba con sus datos", async () => {
+  it("compatibilidad: la edición semanal anterior (estado ACTIVE guardado) se conserva como histórico de prueba", async () => {
     const { call, memory, setClock } = setup();
     memory.editions.push(
       edition({
@@ -708,9 +778,13 @@ describe("torneos: creación, programación y estados", () => {
     assert.equal(live.tournament.isTest, true);
     setClock("2026-10-25T12:00:00Z");
     assert.equal((await json(await call("/api/public/challenge"))).tournament.status, "FINISHED");
-    // Su fecha no bloquea torneos posteriores.
-    const res = await call("/api/admin/challenge/editions", { method: "POST", body: { ...form({ startDate: "2026-10-26", endDate: "2026-10-27" }), schedule: true } });
-    assert.equal(res.status, 201);
+    // El histórico NO bloquea fechas: se puede publicar un torneo real superpuesto, y ese tiene prioridad.
+    setClock("2026-10-22T18:00:00Z");
+    const created = await json(await call("/api/admin/challenge/editions", { method: "POST", body: form({ startDate: "2026-10-22", startTime: "10:00", endDate: "2026-10-27" }) }));
+    assert.equal((await call(`/api/admin/challenge/editions/${created.id}/schedule`, { method: "POST" })).status, 200);
+    const now = await json(await call("/api/public/challenge"));
+    assert.equal(now.tournament.id, created.id);
+    assert.equal(now.tournament.isTest, false);
   });
 });
 
@@ -776,7 +850,7 @@ describe("torneos: intentos configurables, ranking y premio", () => {
 
   it("reclamo exclusivo del ganador confirmado, con el premio de SU torneo; nada privado en lo público", async () => {
     const { call, create, join, play, setClock } = setup();
-    const t = await create(runningNow({ prize: "Caja de 6 cookies", mode: "official" }));
+    const t = await create(runningNow({ prize: "Caja de 6 cookies" }));
     const winner = await join("@ganadora");
     const other = await join("@segundo");
     await play(winner, humanTaps(80));
@@ -800,16 +874,15 @@ describe("torneos: intentos configurables, ranking y premio", () => {
     assert.ok(!text.includes("5493584123456") && !text.includes("Pérez") && !text.includes("participantId") && !text.includes("181.10"));
   });
 
-  it("torneo de prueba: el premio se marca como no real", async () => {
-    const { call, create, join, play, setClock } = setup();
-    const t = await create(runningNow({ mode: "test" }));
-    const token = await join("@ana");
-    await play(token, humanTaps(30));
-    setClock("2026-10-30T12:00:00Z");
-    await call(`/api/admin/challenge/editions/${t.data.id}/publish`, { method: "POST", body: {} });
-    const me = await json(await call("/api/challenge/me", { token }));
-    assert.equal(me.claims[0].isTest, true);
-    assert.equal(me.tournament.isTest, true);
+  it("histórico de prueba: no se reactiva, no tiene ganador con premio ni reclamos", async () => {
+    const { call, memory, setClock } = setup();
+    memory.editions.push(edition({ id: "legacy", isTest: true, status: "PAUSED", startsAt: new Date("2026-10-19T03:00:00Z"), endsAt: new Date("2026-10-24T02:59:59.999Z") }));
+    setClock("2026-10-22T18:00:00Z");
+    assert.equal((await json(await call("/api/admin/challenge/editions/legacy/resume", { method: "POST", body: {} }))).error, "legacy");
+    assert.equal((await json(await call("/api/admin/challenge/editions/legacy/schedule", { method: "POST" }))).error, "legacy");
+    setClock("2026-10-25T12:00:00Z");
+    assert.equal((await json(await call("/api/admin/challenge/editions/legacy/publish", { method: "POST", body: {} }))).error, "legacy");
+    assert.equal(memory.editions[0].status, "PAUSED");
   });
 });
 
@@ -1026,5 +1099,110 @@ describe("invitaciones entre amigos", () => {
     await call(`/api/admin/challenge/editions/${t.data.id}/cancel`, { method: "POST", body: { reason: "Cancelado por prueba" } });
     await call("/api/challenge/register", { method: "POST", ip: "190.1.1.1", body: { instagram: "@beto", terms: true, ref: code } });
     assert.equal(memory.referrals.length, 0);
+  });
+});
+
+describe("publicación y ciclo de vida de los torneos", () => {
+  it("despublicar: se oculta, no acepta partidas, conserva los datos y se puede volver a publicar", async () => {
+    const { call, create, join, play } = setup();
+    const t = await create(runningNow());
+    const token = await join("@ana");
+    await play(token, humanTaps(25));
+    const off = await json(await call(`/api/admin/challenge/editions/${t.data.id}/unpublish`, { method: "POST", body: { reason: "Ajustes" } }));
+    assert.equal(off.status, "UNPUBLISHED");
+    assert.equal(off.published, false);
+    assert.equal((await json(await call("/api/public/challenge"))).tournament, null);
+    assert.equal((await json(await call(`/api/public/challenge?torneo=${t.data.id}`))).linkStatus, "invalid");
+    assert.equal((await call("/api/challenge/games", { method: "POST", token })).status, 409);
+    const back = await json(await call(`/api/admin/challenge/editions/${t.data.id}/publish-tournament`, { method: "POST" }));
+    assert.equal(back.status, "ACTIVE");
+    const board = await json(await call("/api/public/challenge"));
+    assert.deepEqual(board.leaderboard.map((r: { handle: string; score: number }) => [r.handle, r.score]), [["@ana", 25]]);
+  });
+
+  it("un despublicado no bloquea fechas", async () => {
+    const { call, create } = setup();
+    const a = await create(runningNow({ name: "Torneo A" }));
+    await call(`/api/admin/challenge/editions/${a.data.id}/unpublish`, { method: "POST", body: {} });
+    assert.equal((await create(runningNow({ name: "Torneo B" }))).status, 201);
+    // Y A ya no se puede volver a publicar encima de B.
+    assert.equal((await json(await call(`/api/admin/challenge/editions/${a.data.id}/schedule`, { method: "POST" }))).error, "overlap");
+  });
+
+  it("pausar y reanudar", async () => {
+    const { call, create, join } = setup();
+    const t = await create(runningNow());
+    const token = await join("@ana");
+    assert.equal((await json(await call(`/api/admin/challenge/editions/${t.data.id}/pause`, { method: "POST", body: { reason: "Revisión" } }))).status, "PAUSED");
+    assert.equal((await call("/api/challenge/games", { method: "POST", token })).status, 409);
+    assert.equal((await json(await call(`/api/admin/challenge/editions/${t.data.id}/resume`, { method: "POST", body: {} }))).status, "ACTIVE");
+    assert.equal((await call("/api/challenge/games", { method: "POST", token })).status, 201);
+  });
+
+  it("finalizar ahora: no acepta más partidas y permite confirmar el ganador; uno no empezado no se finaliza", async () => {
+    const { call, create, join, play } = setup();
+    const future = await create({ name: "Futuro", startDate: "2026-11-05", endDate: "2026-11-06" });
+    assert.equal((await json(await call(`/api/admin/challenge/editions/${future.data.id}/finish`, { method: "POST", body: {} }))).error, "not_started");
+    const t = await create(runningNow());
+    const token = await join("@ana");
+    await play(token, humanTaps(40));
+    const done = await json(await call(`/api/admin/challenge/editions/${t.data.id}/finish`, { method: "POST", body: { reason: "Cierre anticipado" } }));
+    assert.equal(done.status, "FINISHED");
+    assert.equal((await call("/api/challenge/games", { method: "POST", token })).status, 409);
+    assert.equal((await json(await call("/api/admin/challenge/overview"))).pendingWinners, 1);
+    assert.equal((await call(`/api/admin/challenge/editions/${t.data.id}/publish`, { method: "POST", body: {} })).status, 200);
+    assert.equal((await json(await call("/api/challenge/me", { token }))).claims.length, 1);
+  });
+
+  it("eliminar sin actividad: definitivo; exige escribir ELIMINAR", async () => {
+    const { call, create, memory } = setup();
+    const t = await create({}, false);
+    assert.equal((await json(await call(`/api/admin/challenge/editions/${t.data.id}/deletion`))).mode, "hard");
+    assert.equal((await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "DELETE", body: { confirm: "eliminar" } })).status, 422);
+    const res = await json(await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "DELETE", body: { confirm: "ELIMINAR" } }));
+    assert.equal(res.mode, "hard");
+    assert.equal(memory.editions.length, 0);
+    assert.equal((await call(`/api/admin/challenge/editions/${t.data.id}`)).status, 404);
+  });
+
+  it("eliminar con actividad: lógico; conserva el historial, sale de la página, no bloquea fechas ni habilita partidas o reclamos", async () => {
+    const { call, create, join, play, memory, setClock } = setup();
+    const t = await create(runningNow());
+    const token = await join("@ana");
+    await play(token, humanTaps(30));
+    setClock("2026-10-30T12:00:00Z");
+    await call(`/api/admin/challenge/editions/${t.data.id}/publish`, { method: "POST", body: {} });
+    const info = await json(await call(`/api/admin/challenge/editions/${t.data.id}/deletion`));
+    assert.deepEqual([info.mode, info.participants, info.games, info.winnerPublished, info.claimStatus], ["soft", 1, 1, true, "PENDING"]);
+    const res = await json(await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "DELETE", body: { confirm: "ELIMINAR", reason: "Limpieza" } }));
+    assert.equal(res.mode, "soft");
+    // Se conserva: el torneo y su partida siguen en la base.
+    assert.equal(memory.editions.length, 1);
+    assert.ok(memory.editions[0].deletedAt);
+    assert.equal(memory.games.length, 1);
+    // No se ve, no permite reclamar y no se puede volver a eliminar ni editar.
+    assert.equal((await json(await call("/api/public/challenge"))).tournament, null);
+    assert.deepEqual((await json(await call("/api/challenge/me", { token }))).claims, []);
+    assert.equal((await call(`/api/challenge/claims/${t.data.id}`, { method: "POST", token, body: { name: "Ana Pérez", phone: "358 412-3456" } })).status, 403);
+    assert.equal((await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "DELETE", body: { confirm: "ELIMINAR" } })).status, 404);
+    // Las mismas fechas quedan libres para otro torneo.
+    setClock("2026-10-28T15:00:00Z");
+    assert.equal((await create(runningNow({ name: "Nuevo" }))).status, 201);
+    const list = await json(await call("/api/admin/challenge/editions"));
+    assert.equal(list.editions.find((e: { id: string }) => e.id === t.data.id).deletedAt !== null, true);
+  });
+
+  it("el histórico de prueba se puede eliminar (lógico, conserva sus resultados)", async () => {
+    const { call, memory, setClock } = setup();
+    memory.editions.push(edition({ id: "legacy", isTest: true, status: "PAUSED", startsAt: new Date("2026-10-19T03:00:00Z"), endsAt: new Date("2026-10-24T02:59:59.999Z") }));
+    const token = (await json(await call("/api/challenge/register", { method: "POST", body: { instagram: "@viejo", terms: true } }))).token;
+    memory.games.push({ ...memory.games[0], id: "g-old", editionId: "legacy", participantId: "p1", attemptNumber: 1, status: "FINISHED", startedAt: new Date("2026-10-20T12:00:00Z"), finishedAt: new Date("2026-10-20T12:00:20Z"), ipHash: null, clientRequestId: null, score: 145, cookies: 4, tapsReceived: 145, tapsIgnored: 0, untrustedTaps: 0, flags: [], suspicion: "NONE", review: "NONE", reviewedAt: null, reviewedBy: null, reviewReason: null } as GameRecord);
+    setClock("2026-10-22T18:00:00Z");
+    assert.equal((await json(await call("/api/public/challenge"))).tournament.id, "legacy");
+    const res = await json(await call("/api/admin/challenge/editions/legacy", { method: "DELETE", body: { confirm: "ELIMINAR" } }));
+    assert.equal(res.mode, "soft");
+    assert.equal(memory.games.find((g) => g.id === "g-old")?.score, 145);
+    assert.equal((await json(await call("/api/public/challenge"))).tournament, null);
+    assert.ok(token);
   });
 });
