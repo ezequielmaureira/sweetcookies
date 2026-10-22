@@ -1,0 +1,313 @@
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: max(env(safe-area-inset-top), 14px) 16px max(env(safe-area-inset-bottom), 32px);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1080px;
+}
+
+.homeLink {
+  display: inline-flex;
+  border-radius: 50%;
+}
+
+.demoTag {
+  padding: 6px 12px;
+  border: 1px solid var(--ch-line);
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ch-cream-soft);
+}
+
+.hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 560px;
+  padding-top: clamp(10px, 3svh, 36px);
+  text-align: center;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ch-caramel);
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 12.5vw, 5rem);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  color: var(--ch-cream);
+}
+
+.titleAccent {
+  background: linear-gradient(180deg, var(--ch-caramel-light) 10%, var(--ch-caramel) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lead {
+  max-width: 22ch;
+  margin-top: 14px;
+  font-size: clamp(1.125rem, 4.6vw, 1.375rem);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ch-cream);
+}
+
+/* Cookie protagonista */
+.cookieWrap {
+  position: relative;
+  width: min(74vw, 40svh, 400px);
+  aspect-ratio: 1 / 1;
+  margin: clamp(16px, 3.5svh, 32px) 0;
+}
+
+.glow {
+  position: absolute;
+  inset: -16%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(217, 150, 60, 0.34), rgba(217, 150, 60, 0) 72%);
+  animation: glow 4.2s ease-in-out infinite;
+}
+
+.cookie {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 22px 26px rgba(0, 0, 0, 0.55)) drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+  animation:
+    cookieIn 800ms var(--ease-out) 120ms both,
+    float 4.2s ease-in-out 900ms infinite;
+}
+
+.cutout {
+  object-fit: contain;
+}
+
+.round {
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.missing {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--ch-surface);
+  font-size: 0.875rem;
+  color: var(--ch-cream-soft);
+}
+
+/* Migas sueltas alrededor (decoración estática) */
+.decor {
+  position: absolute;
+  clip-path: polygon(50% 0%, 88% 18%, 100% 58%, 72% 96%, 26% 100%, 0% 62%, 12% 16%);
+  transform: translate(-50%, -50%) rotate(var(--r));
+  animation: crumbIn 600ms var(--ease-out) var(--d) both;
+}
+
+.tone0 {
+  background: #d8a868;
+}
+
+.tone1 {
+  background: #b77a3e;
+}
+
+.tone2 {
+  background: #4a2a1a;
+  box-shadow: inset 0 0 0 1px rgba(246, 233, 212, 0.12);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.play {
+  min-width: min(100%, 280px);
+  animation: ctaGlow 2.4s ease-in-out 1.2s infinite;
+}
+
+/* Al presionar manda el relieve del botón, no el brillo. */
+.play:active,
+.play:disabled {
+  animation: none;
+}
+
+.status {
+  font-size: 0.875rem;
+  color: var(--ch-cream-soft);
+}
+
+.prize {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 26px;
+  padding: 14px 22px;
+  border: 1px solid var(--ch-line);
+  border-radius: 20px;
+  background: rgba(42, 25, 16, 0.72);
+}
+
+.prizeTitle {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--ch-caramel-light);
+}
+
+.prizeNote {
+  font-size: 0.875rem;
+  color: var(--ch-cream-soft);
+}
+
+.rules {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rules li {
+  padding: 12px 6px;
+  border-radius: 16px;
+  background: rgba(246, 233, 212, 0.05);
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  color: var(--ch-cream-soft);
+}
+
+.rules strong {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 800;
+  color: var(--ch-cream);
+}
+
+/* Entrada escalonada */
+.enter {
+  animation: rise 700ms var(--ease-out) var(--d, 0ms) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cookieIn {
+  from {
+    opacity: 0;
+    transform: scale(0.88) rotate(-8deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes crumbIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -80%) rotate(var(--r));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(var(--r));
+  }
+}
+
+@keyframes ctaGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 0 var(--ch-caramel-deep),
+      0 16px 34px rgba(0, 0, 0, 0.45),
+      0 0 0 0 rgba(242, 194, 123, 0),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 6px 0 var(--ch-caramel-deep),
+      0 16px 34px rgba(0, 0, 0, 0.45),
+      0 0 0 10px rgba(242, 194, 123, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+}
+
+@media (min-width: 768px) {
+  .cookieWrap {
+    width: min(44svh, 420px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter,
+  .cookie,
+  .glow,
+  .decor,
+  .play {
+    animation: none;
+  }
+}

@@ -1,0 +1,124 @@
+/*
+ * Sweet Click Challenge — tema "Chocolate intenso".
+ * Los colores viven solo dentro de .root: la tienda no cambia.
+ */
+.root {
+  --ch-bg: #1c110b;
+  --ch-surface: #2a1910;
+  --ch-raised: #3a2419;
+  --ch-cream: #f6e9d4;
+  --ch-cream-soft: #d9c4a6;
+  --ch-caramel: #d9963c;
+  --ch-caramel-light: #f2c27b;
+  --ch-caramel-deep: #9c6224;
+  --ch-urgent: #e8643c;
+  --ch-line: rgba(246, 233, 212, 0.14);
+  --ch-backdrop: radial-gradient(120% 75% at 50% 42%, #3d2417 0%, #26160e 45%, var(--ch-bg) 78%);
+
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  background: var(--ch-backdrop), var(--ch-bg);
+  color: var(--ch-cream);
+  overflow-x: clip;
+}
+
+.root ::selection {
+  background: var(--ch-caramel);
+  color: var(--ch-bg);
+}
+
+.root :focus-visible {
+  outline-color: var(--ch-caramel-light);
+}
+
+/* Botón principal: caramelo, con relieve de botón de juego. */
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 16px 36px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--ch-caramel-light) 0%, var(--ch-caramel) 100%);
+  color: #2a1308;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-transform: uppercase;
+  box-shadow:
+    0 6px 0 var(--ch-caramel-deep),
+    0 16px 34px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out),
+    filter var(--dur-fast) ease;
+}
+
+.cta:hover {
+  filter: brightness(1.06);
+}
+
+.cta:active {
+  transform: translateY(4px);
+  box-shadow:
+    0 2px 0 var(--ch-caramel-deep),
+    0 8px 18px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.cta:disabled {
+  cursor: progress;
+  filter: saturate(0.55) brightness(0.8);
+  transform: none;
+}
+
+/* Botón secundario: contorno crema. */
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  padding: 14px 28px;
+  border: 1.5px solid var(--ch-line);
+  border-radius: 999px;
+  background: rgba(246, 233, 212, 0.04);
+  color: var(--ch-cream);
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform 120ms var(--ease-out);
+}
+
+.ghost:hover {
+  border-color: var(--ch-cream-soft);
+  background: rgba(246, 233, 212, 0.08);
+}
+
+.ghost:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta,
+  .ghost {
+    transition: none;
+  }
+}
