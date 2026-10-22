@@ -11,8 +11,9 @@
  * - Cada mordida va al sector que más sobresale de lo que queda (mirado desde
  *   su centro), evitando el sector recién mordido: las mordidas se reparten
  *   alrededor y avanzan solas desde el borde hacia el centro.
- * - Cada mordida se lleva ~1/29 de lo que falta (el tamaño se recalcula siempre),
- *   así el ritmo es parejo y no hay saltos.
+ * - Cada mordida se lleva ~1/29 de la cookie (ritmo fijo: ≈ 2/3 a las 10,
+ *   ≈ 1/3 a las 20). Su tamaño se ajusta midiendo en la grilla lo que
+ *   realmente come, así el avance se ve parejo y sin saltos.
  * - Pedacitos que quedan sueltos se borran en esa misma mordida y se deshacen
  *   en migas: nunca quedan partes flotando.
  * - La mordida 30 se lleva el último bocado.
@@ -22,8 +23,6 @@ import { BITES_PER_COOKIE } from "./scoring.ts";
 
 /** Radio que se sigue en la grilla: algo más que COOKIE_EDGE para cubrir el borde irregular de la foto. */
 export const COOKIE_RADIUS = 49.5;
-/** Cuánto más chico es el agujero en la capa de miga expuesta (igual criterio que BiteableCookie). */
-export const RIM_INSET = 1.6;
 
 const GRID = 100;
 const SECTORS = 36;
@@ -35,10 +34,8 @@ const CRUMBS_PER_BITE = 5;
 const FINAL_CRUMBS = 16;
 
 export type CookieBite = {
-  /** Agujero en la foto. */
+  /** Agujero en la foto: queda transparente (se ve el fondo). */
   outline: readonly Point[];
-  /** Agujero más chico en la capa de miga (deja ver el interior en el borde de la mordida). */
-  rimOutline: readonly Point[];
   /** Pedacitos que quedaron sueltos: centros de celdas (1 × 1) a borrar en ambas capas. */
   fragments: readonly (readonly Point[])[];
   /** De dónde caen las migas. */
@@ -175,33 +172,54 @@ function rankSectors(shape: Shape, recent: readonly number[], rand: () => number
   return scored.sort((a, b) => b.score - a.score).map((entry) => entry.s);
 }
 
-type Plan = { spec: BiteSpec; angle: number; dx: number; dy: number; outline: Point[] };
+type Plan = { angle: number; outline: Point[]; cells: number };
 
 const shift = (points: readonly Point[], dx: number, dy: number) => points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
 
 /**
- * Mandíbula en el sector `s`. biteOutline mide desde el centro de la foto
+ * Mandíbula en el sector `s` que se lleva ~`target` celdas. La profundidad se
+ * ajusta MIDIENDO lo que realmente come en la grilla (búsqueda binaria), no
+ * con una estimación de área. biteOutline mide desde el centro de la foto
  * (50/50); el resultado se traslada al centro de lo que queda.
  */
-function planBite(shape: Shape, s: number, target: number, rand: () => number): Plan {
+function planBite(grid: Uint8Array, shape: Shape, s: number, target: number, rand: () => number): Plan {
   const reach = shape.reach[s];
   const angle = ((s + 0.15 + rand() * 0.7) * 360) / SECTORS;
-  // Boca de tamaño razonable para lo que queda; la profundidad sale del área buscada.
-  const width = clamp(reach * 0.5, 6, 19) * (0.9 + rand() * 0.2);
-  const thickness = clamp(target / (1.3 * width), 2.5, Math.max(3, reach * 0.95));
-  const spec: BiteSpec = {
-    angle,
-    depth: COOKIE_EDGE - (reach - thickness),
-    width,
-    // El centro de la mandíbula queda apenas afuera de la cookie: arco de mordida, no un círculo.
-    height: thickness + 3 + rand() * 3,
-    skew: (rand() - 0.5) * 14,
-    teeth: clamp(Math.round(width / 4), 4, 7),
-    seed: Math.floor(rand() * 2 ** 31),
-  };
+  const width = clamp(reach * 0.55, 7, 21) * (0.9 + rand() * 0.2);
+  const outward = 3 + rand() * 3;
+  const skew = (rand() - 0.5) * 14;
+  const teeth = clamp(Math.round(width / 4), 4, 7);
+  const seed = Math.floor(rand() * 2 ** 31);
   const dx = shape.cx - 50;
   const dy = shape.cy - 50;
-  return { spec, angle, dx, dy, outline: shift(biteOutline(spec), dx, dy) };
+
+  const build = (thickness: number): Plan => {
+    const spec: BiteSpec = {
+      angle,
+      depth: COOKIE_EDGE - (reach - thickness),
+      width,
+      // El centro de la mandíbula queda apenas afuera de la cookie: arco de mordida, no un círculo.
+      height: thickness + outward,
+      skew,
+      teeth,
+      seed,
+    };
+    const outline = shift(biteOutline(spec), dx, dy);
+    return { angle, outline, cells: polygonCells(grid, outline, false) };
+  };
+
+  let low = 1.5;
+  let high = Math.max(4, reach * 1.9);
+  let thickness = clamp(target / (1.3 * width), low, high);
+  let best = build(thickness);
+  for (let i = 0; i < 8 && Math.abs(best.cells - target) > target * 0.06; i++) {
+    const plan = i === 0 ? best : build(thickness);
+    if (Math.abs(plan.cells - target) < Math.abs(best.cells - target)) best = plan;
+    if (plan.cells < target) low = thickness;
+    else high = thickness;
+    thickness = (low + high) / 2;
+  }
+  return best;
 }
 
 /** Borra los pedazos separados del principal que son muy chicos. Devuelve cada uno como celdas. */
@@ -250,7 +268,6 @@ function centroid(points: readonly Point[]): Point {
 export function createCookieSequence(seed: number): CookieSequence {
   const rand = random(seed);
   const { grid, total } = fullCookie();
-  const leftover = total * FINAL_LEFTOVER;
   const recent: number[] = [];
   const bites: CookieBite[] = [];
   const regular = BITES_PER_COOKIE - 1;
@@ -258,18 +275,20 @@ export function createCookieSequence(seed: number): CookieSequence {
   for (let k = 0; k < regular; k++) {
     const shape = measure(grid);
     if (shape.count === 0) {
-      bites.push({ outline: [], rimOutline: [], fragments: [], crumbs: [], remaining: 0, final: false });
+      bites.push({ outline: [], fragments: [], crumbs: [], remaining: 0, final: false });
       continue;
     }
-    const target = Math.max(6, (shape.count - leftover) / (regular - k));
+    // Ritmo fijo y visible: tras la mordida k+1 queda 1 − (k+1)/29 de la cookie
+    // (≈ 2/3 a las 10, ≈ 1/3 a las 20, un bocado chico antes de la 30).
+    const planned = total * (1 - ((k + 1) * (1 - FINAL_LEFTOVER)) / regular);
+    const target = Math.max(6, shape.count - planned);
 
-    // Hasta tres sectores candidatos: se queda con el primero que muerde lo suficiente.
-    let best: (Plan & { cells: number }) | null = null;
+    // Hasta tres sectores candidatos: se queda con el que más se acerca al tamaño buscado.
+    let best: Plan | null = null;
     for (const s of rankSectors(shape, recent, rand).slice(0, 3)) {
-      const plan = planBite(shape, s, target, rand);
-      const cells = polygonCells(grid, plan.outline, false);
-      if (!best || cells > best.cells) best = { ...plan, cells };
-      if (cells >= target * 0.3) break;
+      const plan = planBite(grid, shape, s, target, rand);
+      if (!best || Math.abs(plan.cells - target) < Math.abs(best.cells - target)) best = plan;
+      if (Math.abs(plan.cells - target) <= target * 0.15) break;
     }
     if (!best) break;
 
@@ -283,7 +302,6 @@ export function createCookieSequence(seed: number): CookieSequence {
 
     bites.push({
       outline: best.outline,
-      rimOutline: shift(biteOutline(best.spec, RIM_INSET, 1.1), best.dx, best.dy),
       fragments: loose,
       crumbs,
       remaining: measure(grid).count / total,
@@ -296,7 +314,7 @@ export function createCookieSequence(seed: number): CookieSequence {
   for (let cell = 0; cell < grid.length; cell++) if (grid[cell] === 1) rest.push(cellPoint(cell));
   bites.push({
     outline: [],
-    rimOutline: [],
+   
     fragments: [],
     crumbs: rest.length ? sample(rest, FINAL_CRUMBS) : [{ x: 50, y: 50 }],
     remaining: 0,

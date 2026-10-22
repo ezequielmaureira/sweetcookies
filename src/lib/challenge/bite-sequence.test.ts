@@ -53,12 +53,12 @@ describe("secuencia de mordidas", () => {
     }
   });
 
-  it("la capa de miga es un agujero más chico que la mordida", () => {
-    for (const bite of sequence.slice(0, 10)) {
-      const grid = new Uint8Array(100 * 100).fill(1);
-      const whole = polygonCells(grid, bite.outline, false);
-      const rim = polygonCells(grid, bite.rimOutline, false);
-      assert.ok(rim < whole, `miga ${rim} >= mordida ${whole}`);
+  it("a las 10 mordidas falta ~1/3 y a las 20 queda ~1/3, en todas las variantes", () => {
+    for (let v = 0; v < SEQUENCE_VARIANTS; v++) {
+      const s = sequenceFor(v);
+      assert.ok(s[9].remaining > 0.6 && s[9].remaining < 0.74, `variante ${v}, 10 mordidas: queda ${s[9].remaining}`);
+      assert.ok(s[19].remaining > 0.26 && s[19].remaining < 0.4, `variante ${v}, 20 mordidas: queda ${s[19].remaining}`);
+      assert.ok(s[28].remaining < 0.08, `variante ${v}, 29 mordidas: queda ${s[28].remaining}`);
     }
   });
 

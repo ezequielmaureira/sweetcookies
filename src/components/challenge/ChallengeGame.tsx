@@ -66,7 +66,6 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
   const stageRef = useRef<HTMLButtonElement>(null);
   const bodyRef = useRef<HTMLSpanElement>(null);
   const cookieRef = useRef<HTMLCanvasElement>(null);
-  const rimRef = useRef<HTMLCanvasElement>(null);
   const crumbsRef = useRef<HTMLCanvasElement>(null);
   const timerRef = useRef<HTMLSpanElement>(null);
   const ringRef = useRef<SVGCircleElement>(null);
@@ -83,13 +82,12 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
     const root = rootRef.current;
     const stageEl = stageRef.current;
     const cookieCanvas = cookieRef.current;
-    const rimCanvas = rimRef.current;
     const crumbsCanvas = crumbsRef.current;
-    if (!root || !stageEl || !cookieCanvas || !rimCanvas || !crumbsCanvas) return;
+    if (!root || !stageEl || !cookieCanvas || !crumbsCanvas) return;
 
     const sequence = sequenceFor(0);
     const engine: Engine = {
-      renderer: new CookieRenderer(cookieCanvas, rimCanvas, image, isCutout),
+      renderer: new CookieRenderer(cookieCanvas, image, isCutout),
       crumbs: new CrumbField(crumbsCanvas),
       counter: createTapCounter(),
       sequence,
@@ -277,7 +275,6 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
         >
           <span ref={bodyRef} className={styles.body} aria-hidden="true">
             <span className={styles.shadow} />
-            <canvas ref={rimRef} className={styles.layer} />
             <canvas ref={cookieRef} className={styles.layer} />
           </span>
           <canvas ref={crumbsRef} className={styles.crumbs} aria-hidden="true" />
