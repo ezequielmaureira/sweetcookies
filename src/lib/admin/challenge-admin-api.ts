@@ -1,20 +1,28 @@
-import { adminRequest } from "@/lib/admin/admin-api";
+import { AdminApiError, adminRequest } from "@/lib/admin/admin-api";
+import { apiUrl, fetchWithTimeout } from "@/lib/api";
 import type { ChallengeStatus } from "@/lib/challenge/challenge-api";
 
 /** Cliente del panel para el Sweet Click Challenge (token de Clerk; autoriza el backend). */
 
+/** Torneo visto desde el panel (estado calculado por el servidor). */
 export type AdminEdition = {
   id: string;
   number: number;
+  name: string;
+  description: string | null;
   isTest: boolean;
-  weekStart: string;
   startsAt: string;
   endsAt: string;
-  reviewEndsAt: string;
+  /** Fecha y hora en Córdoba, para el formulario. */
+  start: { date: string; time: string };
+  end: { date: string; time: string };
   status: ChallengeStatus;
   storedStatus: ChallengeStatus;
   attempts: number;
   prize: string;
+  prizeDescription: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
   pausedAt: string | null;
   pauseReason: string | null;
   winnerParticipantId: string | null;
@@ -23,8 +31,35 @@ export type AdminEdition = {
   resultsPublishedAt: string | null;
 };
 
-/** Edición vigente + configuración del servidor (modo y HMAC de IP). */
-export type CurrentEdition = AdminEdition & { mode: "test" | "official"; ipTracking: boolean };
+/** Torneo en el listado: con participantes y partidas. */
+export type EditionListItem = AdminEdition & { participants: number; games: number };
+
+export type Overview = {
+  /** El servidor permite publicar torneos oficiales (CHALLENGE_MODE=official). */
+  officialAllowed: boolean;
+  ipTracking: boolean;
+  limits: { minAttempts: number; maxAttempts: number };
+  live: AdminEdition | null;
+  next: AdminEdition | null;
+  liveStats: { participants: number; games: number; finished: number; pendingReview: number } | null;
+  liveAlerts: number;
+  pendingWinners: number;
+  serverNow: string;
+};
+
+/** Formulario de torneo (fechas y horas en Córdoba). */
+export type TournamentForm = {
+  name: string;
+  description: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  prize: string;
+  prizeDescription: string;
+  attempts: number;
+  mode: "test" | "official";
+};
 
 export type Suspicion = "NONE" | "LOW" | "HIGH";
 export type Review = "NONE" | "PENDING" | "APPROVED" | "REJECTED";
@@ -99,7 +134,7 @@ export type AdminParticipant = {
   lastDuplicateAt: string | null;
   createdAt: string;
   lastSeenAt: string | null;
-  /** Intentos usados y mejor puntaje en la edición consultada. */
+  /** Intentos usados y mejor puntaje en el torneo consultado. */
   attemptsUsed: number;
   best: number | null;
   recoveryPending: boolean;
@@ -114,8 +149,14 @@ export const FLAG_LABELS: Record<string, string> = {
 };
 
 export const ACTION_LABELS: Record<string, string> = {
-  PAUSE: "Pausó la edición",
-  RESUME: "Reanudó la edición",
+  CREATE_DRAFT: "Creó el torneo como borrador",
+  CREATE_SCHEDULED: "Creó y programó el torneo",
+  SCHEDULE: "Programó el torneo",
+  UPDATE: "Editó el torneo",
+  UPDATE_PRIZE: "Editó el torneo (cambió el premio)",
+  CANCEL: "Canceló el torneo",
+  PAUSE: "Pausó el torneo",
+  RESUME: "Reanudó el torneo",
   APPROVE_GAME: "Aprobó una partida",
   REJECT_GAME: "Rechazó una partida",
   DISQUALIFY: "Descalificó",
@@ -136,20 +177,83 @@ export const CLAIM_LABELS: Record<ClaimStatus, string> = {
 export const connectionLabel = (ipHash: string | null) => (ipHash ? ipHash.slice(0, 6).toUpperCase() : "—");
 
 export const STATUS_LABELS: Record<ChallengeStatus, string> = {
+  DRAFT: "Borrador",
   SCHEDULED: "Programado",
   ACTIVE: "Activo",
   PAUSED: "Pausado",
   FINISHED: "Finalizado",
-  RESULTS_PUBLISHED: "Resultados publicados",
+  RESULTS_PUBLISHED: "Ganador publicado",
+  CANCELLED: "Cancelado",
 };
 
 const post = <T>(token: string | null, path: string, body: unknown) => adminRequest<T>(path, token, { method: "POST", body: JSON.stringify(body) });
 
-export const getCurrentEdition = (token: string | null) => adminRequest<CurrentEdition>("/api/admin/challenge/current", token);
-export const listEditions = async (token: string | null) => (await adminRequest<{ editions: AdminEdition[] }>("/api/admin/challenge/editions", token)).editions;
+export const getOverview = (token: string | null) => adminRequest<Overview>("/api/admin/challenge/overview", token);
+export const listEditions = async (token: string | null) => (await adminRequest<{ editions: EditionListItem[] }>("/api/admin/challenge/editions", token)).editions;
+/**
+ * Error de torneo con el código y el mensaje del servidor (superposición,
+ * reglas de edición, modo oficial bloqueado). Sigue siendo un AdminApiError.
+ */
+export class TournamentApiError extends AdminApiError {
+  readonly code: string;
+  readonly serverMessage: string | null;
+  constructor(status: number, body: { error?: string; message?: string; fields?: Record<string, string> }) {
+    super(status, body.fields ?? {});
+    this.code = body.error ?? "";
+    this.serverMessage = body.message ?? null;
+  }
+}
+
+async function tournamentRequest<T>(path: string, token: string | null, method: "POST" | "PUT", body: unknown): Promise<T> {
+  const url = apiUrl(path);
+  if (!url) throw new TournamentApiError(0, {});
+  if (!token) throw new TournamentApiError(401, {});
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, {
+      method,
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      timeoutMs: 30000,
+    });
+  } catch {
+    throw new TournamentApiError(0, {});
+  }
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) throw new TournamentApiError(res.status, data);
+  return data as T;
+}
+
+const tournamentPath = (id: string) => `/api/admin/challenge/editions/${encodeURIComponent(id)}`;
+
+export const createTournament = (token: string | null, form: TournamentForm, schedule: boolean) =>
+  tournamentRequest<AdminEdition>("/api/admin/challenge/editions", token, "POST", { ...form, schedule });
+export const updateTournament = (token: string | null, id: string, form: TournamentForm, extra: { reason?: string; confirmPrizeChange?: boolean }) =>
+  tournamentRequest<AdminEdition>(tournamentPath(id), token, "PUT", { ...form, ...extra });
+export const scheduleTournament = (token: string | null, id: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/schedule`, token, "POST", {});
+export const cancelTournament = (token: string | null, id: string, reason: string) => tournamentRequest<AdminEdition>(`${tournamentPath(id)}/cancel`, token, "POST", { reason });
 export const getEdition = (token: string | null, id: string) => adminRequest<EditionDetail>(`/api/admin/challenge/editions/${encodeURIComponent(id)}`, token);
 export const listGames = async (token: string | null, id: string, filter: "all" | "suspicious") =>
   (await adminRequest<{ games: AdminGame[] }>(`/api/admin/challenge/editions/${encodeURIComponent(id)}/games?filter=${filter}`, token)).games;
+/**
+ * Invitaciones de un torneo. "invites" = enlaces generados (no prueba que se
+ * hayan enviado); "visits" = visitantes distintos que abrieron un enlace;
+ * "registrations" = registros nuevos atribuidos por el servidor (sin los de la
+ * misma conexión que quien invitó, que van en "sameConnection").
+ */
+export type InviteStats = {
+  invites: number;
+  visits: number;
+  registrations: number;
+  sameConnection: number;
+  /** Registros / visitas, en %. null si todavía no hay visitas. */
+  conversion: number | null;
+  top: { instagram: string; visits: number; registrations: number; sameConnection: number }[];
+};
+
+export const getInviteStats = (token: string | null, id: string) => adminRequest<InviteStats>(`/api/admin/challenge/editions/${encodeURIComponent(id)}/invites`, token);
+
 export const listParticipants = async (token: string | null, id: string) =>
   (await adminRequest<{ participants: AdminParticipant[] }>(`/api/admin/challenge/editions/${encodeURIComponent(id)}/participants`, token)).participants;
 

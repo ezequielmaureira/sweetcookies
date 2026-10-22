@@ -5,52 +5,60 @@
  * registrarse: se guarda solo en este navegador (localStorage) y se manda como
  * Authorization: Bearer. El servidor guarda únicamente su hash.
  *
- * Para competir se pide solo el @ de Instagram. La práctica no usa el servidor.
+ * Para competir se pide solo el @ de Instagram. No hay práctica: toda partida es
+ * oficial, la reserva el servidor y consume un intento del torneo activo.
+ * Cada torneo (fechas, premio, intentos) lo crea el admin.
  */
 import { apiUrl, fetchWithTimeout } from "@/lib/api";
 
-export type ChallengeStatus = "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED";
+export type ChallengeStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED" | "CANCELLED";
 
-export type PublicEdition = {
+/** Torneo tal como lo ve el jugador. El estado lo calcula el servidor con su hora. */
+export type Tournament = {
   id: string;
-  number: number;
-  /** Edición de prueba privada: sin premio real. */
+  name: string;
+  description: string | null;
+  /** Torneo de prueba: sin premio real. */
   isTest: boolean;
   startsAt: string;
   endsAt: string;
-  /** Sábado 23:59:59 (fin del día de revisión). */
-  reviewEndsAt: string;
-  /** Lunes siguiente 00:00: nueva edición con intentos nuevos. */
-  nextStartsAt: string;
   status: ChallengeStatus;
   gameDurationMs: number;
-  /** Intentos oficiales por torneo semanal. */
+  /** Intentos oficiales por participante en este torneo. */
   attempts: number;
   bitesPerCookie: number;
   prize: string;
+  prizeDescription: string | null;
   serverNow: string;
 };
 
 export type LeaderRow = { position: number; handle: string; score: number; cookies: number };
 
 export type ChallengeInfo = {
-  edition: PublicEdition;
+  /** Torneo que muestra la página (en curso, recién terminado o próximo). null = sin torneos. */
+  tournament: Tournament | null;
+  /** Próximo torneo programado, si el principal es otro. */
+  next: Tournament | null;
+  serverNow: string;
   leaderboard: LeaderRow[];
   ranked: number;
   winner: { handle: string; score: number; cookies: number } | null;
   instagramHandle: string | null;
+  /** Resultado del enlace ?torneo=: "invalid" si no existe o no es visible. */
+  linkStatus: "ok" | "invalid" | null;
 };
 
 export type Attempts = { limit: number; used: number; left: number };
 export type Standing = { position: number; score: number; cookies: number } | null;
 
 export type ClaimStatus = "PENDING" | "CLAIMED" | "CONTACTED" | "DELIVERED";
-export type PrizeClaim = { editionId: string; editionNumber: number; isTest: boolean; status: ClaimStatus };
+export type PrizeClaim = { editionId: string; tournamentName: string; prize: string; prizeDescription: string | null; isTest: boolean; status: ClaimStatus };
 
 export type Me = {
   participant: { handle: string };
-  edition: PublicEdition;
-  attempts: Attempts;
+  tournament: Tournament | null;
+  /** null = no hay torneo. */
+  attempts: Attempts | null;
   best: Standing;
   ranked: number;
   disqualified: boolean;
@@ -61,7 +69,7 @@ export type Me = {
 export type FinishResponse = {
   result: { score: number; cookies: number; best: Standing; ranked: number; newRecord: boolean; enteredTop10: boolean };
   attempts: Attempts;
-  edition: PublicEdition;
+  tournament: Tournament;
   repeated?: boolean;
 };
 
@@ -104,16 +112,38 @@ async function request<T>(path: string, init: { method?: string; token?: string 
   return data as T;
 }
 
-export const getChallenge = () => request<ChallengeInfo>("/api/public/challenge");
-export const getMe = (token: string) => request<Me>("/api/challenge/me", { token });
+const withTournament = (path: string, tournamentId: string | null) => (tournamentId ? `${path}?torneo=${encodeURIComponent(tournamentId)}` : path);
+
+export const getChallenge = (tournamentId: string | null = null) => request<ChallengeInfo>(withTournament("/api/public/challenge", tournamentId));
+export const getMe = (token: string, tournamentId: string | null = null) => request<Me>(withTournament("/api/challenge/me", tournamentId), { token });
 type SessionResponse = { token: string; participant: { handle: string } };
 
-export const register = (instagram: string, terms: boolean) => request<SessionResponse>("/api/challenge/register", { method: "POST", body: { instagram, terms } });
+/** `ref`: código del enlace por el que llegó (solo para medir la difusión; no da ventajas). */
+export const register = (instagram: string, terms: boolean, ref: string | null) =>
+  request<SessionResponse>("/api/challenge/register", { method: "POST", body: { instagram, terms, ...(ref ? { ref } : {}) } });
 export const recoverSession = (instagram: string, code: string) => request<SessionResponse>("/api/challenge/recover", { method: "POST", body: { instagram, code } });
 export const claimPrize = (token: string, editionId: string, data: { name: string; phone: string }) =>
   request<{ claim: PrizeClaim }>(`/api/challenge/claims/${encodeURIComponent(editionId)}`, { method: "POST", token, body: data });
-export const startGame = (token: string) =>
-  request<{ game: { id: string; durationMs: number; attemptNumber: number }; attempts: Attempts }>("/api/challenge/games", { method: "POST", token });
+/** `requestId`: uno por toque de "Jugar"; si el pedido se repite, el servidor devuelve la misma partida (no gasta otro intento). */
+export const startGame = (token: string, requestId: string) =>
+  request<{ game: { id: string; durationMs: number; attemptNumber: number }; attempts: Attempts; replayed?: boolean }>("/api/challenge/games", {
+    method: "POST",
+    token,
+    body: { requestId },
+  });
+
+/** Enlace personal para invitar amigos al torneo (código público, sin datos privados). */
+export const createInvite = (token: string, tournamentId: string | null) =>
+  request<{ code: string; tournamentId: string }>(withTournament("/api/challenge/invites", tournamentId), { method: "POST", token });
+
+/** Avisa que se abrió un enlace de invitación (una visita por navegador). Nunca falla hacia la página. */
+export async function recordVisit(ref: string, visitor: string, token: string | null) {
+  try {
+    await request<unknown>("/api/challenge/visits", { method: "POST", token, body: { ref, visitor }, timeoutMs: 8000 });
+  } catch {
+    // Es solo una métrica.
+  }
+}
 export const finishGame = (token: string, gameId: string, taps: number[], untrusted: number) =>
   request<FinishResponse>(`/api/challenge/games/${encodeURIComponent(gameId)}/finish`, { method: "POST", token, body: { taps, untrusted } });
 
@@ -122,6 +152,8 @@ export const finishGame = (token: string, gameId: string, taps: number[], untrus
 const TOKEN_KEY = "sweetcookies:challenge-token";
 const PENDING_KEY = "sweetcookies:challenge-pending";
 const FOLLOWED_KEY = "sweetcookies:challenge-followed";
+const REF_KEY = "sweetcookies:challenge-ref";
+const VISITOR_KEY = "sweetcookies:challenge-visitor";
 
 function read(key: string): string | null {
   try {
@@ -146,6 +178,30 @@ export const saveToken = (token: string | null) => write(TOKEN_KEY, token);
 /** Paso "Seguir en Instagram" ya hecho en este navegador (no se verifica). */
 export const loadFollowed = () => read(FOLLOWED_KEY) === "1";
 export const saveFollowed = () => write(FOLLOWED_KEY, "1");
+
+/** Código del enlace por el que llegó este navegador (se manda al registrarse). */
+export const loadRef = () => {
+  const ref = read(REF_KEY);
+  return ref && /^[a-z2-9]{10}$/.test(ref) ? ref : null;
+};
+export const saveRef = (ref: string | null) => write(REF_KEY, ref);
+
+/** Id aleatorio de este navegador, solo para no contar dos veces la misma visita (no es publicidad ni rastreo entre sitios). */
+export function visitorId(): string {
+  const saved = read(VISITOR_KEY);
+  if (saved && /^[A-Za-z0-9_-]{16,64}$/.test(saved)) return saved;
+  const id = randomId();
+  write(VISITOR_KEY, id);
+  return id;
+}
+
+/** Id aleatorio (URL-safe) para pedidos y visitantes. */
+export function randomId(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"[b & 63]).join("");
+}
+
 
 /** Resultado que todavía no llegó al servidor (se reintenta al volver). */
 export type PendingResult = { gameId: string; taps: number[]; untrusted: number; bites: number; cookies: number };

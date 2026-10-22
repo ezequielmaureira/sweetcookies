@@ -4,15 +4,22 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import {
   DuplicateParticipantError,
-  FINISH_GRACE_MS,
+  MAX_ATTEMPTS,
+  MIN_ATTEMPTS,
   RECOVERY_TTL_MS,
   TOP_SIZE,
   assessGame,
+  checkTournamentEdit,
   cookiesFor,
+  finishDeadline,
   flattenTaps,
   generateRecoveryCode,
   generateToken,
   handleOf,
+  hashVisitor,
+  isInviteCode,
+  isRequestId,
+  isVisitorId,
   hashIp,
   hashRecoveryCode,
   hashToken,
@@ -26,14 +33,16 @@ import {
   scoreTaps,
   validateClaim,
   validateJoin,
+  validateTournament,
   type ChallengeRepository,
   type ClaimRecord,
   type EditionRecord,
   type GameRecord,
   type ParticipantRecord,
   type RankingRow,
+  type SaveResult,
 } from "./challenge.ts";
-import { effectiveStatus, weekWindow } from "./challenge-time.ts";
+import { cordobaDateTime, effectiveStatus } from "./challenge-time.ts";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.ts";
 import type { SettingsRepository } from "./repository.ts";
 
@@ -41,7 +50,11 @@ type Variables = { userId: string };
 type AppContext = Context<{ Variables: Variables }>;
 
 export type ChallengeConfig = {
-  /** false (por defecto) = ediciones de PRUEBA, sin premio real. true solo con CHALLENGE_MODE=official. */
+  /**
+   * Seguro del servidor: sin CHALLENGE_MODE=official solo se pueden PUBLICAR
+   * torneos de prueba (los oficiales quedan en borrador). El modo de cada
+   * torneo lo elige el admin.
+   */
   official: boolean;
   /** Clave del HMAC de IP (CHALLENGE_IP_SECRET). null = no se guarda ningún dato de IP. */
   ipSecret: string | null;
@@ -60,10 +73,12 @@ type Deps = {
   log: (message: string) => void;
   config: ChallengeConfig;
   now?: () => Date;
-  limiters?: Partial<Record<"register" | "recover" | "start" | "finish" | "claim", RateLimiter>>;
+  limiters?: Partial<Record<"register" | "recover" | "start" | "finish" | "claim" | "visit" | "invite", RateLimiter>>;
 };
 
 const RANKING_CACHE_MS = 10_000;
+/** Un torneo terminado se sigue mostrando en la página (resultados, ganador) hasta 7 días después. */
+const SHOW_ENDED_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function readJson(c: Context): Promise<{ ok: true; body: unknown } | { ok: false }> {
   try {
@@ -80,7 +95,7 @@ const tooLarge = (c: Context) => c.json({ error: "payload_too_large" }, 413);
  * stock ni vouchers. Se registra DESPUÉS del middleware de /api/admin/*, así
  * las rutas admin ya llegan autenticadas (401) y autorizadas (403).
  *
- * - /api/public/challenge: lectura pública (edición vigente + top 10 con @, sin datos privados).
+ * - /api/public/challenge: lectura pública (torneo que muestra la página + top 10 con @, sin datos privados).
  * - /api/challenge/*: participante (token propio), CORS restringido y límites por IP.
  * - /api/admin/challenge/*: panel (Clerk + ADMIN_EMAILS).
  *
@@ -93,13 +108,15 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   const now = deps.now ?? (() => new Date());
   const limit = {
     // Holgados a propósito: muchas personas pueden compartir IP (CGNAT de las
-    // compañías móviles, Wi-Fi de una familia o escuela). Los 3 intentos ya se
+    // compañías móviles, Wi-Fi de una familia o escuela). Los intentos ya se
     // limitan por participante; esto solo frena abusos masivos.
     register: deps.limiters?.register ?? createRateLimiter({ limit: 30, windowMs: 60 * 60 * 1000 }),
     recover: deps.limiters?.recover ?? createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000 }),
     start: deps.limiters?.start ?? createRateLimiter({ limit: 60, windowMs: 10 * 60 * 1000 }),
     finish: deps.limiters?.finish ?? createRateLimiter({ limit: 120, windowMs: 10 * 60 * 1000 }),
     claim: deps.limiters?.claim ?? createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000 }),
+    visit: deps.limiters?.visit ?? createRateLimiter({ limit: 60, windowMs: 10 * 60 * 1000 }),
+    invite: deps.limiters?.invite ?? createRateLimiter({ limit: 30, windowMs: 10 * 60 * 1000 }),
   };
 
   /** IP observada por un proxy confiable (o la conexión directa). null = desconocida. */
@@ -125,23 +142,46 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   };
 
   /**
-   * Edición de la semana actual (se crea sola, sin cron) y su estado real.
-   * Prueba u oficial según la configuración: nunca se mezclan.
-   * Se recuerda 10 s para no escribir en la base en cada lectura pública; reservar
-   * un intento siempre la relee (`fresh`), y las acciones del admin la olvidan.
+   * Torneo que muestra la página (nunca se crea solo):
+   * 1) el que está en curso (entre su inicio y su fin);
+   * 2) si no, el último terminado, durante 7 días (resultados y ganador);
+   * 3) si no, el próximo programado; 4) si no hay ninguno, null ("Próximamente").
+   * `next` = el próximo programado cuando el principal es otro.
+   * El estado se calcula siempre con la hora del servidor: así un torneo se
+   * activa y finaliza solo. Se recuerda 10 s; reservar un intento siempre relee
+   * (`fresh`) y las acciones del admin lo olvidan.
    */
-  let editionCache: { weekStart: string; at: number; edition: EditionRecord } | null = null;
+  let tournamentCache: { at: number; value: { main: EditionRecord | null; next: EditionRecord | null } } | null = null;
   const current = async (fresh = false) => {
     const t = now();
-    const week = weekWindow(t);
-    const cached = !fresh && editionCache?.weekStart === week.weekStart && Date.now() - editionCache.at < RANKING_CACHE_MS ? editionCache.edition : null;
-    const edition = cached ?? (await challenge.ensureEdition({ ...week, isTest: !config.official }));
-    editionCache = { weekStart: week.weekStart, at: cached ? editionCache!.at : Date.now(), edition };
-    return { edition, status: effectiveStatus(edition, t), t };
+    if (fresh || !tournamentCache || Date.now() - tournamentCache.at >= RANKING_CACHE_MS) {
+      const { live, lastEnded, next } = await challenge.publicTournaments(t);
+      const recent = lastEnded && t.getTime() - lastEnded.endsAt.getTime() <= SHOW_ENDED_MS ? lastEnded : null;
+      const main = live ?? recent ?? next;
+      tournamentCache = { at: Date.now(), value: { main, next: main && next && main.id !== next.id ? next : null } };
+    }
+    const { main, next } = tournamentCache.value;
+    return { edition: main, status: main ? effectiveStatus(main, t) : null, next, t };
   };
   const forgetEdition = (editionId: string) => {
     cache.delete(editionId);
-    editionCache = null;
+    tournamentCache = null;
+  };
+
+  /**
+   * Torneo que pidió un enlace (?torneo=ID). Si existe y es visible (no
+   * borrador) se muestra ese, aunque haya terminado o se haya cancelado; el
+   * torneo vigente pasa a `next` como aviso. Un id inválido no revela nada: se
+   * muestra lo de siempre con linkStatus "invalid".
+   */
+  const shown = async (requested: string | undefined) => {
+    const base = await current();
+    if (!requested) return { ...base, linkStatus: null as "ok" | "invalid" | null };
+    const linked = /^[A-Za-z0-9_-]{1,40}$/.test(requested) ? await challenge.getEdition(requested) : null;
+    if (!linked || linked.status === "DRAFT") return { ...base, linkStatus: "invalid" as const };
+    if (base.edition?.id === linked.id) return { ...base, linkStatus: "ok" as const };
+    const other = base.edition && (base.status === "ACTIVE" || base.status === "SCHEDULED" || base.status === "PAUSED") ? base.edition : base.next;
+    return { edition: linked, status: effectiveStatus(linked, base.t), next: other, t: base.t, linkStatus: "ok" as const };
   };
 
   const standing = (rows: RankingRow[], participantId: string) => {
@@ -149,7 +189,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     return index < 0 ? null : { position: index + 1, score: rows[index].score, cookies: cookiesFor(rows[index].score) };
   };
 
-  /** Intentos oficiales de la edición: 3 por torneo semanal, no por día. */
+  /** Intentos oficiales del torneo: los que configuró el admin, para todo el torneo. */
   const attemptsOf = async (participantId: string, edition: EditionRecord) => {
     const used = await challenge.countAttempts(participantId, edition.id);
     return { limit: edition.attempts, used: Math.min(used, edition.attempts), left: Math.max(0, edition.attempts - used) };
@@ -164,7 +204,9 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   /** Premio del jugador (sin datos de contacto: esos solo se cargan y se ven en el panel). */
   const publicClaim = (claim: ClaimRecord) => ({
     editionId: claim.editionId,
-    editionNumber: claim.editionNumber,
+    tournamentName: claim.editionName,
+    prize: claim.prize,
+    prizeDescription: claim.prizeDescription,
     isTest: claim.isTest,
     status: claim.status,
   });
@@ -172,19 +214,22 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   /* ---------- Público ---------- */
 
   app.get("/api/public/challenge", async (c) => {
-    const { edition, status, t } = await current();
-    const [rows, siteSettings] = await Promise.all([ranking(edition.id), settings.get()]);
+    const { edition, status, next, t, linkStatus } = await shown(c.req.query("torneo"));
+    const [rows, siteSettings] = await Promise.all([edition ? ranking(edition.id) : Promise.resolve([]), settings.get()]);
     const winner =
-      status === "RESULTS_PUBLISHED" && edition.winnerParticipantId
+      edition && status === "RESULTS_PUBLISHED" && edition.winnerParticipantId
         ? (rows.find((r) => r.participantId === edition.winnerParticipantId) ?? null)
         : null;
     c.header("Cache-Control", "public, max-age=5, s-maxage=5");
     return c.json({
-      edition: publicEdition(edition, t, status),
+      tournament: edition && status ? publicEdition(edition, t, status) : null,
+      next: next ? publicEdition(next, t, effectiveStatus(next, t)) : null,
+      serverNow: t.toISOString(),
       leaderboard: rows.slice(0, TOP_SIZE).map((row, i) => publicRow(row, i + 1)),
       ranked: rows.length,
-      winner: winner ? { handle: handleOf(winner.instagram), score: edition.winnerScore ?? winner.score, cookies: cookiesFor(edition.winnerScore ?? winner.score) } : null,
+      winner: edition && winner ? { handle: handleOf(winner.instagram), score: edition.winnerScore ?? winner.score, cookies: cookiesFor(edition.winnerScore ?? winner.score) } : null,
       instagramHandle: siteSettings.instagramHandle,
+      linkStatus,
     });
   });
 
@@ -216,14 +261,16 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
 
     const token = generateToken();
+    const ipHash = ipHashOf(c);
     try {
-      const participant = await challenge.createParticipant({ instagram: result.instagram, tokenHash: hashToken(token), ipHash: ipHashOf(c), now: now() });
+      const participant = await challenge.createParticipant({ instagram: result.instagram, tokenHash: hashToken(token), ipHash, now: now() });
       log(`[challenge] participant ${participant.id} joined`);
+      await attributeReferral((parsed.body as Record<string, unknown>).ref, participant.id, ipHash);
       // El token se entrega UNA sola vez: la base guarda solo su hash.
       return c.json({ token, participant: { handle: handleOf(participant.instagram) } }, 201);
     } catch (error) {
       if (!(error instanceof DuplicateParticipantError)) throw error;
-      // El mismo @ desde otro navegador NO obtiene otra sesión ni otros 3 intentos. Queda como alerta.
+      // El mismo @ desde otro navegador NO obtiene otra sesión ni más intentos. Queda como alerta.
       await challenge.noteDuplicate(result.instagram, now());
       log(`[challenge] duplicate join attempt for an existing handle`);
       return c.json(
@@ -234,6 +281,54 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
         409,
       );
     }
+  });
+
+  /**
+   * Atribución de un registro NUEVO a un enlace de invitación (la decide el
+   * servidor). Solo cuenta para torneos visibles y no cancelados, una vez por
+   * persona y torneo, y nunca a sí misma. Si viene desde la misma conexión que
+   * quien invitó (familia o la misma persona) se guarda marcado aparte. Nunca
+   * da intentos, puntos ni ventajas. Un fallo acá no impide registrarse.
+   */
+  async function attributeReferral(ref: unknown, referredId: string, ipHash: string | null) {
+    if (!isInviteCode(ref)) return;
+    try {
+      const invite = await challenge.findInviteByCode(ref);
+      if (!invite || invite.participantId === referredId) return;
+      const edition = await challenge.getEdition(invite.editionId);
+      if (!edition || edition.status === "DRAFT" || edition.status === "CANCELLED") return;
+      const sameConnection = ipHash !== null && ipHash === invite.ipHash;
+      await challenge.recordReferral({ editionId: invite.editionId, inviteId: invite.id, referrerId: invite.participantId, referredId, sameConnection });
+    } catch (error) {
+      log(`[challenge] referral attribution failed: ${error instanceof Error ? error.message : "error"}`);
+    }
+  }
+
+  // Enlace personal de invitación para el torneo que ve el jugador (o ?torneo=ID).
+  // Devuelve solo el código público y el id del torneo: nada privado.
+  app.post("/api/challenge/invites", async (c) => {
+    if (!allow(limit.invite, c)) return c.json({ error: "too_many_requests" }, 429);
+    const participant = await participantOf(c);
+    if (!participant) return c.json({ error: "no_session" }, 401);
+    const { edition, status } = await shown(c.req.query("torneo"));
+    if (!edition || !status || status === "DRAFT" || status === "CANCELLED") return c.json({ error: "no_tournament" }, 409);
+    const invite = await challenge.getOrCreateInvite(edition.id, participant.id, ipHashOf(c));
+    return c.json({ code: invite.code, tournamentId: edition.id });
+  });
+
+  // Visita a un enlace: una por visitante. Siempre responde igual (no revela si el código existe).
+  app.post("/api/challenge/visits", bodyLimit({ maxSize: 512, onError: tooLarge }), async (c) => {
+    if (!allow(limit.visit, c)) return c.body(null, 204);
+    const parsed = await readJson(c);
+    const body = parsed.ok && parsed.body && typeof parsed.body === "object" ? (parsed.body as Record<string, unknown>) : {};
+    if (!isInviteCode(body.ref) || !isVisitorId(body.visitor)) return c.body(null, 204);
+    const invite = await challenge.findInviteByCode(body.ref);
+    if (!invite) return c.body(null, 204);
+    // Quien invita abriendo su propio enlace no suma visitas.
+    const viewer = await participantOf(c);
+    if (viewer?.id === invite.participantId) return c.body(null, 204);
+    await challenge.recordVisit(invite.id, hashVisitor(body.visitor), ipHashOf(c));
+    return c.body(null, 204);
   });
 
   // Recuperación manual: el admin genera un código de un solo uso y se lo manda por Instagram.
@@ -255,16 +350,16 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   app.get("/api/challenge/me", async (c) => {
     const participant = await participantOf(c);
     if (!participant) return c.json({ error: "no_session" }, 401);
-    const { edition, status, t } = await current();
+    const { edition, status, t } = await shown(c.req.query("torneo"));
     const [rows, attempts, disqualified, claims] = await Promise.all([
-      ranking(edition.id),
-      attemptsOf(participant.id, edition),
-      challenge.isDisqualified(edition.id, participant.id),
+      edition ? ranking(edition.id) : Promise.resolve([]),
+      edition ? attemptsOf(participant.id, edition) : Promise.resolve(null),
+      edition ? challenge.isDisqualified(edition.id, participant.id) : Promise.resolve(false),
       challenge.claimsOf(participant.id),
     ]);
     return c.json({
       participant: { handle: handleOf(participant.instagram) },
-      edition: publicEdition(edition, t, status),
+      tournament: edition && status ? publicEdition(edition, t, status) : null,
       attempts,
       best: standing(rows, participant.id),
       ranked: rows.length,
@@ -274,23 +369,40 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     });
   });
 
-  // Reserva ATÓMICA del intento: el índice único (participante, edición, intento)
-  // impide que dos pestañas o pedidos simultáneos superen los 3 del torneo.
+  // Reserva ATÓMICA del intento: el índice único (participante, torneo, intento)
+  // impide que dos pestañas o pedidos simultáneos superen los intentos del torneo.
+  // Solo dentro de las fechas del torneo (hora del servidor).
   app.post("/api/challenge/games", async (c) => {
     if (!allow(limit.start, c)) return c.json({ error: "too_many_requests" }, 429);
     const participant = await participantOf(c);
     if (!participant) return c.json({ error: "no_session" }, 401);
     const { edition, status, t } = await current(true);
-    if (status !== "ACTIVE") return c.json({ error: "edition_not_active", status }, 409);
+    if (!edition || status !== "ACTIVE") return c.json({ error: "edition_not_active", status }, 409);
     if (await challenge.isDisqualified(edition.id, participant.id)) return c.json({ error: "disqualified" }, 403);
+
+    // Idempotencia: el navegador manda un id por cada toque de "Jugar". Un doble
+    // toque o un reintento de red con el mismo id devuelve la MISMA partida y no
+    // consume otro intento.
+    const parsed = await readJson(c);
+    const requested = parsed.ok && parsed.body && typeof parsed.body === "object" ? (parsed.body as Record<string, unknown>).requestId : undefined;
+    const clientRequestId = isRequestId(requested) ? requested : null;
+    const reply = async (game: GameRecord, status: 200 | 201) =>
+      c.json({ game: { id: game.id, durationMs: edition.gameDurationMs, attemptNumber: game.attemptNumber }, attempts: await attemptsOf(participant.id, edition), replayed: status === 200 }, status);
+    if (clientRequestId) {
+      const previous = await challenge.findGameByRequest(participant.id, clientRequestId);
+      if (previous) return reply(previous, 200);
+    }
 
     const ipHash = ipHashOf(c);
     for (let attempt = 0; attempt < 3; attempt++) {
       const used = await challenge.countAttempts(participant.id, edition.id);
       if (used >= edition.attempts) return c.json({ error: "no_attempts", attempts: await attemptsOf(participant.id, edition) }, 429);
-      const game = await challenge.createGame({ editionId: edition.id, participantId: participant.id, attemptNumber: used + 1, startedAt: t, ipHash });
-      if (game) {
-        return c.json({ game: { id: game.id, durationMs: edition.gameDurationMs, attemptNumber: game.attemptNumber }, attempts: await attemptsOf(participant.id, edition) }, 201);
+      const game = await challenge.createGame({ editionId: edition.id, participantId: participant.id, attemptNumber: used + 1, startedAt: t, ipHash, clientRequestId });
+      if (game) return reply(game, 201);
+      // Lo frenó el índice único: o el mismo pedido llegó dos veces a la vez, u otra pestaña tomó ese número.
+      if (clientRequestId) {
+        const same = await challenge.findGameByRequest(participant.id, clientRequestId);
+        if (same) return reply(same, 200);
       }
     }
     return c.json({ error: "attempt_conflict" }, 409);
@@ -313,7 +425,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
         enteredTop10: before !== null && mine !== null && mine.position <= TOP_SIZE && (previous === null || previous.position > TOP_SIZE),
       },
       attempts: await attemptsOf(game.participantId, edition),
-      edition: publicEdition(edition, t, effectiveStatus(edition, t)),
+      tournament: publicEdition(edition, t, effectiveStatus(edition, t)),
     };
   };
 
@@ -333,7 +445,8 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const elapsed = now().getTime() - game.startedAt.getTime();
     // Nadie puede cerrar antes de que pasen los 15 s reales desde que el servidor reservó el intento.
     if (elapsed < edition.gameDurationMs) return c.json({ error: "too_early" }, 409);
-    if (elapsed > edition.gameDurationMs + FINISH_GRACE_MS) {
+    // Una partida empezada antes del cierre se acepta con un margen técnico acotado (ver finishDeadline).
+    if (now().getTime() > finishDeadline(game.startedAt, edition.gameDurationMs, edition.endsAt)) {
       await challenge.expireGame(game.id);
       return c.json({ error: "expired" }, 409);
     }
@@ -390,8 +503,13 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
 
   const adminEdition = (edition: EditionRecord, t: Date) => ({
     ...publicEdition(edition, t, effectiveStatus(edition, t)),
-    weekStart: edition.weekStart,
+    number: edition.number,
+    // Para volver a llenar el formulario en hora de Córdoba.
+    start: cordobaDateTime(edition.startsAt),
+    end: cordobaDateTime(edition.endsAt),
     storedStatus: edition.status,
+    cancelledAt: edition.cancelledAt?.toISOString() ?? null,
+    cancelReason: edition.cancelReason,
     pausedAt: edition.pausedAt?.toISOString() ?? null,
     pauseReason: edition.pauseReason,
     winnerParticipantId: edition.winnerParticipantId,
@@ -402,15 +520,101 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
 
   const editionParam = async (c: Context) => challenge.getEdition(c.req.param("id") ?? "");
 
-  app.get("/api/admin/challenge/current", async (c) => {
-    const { edition, t } = await current(true);
-    return c.json({ ...adminEdition(edition, t), mode: config.official ? "official" : "test", ipTracking: config.ipSecret !== null });
+  // Resumen del panel: torneo activo, próximo, y lo que espera revisión.
+  app.get("/api/admin/challenge/overview", async (c) => {
+    const t = now();
+    const { live, next } = await challenge.publicTournaments(t);
+    const [liveStats, liveAlerts, pendingWinners] = await Promise.all([
+      live ? challenge.stats(live.id) : Promise.resolve(null),
+      live ? challenge.duplicateAlerts(live.id) : Promise.resolve([]),
+      challenge.countPendingWinners(t),
+    ]);
+    return c.json({
+      officialAllowed: config.official,
+      ipTracking: config.ipSecret !== null,
+      limits: { minAttempts: MIN_ATTEMPTS, maxAttempts: MAX_ATTEMPTS },
+      live: live ? adminEdition(live, t) : null,
+      next: next ? adminEdition(next, t) : null,
+      liveStats,
+      liveAlerts: liveAlerts.length,
+      pendingWinners,
+      serverNow: t.toISOString(),
+    });
   });
 
   app.get("/api/admin/challenge/editions", async (c) => {
-    await current();
     const t = now();
-    return c.json({ editions: (await challenge.listEditions()).map((e) => adminEdition(e, t)) });
+    const rows = await challenge.listEditions();
+    return c.json({ editions: rows.map((e) => ({ ...adminEdition(e, t), participants: e.participants, games: e.games })) });
+  });
+
+  const saveError = (c: Context, result: Exclude<SaveResult, { ok: true }>) =>
+    result.conflict
+      ? c.json({ error: "overlap", message: `Las fechas se superponen con "${result.conflict.name}". Solo puede haber un torneo a la vez.`, conflictId: result.conflict.id }, 409)
+      : c.json({ error: "not_found" }, 404);
+
+  const officialLocked = (c: Context) =>
+    c.json({ error: "official_locked", message: "Los torneos oficiales todavía no están habilitados en el servidor (CHALLENGE_MODE=official). Guardalo como borrador o en modo prueba." }, 409);
+
+  /** Programar exige que el torneo no haya terminado ya. */
+  const endedAlready = (endsAt: Date) => endsAt.getTime() <= now().getTime();
+
+  // Crear torneo: borrador o programado ("schedule": true).
+  app.post("/api/admin/challenge/editions", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const input = validateTournament(parsed.body);
+    if (!input.ok) return c.json({ error: "validation_error", fields: input.errors }, 422);
+    const schedule = (parsed.body as Record<string, unknown>).schedule === true;
+    if (schedule && !input.data.isTest && !config.official) return officialLocked(c);
+    if (schedule && endedAlready(input.data.endsAt)) return c.json({ error: "validation_error", fields: { end: "La finalización ya pasó." } }, 422);
+    const result = await challenge.createEdition({ ...input.data, status: schedule ? "SCHEDULED" : "DRAFT" }, c.get("userId"));
+    if (!result.ok) return saveError(c, result);
+    tournamentCache = null;
+    log(`[admin] challenge tournament ${result.edition.id} created (${schedule ? "scheduled" : "draft"}) by ${c.get("userId")}`);
+    return c.json(adminEdition(result.edition, now()), 201);
+  });
+
+  // Editar torneo, con las reglas que protegen la competencia (checkTournamentEdit).
+  app.put("/api/admin/challenge/editions/:id", bodyLimit({ maxSize: 8 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const edition = await editionParam(c);
+    if (!edition) return c.json({ error: "not_found" }, 404);
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const input = validateTournament(parsed.body);
+    if (!input.ok) return c.json({ error: "validation_error", fields: input.errors }, 422);
+    const body = parsed.body as Record<string, unknown>;
+    const reason = parseReason(body, false);
+    if (!reason.ok) return reasonError(c);
+    const t = now();
+    const status = effectiveStatus(edition, t);
+    const check = checkTournamentEdit(edition, status, input.data, {
+      games: await challenge.countGames(edition.id),
+      reason: reason.reason,
+      confirmPrizeChange: body.confirmPrizeChange === true,
+      now: t,
+    });
+    if (!check.ok) return c.json({ error: check.error, message: check.message }, 409);
+    if (status !== "DRAFT" && endedAlready(input.data.endsAt)) return c.json({ error: "validation_error", fields: { end: "La finalización ya pasó." } }, 422);
+    const result = await challenge.updateEdition(edition.id, input.data, check.changes, reason.reason, c.get("userId"));
+    if (!result.ok) return saveError(c, result);
+    forgetEdition(edition.id);
+    log(`[admin] challenge tournament ${edition.id} updated (${check.changes.join(",") || "no changes"}) by ${c.get("userId")}`);
+    return c.json(adminEdition(result.edition, now()));
+  });
+
+  // Publicar/programar un borrador: queda visible y se activa solo en su fecha.
+  app.post("/api/admin/challenge/editions/:id/schedule", async (c: AppContext) => {
+    const edition = await editionParam(c);
+    if (!edition) return c.json({ error: "not_found" }, 404);
+    if (edition.status !== "DRAFT") return c.json({ error: "not_draft" }, 409);
+    if (!edition.isTest && !config.official) return officialLocked(c);
+    if (endedAlready(edition.endsAt)) return c.json({ error: "ended", message: "La finalización ya pasó: editá las fechas antes de programarlo." }, 409);
+    const result = await challenge.scheduleEdition(edition.id, c.get("userId"));
+    if (!result.ok) return saveError(c, result);
+    forgetEdition(edition.id);
+    log(`[admin] challenge tournament ${edition.id} scheduled by ${c.get("userId")}`);
+    return c.json(adminEdition(result.edition, now()));
   });
 
   app.get("/api/admin/challenge/editions/:id", async (c) => {
@@ -442,19 +646,47 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     return c.json({ games: await challenge.listGames(edition.id, filter) });
   });
 
+  // Invitaciones del torneo: enlaces, visitas, registros atribuidos y quiénes más atrajeron (solo @).
+  app.get("/api/admin/challenge/editions/:id/invites", async (c) => {
+    const edition = await editionParam(c);
+    if (!edition) return c.json({ error: "not_found" }, 404);
+    const stats = await challenge.inviteStats(edition.id);
+    return c.json({
+      ...stats,
+      conversion: stats.visits > 0 ? Math.round((stats.registrations / stats.visits) * 1000) / 10 : null,
+      // Solo @ y conteos: nunca ids internos.
+      top: stats.top.map((row) => ({ instagram: row.instagram, visits: row.visits, registrations: row.registrations, sameConnection: row.sameConnection })),
+    });
+  });
+
   app.get("/api/admin/challenge/editions/:id/participants", async (c) => {
     const edition = await editionParam(c);
     if (!edition) return c.json({ error: "not_found" }, 404);
     return c.json({ participants: await challenge.listParticipants(edition.id) });
   });
 
-  const reasonOf = async (c: Context, required: boolean) => {
+  // Cancelar: motivo obligatorio; se conserva todo el historial.
+  app.post("/api/admin/challenge/editions/:id/cancel", bodyLimit({ maxSize: 2 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const edition = await editionParam(c);
+    if (!edition) return c.json({ error: "not_found" }, 404);
+    const input = await reasonOf(c, true);
+    if (!input) return reasonError(c);
+    const updated = await challenge.cancelEdition(edition.id, input.reason ?? "", c.get("userId"));
+    if (!updated) return c.json({ error: "cannot_cancel", message: "Un torneo con ganador publicado o ya cancelado no se puede cancelar." }, 409);
+    forgetEdition(edition.id);
+    log(`[admin] challenge tournament ${edition.id} cancelled by ${c.get("userId")}`);
+    return c.json(adminEdition(updated, now()));
+  });
+
+  async function reasonOf(c: Context, required: boolean) {
     const parsed = await readJson(c);
     if (!parsed.ok) return null;
     const reason = parseReason(parsed.body, required);
     return reason.ok ? { reason: reason.reason, body: parsed.body as Record<string, unknown> } : null;
-  };
-  const reasonError = (c: Context) => c.json({ error: "validation_error", fields: { reason: "Escribí el motivo (3 a 300 caracteres)." } }, 422);
+  }
+  function reasonError(c: Context) {
+    return c.json({ error: "validation_error", fields: { reason: "Escribí el motivo (3 a 300 caracteres)." } }, 422);
+  }
   const small = bodyLimit({ maxSize: 2 * 1024, onError: tooLarge });
 
   app.post("/api/admin/challenge/editions/:id/pause", small, async (c: AppContext) => {
@@ -521,7 +753,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   app.post("/api/admin/challenge/editions/:id/disqualify", small, participantChange("disqualify"));
   app.post("/api/admin/challenge/editions/:id/reinstate", small, participantChange("reinstate"));
 
-  // Confirmar y publicar el ganador: solo con la edición cerrada (sábado o después)
+  // Confirmar y publicar el ganador: solo con el torneo cerrado (después de su fin)
   // y con el primer puesto revisado si estaba marcado. Crea su premio pendiente.
   app.post("/api/admin/challenge/editions/:id/publish", small, async (c: AppContext) => {
     const edition = await editionParam(c);

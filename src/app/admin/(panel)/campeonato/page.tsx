@@ -6,10 +6,10 @@ export default function AdminChallengePage() {
     <>
       <header className={styles.pageHeader}>
         <p className="kicker">Sweet Click Challenge</p>
-        <h1 className={styles.title}>Campeonato</h1>
+        <h1 className={styles.title}>Torneos</h1>
         <p className={styles.lead}>
-          Torneo semanal con 3 intentos oficiales por participante: lunes a viernes se compite, el sábado se revisa y se confirma el ganador, el domingo está cerrado (hora
-          de Córdoba). El ganador se confirma solo al publicar, después de revisar las partidas marcadas.
+          Creá y programá torneos con sus propias fechas, premio e intentos. Se activan y finalizan solos según sus fechas (hora de Córdoba). El ganador se
+          confirma solo cuando lo publicás, después de revisar los resultados.
         </p>
       </header>
       <ChallengeAdmin />

@@ -11,13 +11,18 @@ import {
   loadFollowed,
   loadPending,
   loadToken,
+  randomId,
+  recordVisit,
   saveFollowed,
   savePending,
+  saveRef,
   saveToken,
   startGame,
+  visitorId,
   type ChallengeInfo,
   type PendingResult,
 } from "@/lib/challenge/challenge-api";
+import { readLinkParams } from "@/lib/challenge/challenge-format";
 import { ChallengeGame, type GameResult } from "./ChallengeGame";
 import { ChallengeIntro } from "./ChallengeIntro";
 import { ChallengeResult, type ResultState } from "./ChallengeResult";
@@ -32,9 +37,8 @@ const POLL_MS = 30_000;
 
 type Screen =
   | { name: "intro"; focusRanking: boolean }
-  | { name: "game"; round: number; official: { gameId: string; attemptNumber: number; limit: number } | null }
-  | { name: "result"; pending: PendingResult; state: ResultState }
-  | { name: "practiceResult"; round: number; bites: number; cookies: number };
+  | { name: "game"; round: number; gameId: string; attemptNumber: number; limit: number }
+  | { name: "result"; pending: PendingResult; state: ResultState };
 
 type ChallengeAppProps = {
   cookie: ChallengeCookie | null;
@@ -42,9 +46,14 @@ type ChallengeAppProps = {
 };
 
 /**
- * Sweet Click Challenge: portada (estado, acceso, intentos, ranking) →
- * partida oficial (el servidor reserva el intento) o práctica libre (sin
- * servidor) → resultado (el oficial lo valida el servidor).
+ * Sweet Click Challenge: portada (torneo, acceso, intentos, ranking,
+ * invitaciones) → partida oficial (el servidor reserva el intento) → resultado
+ * validado por el servidor. No hay práctica: la única forma de jugar es
+ * reservando un intento del torneo activo.
+ *
+ * Enlaces /campeonato?torneo=ID&ref=CODIGO: muestran ese torneo y miden la
+ * visita; el código se guarda para atribuir el registro. No saltean el paso
+ * de Instagram ni el registro, y no dan intentos extra.
  */
 export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
   const { image, failed: imageFailed } = useCookieImage(cookie);
@@ -57,7 +66,10 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
   const [starting, setStarting] = useState(false);
   const [playError, setPlayError] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
+  const tournamentRef = useRef<string | null>(null);
   const roundRef = useRef(0);
+  // Freno sincrónico contra el doble toque (el estado de React tarda un render).
+  const startingRef = useRef(false);
 
   useEffect(() => {
     const body = document.body;
@@ -82,8 +94,8 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
 
   const loadInfo = useCallback(async () => {
     try {
-      const data = await getChallenge();
-      setOffsetMs(Date.parse(data.edition.serverNow) - Date.now());
+      const data = await getChallenge(tournamentRef.current);
+      setOffsetMs(Date.parse(data.serverNow) - Date.now());
       setInfo(data);
       setInfoFailed(false);
     } catch {
@@ -98,7 +110,7 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
       return;
     }
     try {
-      setSession({ status: "ready", token, me: await getMe(token) });
+      setSession({ status: "ready", token, me: await getMe(token, tournamentRef.current) });
     } catch (error) {
       if (error instanceof ChallengeApiError && error.status === 401) {
         // El token ya no vale en el servidor (por ejemplo, se recuperó en otro navegador).
@@ -116,7 +128,7 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
     void loadSession();
   }, [loadInfo, loadSession]);
 
-  /** Cierre de una partida oficial (también el que quedó pendiente de otra visita). */
+  /** Cierre de una partida (también el que quedó pendiente de otra visita). */
   const submit = useCallback(
     async (pending: PendingResult, showResult: boolean) => {
       const token = tokenRef.current;
@@ -136,12 +148,19 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
     [refresh],
   );
 
-  // Primera carga: campeonato, sesión de este navegador y un resultado pendiente si lo hay.
+  // Primera carga: enlace (torneo y código de invitación), campeonato, sesión y un resultado pendiente.
   useEffect(() => {
-    // Fuera del render: localStorage solo existe en el navegador.
+    // Fuera del render: localStorage y la URL solo existen en el navegador.
     const timer = window.setTimeout(() => {
+      const link = readLinkParams(window.location.search);
+      tournamentRef.current = link.tournamentId;
       tokenRef.current = loadToken();
       setFollowed(loadFollowed());
+      if (link.ref) {
+        // Se recuerda para atribuir el registro y se cuenta la visita (una por navegador).
+        if (!tokenRef.current) saveRef(link.ref);
+        void recordVisit(link.ref, visitorId(), tokenRef.current);
+      }
       const pending = loadPending();
       void loadInfo();
       if (pending && tokenRef.current) void submit(pending, false);
@@ -168,32 +187,50 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
   const joined = (token: string) => {
     tokenRef.current = token;
     saveToken(token);
+    saveRef(null);
     saveFollowed();
     setFollowed(true);
     setSession({ status: "loading" });
     refresh();
   };
 
+  /**
+   * Partida oficial: el servidor reserva el intento ANTES de jugar. Cada toque
+   * de "Jugar" lleva un id propio: si el pedido se repite (doble toque, red
+   * lenta), el servidor devuelve la misma partida y no gasta otro intento.
+   * Recargar la página o abrir otra pestaña tampoco devuelve intentos.
+   */
   const play = async () => {
     const token = tokenRef.current;
-    if (!token || !image || starting) return;
+    if (!token || !image || startingRef.current) return;
+    startingRef.current = true;
     setStarting(true);
     setPlayError(null);
+    const requestId = randomId();
     try {
-      // El servidor reserva el intento ANTES de jugar: recargar o abrir otra pestaña no da intentos extra.
-      const { game, attempts } = await startGame(token);
+      let reserved: Awaited<ReturnType<typeof startGame>> | null = null;
+      for (let attempt = 0; attempt < 3 && !reserved; attempt++) {
+        try {
+          reserved = await startGame(token, requestId);
+        } catch (error) {
+          // Solo se reintenta (con el MISMO id) si no hubo respuesta del servidor.
+          if (!(error instanceof ChallengeApiError && error.status === 0) || attempt === 2) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+      }
+      if (!reserved) throw new ChallengeApiError(0);
       window.scrollTo(0, 0);
       roundRef.current += 1;
-      setScreen({ name: "game", round: roundRef.current, official: { gameId: game.id, attemptNumber: game.attemptNumber, limit: attempts.limit } });
+      setScreen({ name: "game", round: roundRef.current, gameId: reserved.game.id, attemptNumber: reserved.game.attemptNumber, limit: reserved.attempts.limit });
     } catch (error) {
       const code = error instanceof ChallengeApiError ? error.code : "";
       setPlayError(
         code === "no_attempts"
-          ? "Ya usaste tus 3 intentos oficiales de esta semana. Podés seguir practicando."
+          ? "¡Ya usaste todos tus intentos de este torneo! Desafiá a tus amigos para que lo intenten."
           : code === "edition_not_active"
-            ? "El campeonato no está en juego en este momento. Podés practicar."
+            ? "No hay un torneo en juego en este momento."
             : code === "disqualified"
-              ? "Tu participación en esta edición está suspendida."
+              ? "Tu participación en este torneo está suspendida."
               : code === "too_many_requests"
                 ? "Demasiados intentos seguidos. Esperá un momento."
                 : "No pudimos empezar la partida. Revisá tu conexión y probá de nuevo.",
@@ -201,34 +238,23 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
       setScreen({ name: "intro", focusRanking: false });
       refresh();
     } finally {
+      startingRef.current = false;
       setStarting(false);
     }
   };
 
-  /** Práctica ilimitada: no pide sesión, no usa intentos y nunca llega al servidor. */
-  const practice = () => {
-    if (!image) return;
-    window.scrollTo(0, 0);
-    roundRef.current += 1;
-    setScreen({ name: "game", round: roundRef.current, official: null });
-  };
-
-  const finished = (round: number, official: { gameId: string } | null, result: GameResult) => {
-    if (!official) {
-      setScreen({ name: "practiceResult", round, bites: result.bites, cookies: result.cookies });
-      return;
-    }
-    const pending: PendingResult = { gameId: official.gameId, taps: result.taps, untrusted: result.untrusted, bites: result.bites, cookies: result.cookies };
+  const finished = (gameId: string, result: GameResult) => {
+    const pending: PendingResult = { gameId, taps: result.taps, untrusted: result.untrusted, bites: result.bites, cookies: result.cookies };
     // Se guarda antes de enviar: si se corta la conexión, se reintenta en la próxima visita.
     savePending(pending);
     setScreen({ name: "result", pending, state: { status: "sending" } });
     void submit(pending, true);
   };
 
-  const exitGame = (official: boolean) => {
-    if (official && !window.confirm("Si salís ahora, este intento oficial se pierde. ¿Salir igual?")) return;
+  const exitGame = () => {
+    if (!window.confirm("Si salís ahora, este intento se pierde. ¿Salir igual?")) return;
     setScreen({ name: "intro", focusRanking: false });
-    if (official) refresh();
+    refresh();
   };
 
   const retrySubmit = () => {
@@ -253,20 +279,18 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
           isCutout={cookie.isCutout}
           alt={cookie.alt}
           logoSrc={logoSrc}
-          practice={screen.official === null}
-          modeLabel={screen.official ? `Oficial · intento ${screen.official.attemptNumber} de ${screen.official.limit}` : "Práctica"}
-          onFinish={(result) => finished(screen.round, screen.official, result)}
-          onExit={() => exitGame(screen.official !== null)}
+          modeLabel={`Intento ${screen.attemptNumber} de ${screen.limit}`}
+          onFinish={(result) => finished(screen.gameId, result)}
+          onExit={exitGame}
         />
-      ) : screen.name === "result" || screen.name === "practiceResult" ? (
+      ) : screen.name === "result" ? (
         <ChallengeResult
-          key={screen.name === "result" ? screen.pending.gameId : `practice-${screen.round}`}
-          practice={screen.name === "practiceResult"}
-          local={screen.name === "result" ? { bites: screen.pending.bites, cookies: screen.pending.cookies } : { bites: screen.bites, cookies: screen.cookies }}
-          state={screen.name === "result" ? screen.state : { status: "sending" }}
+          key={screen.pending.gameId}
+          local={{ bites: screen.pending.bites, cookies: screen.pending.cookies }}
+          state={screen.state}
+          token={session.status === "ready" ? session.token : null}
           starting={starting}
           onReplay={play}
-          onPractice={practice}
           onRetry={retrySubmit}
           onRanking={() => setScreen({ name: "intro", focusRanking: true })}
           onHome={home}
@@ -288,7 +312,6 @@ export function ChallengeApp({ cookie, logoSrc }: ChallengeAppProps) {
           focusRanking={screen.name === "intro" && screen.focusRanking}
           onFollow={follow}
           onPlay={play}
-          onPractice={practice}
           onJoined={joined}
           onRefresh={refresh}
         />

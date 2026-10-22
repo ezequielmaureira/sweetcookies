@@ -7,8 +7,8 @@ import styles from "./ChallengeForm.module.css";
 
 type PrizeClaimProps = {
   token: string;
+  /** Premio del torneo que ganó (cada torneo tiene el suyo). */
   claim: Claim;
-  prize: string;
   onClaimed: () => void;
 };
 
@@ -16,7 +16,7 @@ type PrizeClaimProps = {
  * Premio del primer puesto CONFIRMADO. Recién acá se piden nombre y celular,
  * solo para coordinar la entrega. El reclamo va atado a la sesión del ganador.
  */
-export function PrizeClaim({ token, claim, prize, onClaimed }: PrizeClaimProps) {
+export function PrizeClaim({ token, claim, onClaimed }: PrizeClaimProps) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -25,13 +25,13 @@ export function PrizeClaim({ token, claim, prize, onClaimed }: PrizeClaimProps) 
   const [message, setMessage] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
-  const testNote = claim.isTest ? <p className={styles.help}>Edición de prueba: este premio no es real.</p> : null;
+  const testNote = claim.isTest ? <p className={styles.help}>Torneo de prueba: este premio no es real.</p> : null;
 
   if (claim.status !== "PENDING") {
     return (
       <div className={styles.form}>
         <p className={styles.success} role="status">
-          🏆 ¡Ganaste la edición #{claim.editionNumber}! Ya recibimos tus datos: te vamos a contactar para coordinar la entrega.
+          🏆 ¡Ganaste «{claim.tournamentName}»! Ya recibimos tus datos: te vamos a contactar para coordinar la entrega.
         </p>
         {testNote}
       </div>
@@ -41,7 +41,10 @@ export function PrizeClaim({ token, claim, prize, onClaimed }: PrizeClaimProps) 
   if (!open) {
     return (
       <div className={styles.form}>
-        <p className={styles.success}>¡Ganaste la edición #{claim.editionNumber}! Tu premio: {prize.toLowerCase()}.</p>
+        <p className={styles.success}>
+          ¡Ganaste «{claim.tournamentName}»! Tu premio: <strong>{claim.prize}</strong>.
+          {claim.prizeDescription ? ` ${claim.prizeDescription}` : ""}
+        </p>
         {testNote}
         <button type="button" className={`${shared.cta} ${styles.submit}`} onClick={() => setOpen(true)}>
           🏆 Reclamá tu premio

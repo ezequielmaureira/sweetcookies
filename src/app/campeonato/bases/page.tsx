@@ -6,7 +6,7 @@ import { getPublicSettings } from "@/lib/site-settings";
 
 export const metadata: Metadata = {
   title: "Bases y condiciones — Sweet Click Challenge",
-  description: "Borrador de las bases del campeonato semanal Sweet Click Challenge (Río Cuarto).",
+  description: "Borrador de las bases de los torneos Sweet Click Challenge (Río Cuarto).",
   robots: { index: false, follow: false },
 };
 
@@ -28,7 +28,7 @@ export default async function ChallengeRulesPage() {
           <Link href="/campeonato">← Volver al campeonato</Link>
         </p>
         <h1 className={styles.title}>Bases y condiciones</h1>
-        <p className={styles.subtitle}>Sweet Click Challenge · Campeonato semanal</p>
+        <p className={styles.subtitle}>Sweet Click Challenge · Torneos</p>
         <p className={styles.draft} role="note">
           BORRADOR sujeto a revisión antes del lanzamiento público. Los puntos marcados como &quot;a definir&quot; todavía no están decididos.
         </p>
@@ -53,11 +53,15 @@ export default async function ChallengeRulesPage() {
         </section>
 
         <section>
-          <h2>4. Duración</h2>
+          <h2>4. Torneos y fechas</h2>
           <p>
-            Cada edición es semanal: empieza el lunes a las 00:00 y termina el viernes a las 23:59:59, hora de Córdoba (America/Argentina/Cordoba). El
-            sábado se anuncia el resultado, después de la revisión. El domingo la competencia está cerrada. Cada lunes empieza una edición nueva con el
-            ranking en cero; los resultados anteriores se conservan.
+            El campeonato se organiza en torneos. Cada torneo tiene su propio nombre, su fecha y hora de inicio y de finalización, su premio y su cantidad de
+            intentos, y todo eso se informa en la página antes de participar. Las fechas se rigen por la hora de Córdoba (America/Argentina/Cordoba) que
+            registra el servidor de Sweet Cookies. Cada torneo tiene su propio ranking; los resultados de torneos anteriores se conservan.
+          </p>
+          <p>
+            Solo se aceptan partidas oficiales que empiecen dentro del período del torneo. Una partida que empezó antes del cierre puede terminar sus 15
+            segundos, con un margen técnico acotado para enviar el resultado.
           </p>
         </section>
 
@@ -77,38 +81,45 @@ export default async function ChallengeRulesPage() {
         <section>
           <h2>6. Intentos</h2>
           <ul>
-            <li>Cada participante tiene exactamente 3 intentos oficiales por edición semanal (no por día).</li>
-            <li>Los intentos no se renuevan a medianoche: vuelven a ser 3 recién con la edición siguiente, el lunes.</li>
+            <li>Cada torneo establece cuántos intentos oficiales tiene cada participante, para todo el torneo.</li>
+            <li>Los intentos no se renuevan por día ni pasan de un torneo a otro.</li>
             <li>Una partida oficial iniciada consume un intento aunque se abandone o se corte la conexión, salvo un error del servidor verificable.</li>
             <li>Cada @ participa desde un solo navegador. Usar otro @ o registrar varias cuentas para conseguir más intentos es motivo de descalificación.</li>
-            <li>
-              La práctica es libre e ilimitada, aun sin participar: no usa intentos y no cuenta para el ranking. Se puede seguir practicando después de usar
-              los 3 intentos.
-            </li>
+            <li>No hay partidas de práctica: toda partida es oficial, pertenece a un torneo activo y usa uno de tus intentos.</li>
+            <li>Cuando usás todos tus intentos, ya no podés volver a jugar ese torneo.</li>
           </ul>
         </section>
 
         <section>
           <h2>7. Ganador y desempate</h2>
           <p>
-            Gana la mejor partida válida de la semana de cada participante (no se suman los intentos). Si hay empate, gana quien consiguió primero esa
-            puntuación, según la hora del servidor.
+            En el ranking cuenta el mejor resultado válido de cada participante en el torneo (no se suman los intentos). Si hay empate, gana quien consiguió
+            primero esa puntuación, según la hora del servidor.
           </p>
         </section>
 
         <section>
           <h2>8. Premio</h2>
           <p>
-            Solo el primer puesto confirmado gana una caja de 3 cookies. El segundo y el tercer puesto no reciben premio. El premio no se puede cambiar por
-            dinero. Una vez confirmado, el ganador lo reclama desde el mismo navegador con el que jugó, dejando su nombre y su celular para que Sweet Cookies
+            Cada torneo informa su premio antes de participar. Solo el primer puesto confirmado gana ese premio; el resto de los puestos no recibe premio. El
+            premio no se puede cambiar por dinero. Una vez confirmado, el ganador lo reclama desde el mismo navegador con el que jugó, dejando su nombre y su celular para que Sweet Cookies
             lo contacte. Si perdió el acceso, puede escribir por Instagram a {instagram} desde la cuenta ganadora para recuperarlo.
           </p>
-          <p>Durante el período de prueba privada no se entregan premios reales.</p>
+          <p>Los torneos marcados como de prueba no entregan premios reales.</p>
           <p className={styles.pending}>A definir: forma de entrega en Río Cuarto y plazo para reclamar el premio.</p>
         </section>
 
         <section>
-          <h2>9. Instagram</h2>
+          <h2>9. Invitaciones a amigos</h2>
+          <p>
+            Podés invitar a tus amigos con tu enlace personal (WhatsApp, compartir o copiar). Invitar no da intentos, puntos, ventajas en el ranking ni
+            premios: gana siempre el mejor resultado válido. Solo medimos cuántas personas abrieron tu enlace y cuántas se registraron desde él, para saber
+            cómo se difunde el campeonato. El enlace no contiene datos personales.
+          </p>
+        </section>
+
+        <section>
+          <h2>10. Instagram</h2>
           <p>
             Para participar te invitamos a seguir a {instagram}. No se comprueba automáticamente: la página solo recuerda ese paso en tu navegador. Para
             entregar el premio, la organización puede confirmar por mensaje de Instagram que la cuenta ganadora es de quien lo reclama. Nunca vamos a
@@ -118,31 +129,35 @@ export default async function ChallengeRulesPage() {
         </section>
 
         <section>
-          <h2>10. Revisión de resultados y descalificación</h2>
+          <h2>11. Revisión de resultados y descalificación</h2>
           <p>
             La organización puede revisar resultados con patrones anormales (por ejemplo, programas que tocan solos, scripts, registros múltiples o datos
             falsos) y descalificar participaciones de forma justificada. Jugar muy rápido no es, por sí solo, motivo de descalificación. Compartir la conexión
-            a internet (por ejemplo, en familia) tampoco lo es: solo se revisa. El ganador se confirma el sábado, recién después de esta revisión.
+            a internet (por ejemplo, en familia) tampoco lo es: solo se revisa. El ganador se confirma al cierre de cada torneo, recién después de esta revisión.
           </p>
         </section>
 
         <section>
-          <h2>11. Datos personales</h2>
+          <h2>12. Datos personales</h2>
           <ul>
             <li>Para competir pedimos solo tu usuario de Instagram, que se muestra en el ranking público junto con tu puntaje.</li>
             <li>
               Para cuidar el campeonato registramos la hora de cada partida y una huella cifrada de la conexión (no la dirección IP en sí). Sirve solo para
               detectar posibles registros duplicados.
             </li>
-            <li>Solo a quien gane le pedimos nombre y celular, para coordinar la entrega. Esos datos nunca se publican. No pedimos DNI ni domicilio.</li>
+            <li>
+              Si abrís un enlace de invitación, guardamos en tu navegador un identificador aleatorio para no contar dos veces la misma visita. No usamos
+              cookies publicitarias ni rastreo entre sitios.
+            </li>
+            <li>Solo al ganador confirmado le pedimos nombre y celular, únicamente para coordinar la entrega del premio. Esos datos nunca se publican. No pedimos DNI ni domicilio.</li>
             <li>Podés pedir acceder, corregir o eliminar tus datos escribiéndonos a {instagram}.</li>
           </ul>
         </section>
 
         <section>
-          <h2>12. Suspensiones y cambios</h2>
+          <h2>13. Suspensiones y cambios</h2>
           <p>
-            Ante problemas técnicos u otras causas de fuerza mayor, la organización puede pausar una edición. Cualquier cambio en estas bases se publicará en
+            Ante problemas técnicos u otras causas de fuerza mayor, la organización puede pausar o cancelar un torneo. Cualquier cambio en estas bases se publicará en
             esta página.
           </p>
         </section>

@@ -8,23 +8,25 @@ type LeaderboardProps = {
   /** @ del jugador de este navegador, para resaltar su fila. */
   myHandle: string | null;
   prize: string;
+  /** Torneo terminado: ranking final. */
+  final: boolean;
 };
 
-/** Top 10 semanal: solo @, mordidas y cookies (nunca IP, teléfonos ni identificadores privados). */
-export function Leaderboard({ rows, myHandle, prize }: LeaderboardProps) {
+/** Top 10 del torneo: solo @, mordidas y cookies (nunca IP, teléfonos ni identificadores privados). */
+export function Leaderboard({ rows, myHandle, prize, final }: LeaderboardProps) {
   return (
     <section id="ranking" className={styles.board} aria-labelledby="ranking-title">
       <div className={styles.head}>
         <h2 id="ranking-title" className={styles.title}>
-          Ranking semanal
+          {final ? "Ranking final" : "Ranking del torneo"}
         </h2>
-        <p className={styles.note}>Solo el primer puesto gana una {prize.toLowerCase()}.</p>
+        <p className={styles.note}>Solo el primer puesto gana: {prize}.</p>
       </div>
 
       {rows === null ? (
         <p className={styles.empty}>Cargando ranking…</p>
       ) : rows.length === 0 ? (
-        <p className={styles.empty}>Todavía no hay resultados esta semana. ¡Sé el primero!</p>
+        <p className={styles.empty}>{final ? "Este torneo no tuvo resultados." : "Todavía no hay resultados. ¡Sé el primero!"}</p>
       ) : (
         <ol className={styles.list}>
           <li className={styles.columns} aria-hidden="true">

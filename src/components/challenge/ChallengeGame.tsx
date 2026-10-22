@@ -57,9 +57,8 @@ type ChallengeGameProps = {
   isCutout: boolean;
   alt: string;
   logoSrc: string | null;
-  /** Etiqueta visible: partida oficial o práctica (no cambia el juego). */
+  /** Etiqueta visible de la partida oficial (no cambia el juego). */
   modeLabel: string;
-  practice: boolean;
   onFinish: (result: GameResult) => void;
   onExit: () => void;
 };
@@ -68,7 +67,7 @@ type ChallengeGameProps = {
  * Partida de 15 s: cuenta regresiva → toques → "¡TIEMPO!" → onFinish.
  * El cronómetro se calcula siempre contra performance.now() (no suma intervalos).
  */
-export function ChallengeGame({ image, isCutout, alt, logoSrc, modeLabel, practice, onFinish, onExit }: ChallengeGameProps) {
+export function ChallengeGame({ image, isCutout, alt, logoSrc, modeLabel, onFinish, onExit }: ChallengeGameProps) {
   const [stage, setStage] = useState<Stage>("countdown");
   const [step, setStep] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -257,7 +256,7 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, modeLabel, practi
 
       <header className={styles.top}>
         <Brand logoSrc={logoSrc} size="sm" decorative />
-        <span className={`${styles.mode} ${practice ? styles.modePractice : ""}`}>{modeLabel}</span>
+        <span className={styles.mode}>{modeLabel}</span>
         <button type="button" className={styles.exit} onClick={onExit}>
           Salir
         </button>

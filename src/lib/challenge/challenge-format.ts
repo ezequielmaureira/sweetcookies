@@ -30,24 +30,82 @@ const dateTime = new Intl.DateTimeFormat("es-AR", {
 /** "viernes 24/10, 23:59" (hora de Córdoba). */
 export const formatCordobaDateTime = (iso: string) => dateTime.format(new Date(iso)).replace(/\s+/g, " ");
 
-/** Intentos oficiales del torneo semanal (no se renuevan cada día). */
-export const attemptsText = (left: number) => (left === 1 ? "Te queda 1 intento oficial" : `Te quedan ${left} intentos oficiales`);
+/** Intentos oficiales del torneo (los define el admin; no se renuevan cada día). */
+export const attemptsText = (left: number, limit: number) =>
+  left === 1 ? `Te queda 1 de ${limit} intentos en este torneo` : `Te quedan ${left} de ${limit} intentos en este torneo`;
+
+/* ---------- Invitaciones ---------- */
+
+export type ShareKind = "invite" | "record" | "finished";
+
+/** Enlace del torneo; con el código personal si lo hay. */
+export function challengeLink(origin: string, tournamentId: string | null, ref: string | null): string {
+  const url = new URL("/campeonato", origin);
+  if (tournamentId) url.searchParams.set("torneo", tournamentId);
+  if (ref) url.searchParams.set("ref", ref);
+  return url.toString();
+}
+
+/**
+ * Mensaje para invitar amigos. Usa el nombre y el premio reales del torneo y el
+ * puntaje que validó el servidor (nunca uno inventado). En un torneo de prueba
+ * no presenta el premio como real.
+ */
+export function shareMessage(input: { kind: ShareKind; tournamentName: string; prize: string; isTest: boolean; score: number | null; url: string }): string {
+  const prizeLine = input.isTest ? "🧪 Es un torneo de prueba: no hay premio real." : `🏆 Premio: ${input.prize}`;
+  if (input.kind === "finished") {
+    return [
+      "🏆 ¡Mirá cómo terminó Sweet Click Challenge!",
+      "",
+      `Desafío: ${input.tournamentName}${input.isTest ? " (torneo de prueba)" : ""}`,
+      "",
+      "Conocé los resultados y el próximo desafío de Sweet Cookies.",
+      "",
+      `👉 ${input.url}`,
+    ].join("\n");
+  }
+  if (input.kind === "record" && input.score !== null) {
+    return [
+      "🍪 ¡Te desafío a superar mi récord!",
+      "",
+      `Conseguí ${input.score} ${input.score === 1 ? "mordida" : "mordidas"} en Sweet Click Challenge.`,
+      "",
+      prizeLine,
+      "",
+      "¿Podés superarme en 15 segundos?",
+      "",
+      `👉 ${input.url}`,
+    ].join("\n");
+  }
+  return [
+    "🍪 ¡Te desafío a participar en Sweet Click Challenge!",
+    "",
+    prizeLine,
+    "",
+    "Tenés 15 segundos para conseguir la mayor cantidad de mordidas.",
+    "",
+    "¿Te animás?",
+    "",
+    `👉 ${input.url}`,
+  ].join("\n");
+}
+
+/** Parámetros de un enlace /campeonato?torneo=…&ref=… (validados: no se confía en la URL). */
+export function readLinkParams(search: string): { tournamentId: string | null; ref: string | null } {
+  const params = new URLSearchParams(search);
+  const tournamentId = params.get("torneo");
+  const ref = params.get("ref");
+  return {
+    tournamentId: tournamentId && /^[A-Za-z0-9_-]{1,40}$/.test(tournamentId) ? tournamentId : null,
+    ref: ref && /^[a-z2-9]{10}$/.test(ref) ? ref : null,
+  };
+}
+
+/** Abre WhatsApp (app o web) con el mensaje listo; la persona elige a quién mandarlo. */
+export const whatsappShareUrl = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`;
 
 /** URL del perfil a partir del @ configurado ("@sweet.cookies.rio4"). */
 export const instagramUrl = (handle: string) => `https://www.instagram.com/${encodeURIComponent(handle.replace(/^@/, ""))}/`;
 
 export const bitesText = (n: number) => (n === 1 ? "1 mordida" : `${n} mordidas`);
 export const cookiesText = (n: number) => (n === 1 ? "1 cookie" : `${n} cookies`);
-
-export type ChallengePhase = "upcoming" | "competition" | "paused" | "review" | "closed";
-
-/**
- * Momento de la semana para los textos: lunes a viernes se compite, el sábado
- * se revisa y se publica el ganador, el domingo está cerrado.
- */
-export function challengePhase(edition: { status: string; reviewEndsAt: string }, nowMs: number | null): ChallengePhase {
-  if (edition.status === "SCHEDULED") return "upcoming";
-  if (edition.status === "ACTIVE") return "competition";
-  if (edition.status === "PAUSED") return "paused";
-  return nowMs !== null && nowMs > Date.parse(edition.reviewEndsAt) ? "closed" : "review";
-}

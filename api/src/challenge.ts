@@ -8,13 +8,17 @@
  * anormales para revisión humana. No es una protección infalible.
  */
 import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
-import { weekSchedule, type ChallengeStatus } from "./challenge-time.ts";
+import { parseCordobaDateTime, type ChallengeStatus } from "./challenge-time.ts";
 
 /* ---------- Reglas ---------- */
 
 export const GAME_DURATION_MS = 15_000;
-/** Intentos oficiales por participante en TODA la edición semanal (no por día). */
-export const ATTEMPTS_PER_EDITION = 3;
+/** Intentos oficiales por participante: los define el admin en cada torneo, dentro de este rango. */
+export const MIN_ATTEMPTS = 1;
+export const MAX_ATTEMPTS = 20;
+/** Duración de un torneo: de 15 minutos a 90 días. */
+export const MIN_TOURNAMENT_MS = 15 * 60 * 1000;
+export const MAX_TOURNAMENT_MS = 90 * 24 * 60 * 60 * 1000;
 export const BITES_PER_COOKIE = 30;
 export const MIN_TAP_INTERVAL_MS = 40;
 export const MAX_TAPS_PER_SECOND = 20;
@@ -24,13 +28,25 @@ export const HIT_RADIUS = 54;
 export const MAX_TAPS = 600;
 /** Margen para cerrar una partida (reintentos por mala conexión). Después vence sin puntaje. */
 export const FINISH_GRACE_MS = 10 * 60 * 1000;
-export const PRIZE = "Caja de 3 cookies";
-export const TERMS_VERSION = "2026-10-borrador-2";
+/**
+ * Partida que empezó ANTES del cierre del torneo y termina después: se acepta
+ * su cierre solo hasta este margen técnico pasado el fin de sus 15 s (o del
+ * torneo, lo que sea más tarde). Nunca se aceptan partidas que empiecen después.
+ */
+export const CLOSE_GRACE_MS = 2 * 60 * 1000;
+export const TERMS_VERSION = "2026-10-borrador-3";
 /** Vigencia del código de recuperación que genera el admin. */
 export const RECOVERY_TTL_MS = 48 * 60 * 60 * 1000;
 export const TOP_SIZE = 10;
 
 export const cookiesFor = (bites: number) => Math.floor(Math.max(0, bites) / BITES_PER_COOKIE);
+
+/** Hasta cuándo se acepta el cierre de una partida (ver CLOSE_GRACE_MS). */
+export function finishDeadline(startedAt: Date, durationMs: number, endsAt: Date): number {
+  const played = startedAt.getTime() + durationMs;
+  const normal = played + FINISH_GRACE_MS;
+  return normal <= endsAt.getTime() ? normal : Math.min(normal, Math.max(played, endsAt.getTime()) + CLOSE_GRACE_MS);
+}
 
 /* ---------- Puntaje (misma regla que el juego) ---------- */
 
@@ -194,6 +210,137 @@ export function validateClaim(body: unknown): { ok: true; data: ClaimInput } | {
   return { ok: true, data: { name, phone } };
 }
 
+/* ---------- Torneos (los crea el admin) ---------- */
+
+export type TournamentInput = {
+  name: string;
+  description: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  prize: string;
+  prizeDescription: string | null;
+  attempts: number;
+  isTest: boolean;
+};
+
+export type TournamentErrors = Partial<Record<"name" | "description" | "start" | "end" | "prize" | "prizeDescription" | "attempts" | "mode" | "body", string>>;
+
+const cleanText = (raw: unknown) => (typeof raw === "string" ? raw.normalize("NFC").replace(/\s+/g, " ").trim() : "");
+const cleanLong = (raw: unknown) => (typeof raw === "string" ? raw.normalize("NFC").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim() : "");
+
+/**
+ * Formulario del admin → torneo. Fechas en hora de Córdoba ("2026-10-30" +
+ * "18:00"); el cierre dura hasta el final de ese minuto.
+ */
+export function validateTournament(body: unknown): { ok: true; data: TournamentInput } | { ok: false; errors: TournamentErrors } {
+  if (!body || typeof body !== "object") return { ok: false, errors: { body: "Datos inválidos." } };
+  const input = body as Record<string, unknown>;
+  const errors: TournamentErrors = {};
+
+  const name = cleanText(input.name);
+  if (name.length < 3 || name.length > 80) errors.name = "El nombre es obligatorio (3 a 80 caracteres).";
+  const description = cleanLong(input.description);
+  if (description.length > 500) errors.description = "La descripción puede tener hasta 500 caracteres.";
+  const prize = cleanText(input.prize);
+  if (prize.length < 2 || prize.length > 120) errors.prize = "El premio es obligatorio (2 a 120 caracteres).";
+  const prizeDescription = cleanLong(input.prizeDescription);
+  if (prizeDescription.length > 500) errors.prizeDescription = "La descripción del premio puede tener hasta 500 caracteres.";
+
+  const attempts = input.attempts;
+  if (!Number.isInteger(attempts) || (attempts as number) < MIN_ATTEMPTS || (attempts as number) > MAX_ATTEMPTS) {
+    errors.attempts = `Elegí entre ${MIN_ATTEMPTS} y ${MAX_ATTEMPTS} intentos.`;
+  }
+  if (input.mode !== "test" && input.mode !== "official") errors.mode = "Elegí prueba u oficial.";
+
+  const text = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : "");
+  const startsAt = parseCordobaDateTime(text("startDate"), text("startTime"));
+  const endsAt = parseCordobaDateTime(text("endDate"), text("endTime"), true);
+  if (!startsAt) errors.start = "Completá la fecha y la hora de inicio.";
+  if (!endsAt) errors.end = "Completá la fecha y la hora de finalización.";
+  if (startsAt && endsAt) {
+    const duration = endsAt.getTime() - startsAt.getTime();
+    if (duration <= 0) errors.end = "La finalización tiene que ser posterior al inicio.";
+    else if (duration < MIN_TOURNAMENT_MS) errors.end = "El torneo tiene que durar al menos 15 minutos.";
+    else if (duration > MAX_TOURNAMENT_MS) errors.end = "El torneo puede durar como máximo 90 días.";
+  }
+
+  if (Object.keys(errors).length || !startsAt || !endsAt) return { ok: false, errors };
+  return {
+    ok: true,
+    data: {
+      name,
+      description: description || null,
+      startsAt,
+      endsAt,
+      prize,
+      prizeDescription: prizeDescription || null,
+      attempts: attempts as number,
+      isTest: input.mode !== "official",
+    },
+  };
+}
+
+/** Diferencias entre el torneo guardado y el editado (para validar y registrar). */
+export function tournamentChanges(current: EditionRecord, next: TournamentInput): string[] {
+  const changes: string[] = [];
+  if (current.name !== next.name) changes.push("name");
+  if ((current.description ?? null) !== next.description) changes.push("description");
+  if (current.startsAt.getTime() !== next.startsAt.getTime()) changes.push("startsAt");
+  if (current.endsAt.getTime() !== next.endsAt.getTime()) changes.push("endsAt");
+  if (current.prize !== next.prize) changes.push("prize");
+  if ((current.prizeDescription ?? null) !== next.prizeDescription) changes.push("prizeDescription");
+  if (current.attempts !== next.attempts) changes.push("attempts");
+  if (current.isTest !== next.isTest) changes.push("mode");
+  return changes;
+}
+
+export type EditCheck = { ok: true; changes: string[] } | { ok: false; error: string; message: string };
+
+/**
+ * Reglas de edición que protegen la competencia:
+ * - Borrador, o publicado sin empezar y sin partidas: se puede cambiar todo (el
+ *   modo prueba/oficial solo en borrador).
+ * - Ya empezado o con partidas: el inicio y el modo quedan fijos; el cierre
+ *   solo se puede extender; los intentos solo pueden subir; cambiar el premio
+ *   exige confirmación explícita; todo cambio exige motivo y queda registrado.
+ * - Finalizado, con ganador publicado o cancelado: no se edita.
+ */
+export function checkTournamentEdit(
+  current: EditionRecord,
+  status: ChallengeStatus,
+  next: TournamentInput,
+  ctx: { games: number; reason: string | null; confirmPrizeChange: boolean; now: Date },
+): EditCheck {
+  const changes = tournamentChanges(current, next);
+  if (status === "FINISHED" || status === "RESULTS_PUBLISHED" || status === "CANCELLED") {
+    return { ok: false, error: "locked", message: "Este torneo ya terminó o fue cancelado: no se puede editar." };
+  }
+  if (changes.includes("mode") && status !== "DRAFT") {
+    return { ok: false, error: "mode_locked", message: "El modo prueba/oficial solo se puede cambiar en borrador." };
+  }
+  const started = status !== "DRAFT" && (ctx.games > 0 || current.startsAt.getTime() <= ctx.now.getTime());
+  if (!started) return { ok: true, changes };
+
+  if (changes.includes("startsAt")) return { ok: false, error: "start_locked", message: "El torneo ya empezó: la fecha de inicio no se puede cambiar." };
+  if (next.endsAt.getTime() < current.endsAt.getTime()) {
+    return { ok: false, error: "end_shortened", message: "El torneo ya empezó: el cierre solo se puede extender, no adelantar." };
+  }
+  if (next.attempts < current.attempts) {
+    return { ok: false, error: "attempts_reduced", message: "El torneo ya empezó: los intentos solo se pueden aumentar." };
+  }
+  if ((changes.includes("prize") || changes.includes("prizeDescription")) && !ctx.confirmPrizeChange) {
+    return { ok: false, error: "prize_change_unconfirmed", message: "Cambiar el premio de un torneo en curso requiere confirmación." };
+  }
+  if (changes.length && !ctx.reason) {
+    return { ok: false, error: "reason_required", message: "El torneo ya empezó: escribí el motivo del cambio (queda registrado)." };
+  }
+  return { ok: true, changes };
+}
+
+/** Dos torneos publicados nunca se superponen (uno activo a la vez). */
+export const overlaps = (a: { startsAt: Date; endsAt: Date }, b: { startsAt: Date; endsAt: Date }) =>
+  a.startsAt.getTime() < b.endsAt.getTime() && b.startsAt.getTime() < a.endsAt.getTime();
+
 /* ---------- Sesión, recuperación e IP ---------- */
 
 /** Token de 256 bits (base64url). Solo lo conoce el navegador del participante. */
@@ -221,19 +368,57 @@ export const hashRecoveryCode = (code: string) => createHash("sha256").update(`r
 export const hashIp = (secret: string | null, ip: string | null) =>
   secret && ip ? createHmac("sha256", secret).update(ip).digest("hex").slice(0, 32) : null;
 
+/* ---------- Invitaciones (solo difusión: nunca dan intentos ni ventajas) ---------- */
+
+const INVITE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
+
+/** Código público de un enlace de invitación: 10 caracteres aleatorios (~49 bits). No autentica. */
+export const generateInviteCode = () => Array.from({ length: 10 }, () => INVITE_ALPHABET[randomInt(INVITE_ALPHABET.length)]).join("");
+export const isInviteCode = (code: unknown): code is string => typeof code === "string" && /^[a-z2-9]{10}$/.test(code);
+
+/** Id aleatorio del navegador del visitante (lo genera la página). Se guarda solo su hash. */
+export const isVisitorId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{16,64}$/.test(id);
+export const hashVisitor = (id: string) => createHash("sha256").update(`visitor:${id}`).digest("hex");
+
+/** Una misma conexión (IP) cuenta como mucho estas visitas por enlace (freno básico contra visitas infladas). */
+export const MAX_VISITS_PER_CONNECTION = 5;
+
+/** Id de pedido del botón "Jugar" (idempotencia del inicio de partida). */
+export const isRequestId = (id: unknown): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{16,40}$/.test(id);
+
+export type InviteRecord = { id: string; editionId: string; participantId: string; code: string; ipHash: string | null };
+
+export type InviteStats = {
+  /** Enlaces generados (no prueba que se hayan enviado). */
+  invites: number;
+  /** Visitantes distintos que abrieron un enlace. */
+  visits: number;
+  /** Registros nuevos atribuidos (sin contar los de la misma conexión que quien invitó). */
+  registrations: number;
+  /** Registros desde la misma conexión que quien invitó: se muestran aparte. */
+  sameConnection: number;
+  top: { participantId: string; instagram: string; visits: number; registrations: number; sameConnection: number }[];
+};
+
 /* ---------- Registros y repositorio ---------- */
 
+/** Torneo (tabla histórica "challenge_editions"). */
 export type EditionRecord = {
   id: string;
   isTest: boolean;
   number: number;
-  weekStart: string;
+  name: string;
+  description: string | null;
+  weekStart: string | null;
   startsAt: Date;
   endsAt: Date;
   status: ChallengeStatus;
   gameDurationMs: number;
   attempts: number;
   prize: string;
+  prizeDescription: string | null;
+  cancelledAt: Date | null;
+  cancelReason: string | null;
   pausedAt: Date | null;
   pauseReason: string | null;
   winnerParticipantId: string | null;
@@ -265,6 +450,8 @@ export type GameRecord = {
   startedAt: Date;
   finishedAt: Date | null;
   ipHash: string | null;
+  /** Id del pedido de "Jugar" que creó la partida (idempotencia). */
+  clientRequestId: string | null;
   score: number | null;
   cookies: number | null;
   tapsReceived: number | null;
@@ -296,6 +483,9 @@ export type GameResult = {
 export type ClaimRecord = {
   editionId: string;
   editionNumber: number;
+  editionName: string;
+  prize: string;
+  prizeDescription: string | null;
   isTest: boolean;
   participantId: string;
   gameId: string;
@@ -311,14 +501,14 @@ export type AdminRankingRow = RankingRow & {
   suspicion: Suspicion;
   review: Review;
   flags: string[];
-  /** Intentos oficiales usados en la edición. */
+  /** Intentos oficiales usados en el torneo. */
   games: number;
 };
 
 export type AdminGameRow = GameRecord & { instagram: string; taps: number[] };
 
 export type AdminParticipantRow = ParticipantRecord & {
-  /** Intentos usados y mejor puntaje en la edición consultada. */
+  /** Intentos usados y mejor puntaje en el torneo consultado. */
   attemptsUsed: number;
   best: number | null;
   lastSeenAt: Date | null;
@@ -342,6 +532,11 @@ export type DisqualificationRecord = { participantId: string; instagram: string;
 
 export type EditionStats = { participants: number; games: number; finished: number; pendingReview: number };
 
+/** Torneo + cuántos participantes y partidas tiene (listado del panel). */
+export type EditionSummary = EditionRecord & { participants: number; games: number };
+
+export type SaveResult = { ok: true; edition: EditionRecord } | { ok: false; conflict: { id: string; name: string } } | { ok: false; conflict: null };
+
 /** El @ ya tiene una sesión en otro navegador. */
 export class DuplicateParticipantError extends Error {
   constructor() {
@@ -350,10 +545,20 @@ export class DuplicateParticipantError extends Error {
 }
 
 export type ChallengeRepository = {
-  /** Edición de esa semana y tipo (prueba/oficial); si no existe se crea (nunca dos). */
-  ensureEdition(window: { weekStart: string; startsAt: Date; endsAt: Date; isTest: boolean }): Promise<EditionRecord>;
+  /** Torneos publicados para la página: el que está en curso, el último terminado y el próximo. */
+  publicTournaments(now: Date): Promise<{ live: EditionRecord | null; lastEnded: EditionRecord | null; next: EditionRecord | null }>;
   getEdition(id: string): Promise<EditionRecord | null>;
-  listEditions(): Promise<EditionRecord[]>;
+  listEditions(): Promise<EditionSummary[]>;
+  /**
+   * Alta, edición y publicación. Si el resultado queda publicado, se verifica
+   * (con bloqueo) que no se superponga con otro torneo publicado.
+   */
+  createEdition(data: TournamentInput & { status: "DRAFT" | "SCHEDULED" }, adminUserId: string): Promise<SaveResult>;
+  updateEdition(id: string, data: TournamentInput, changes: string[], reason: string | null, adminUserId: string): Promise<SaveResult>;
+  scheduleEdition(id: string, adminUserId: string): Promise<SaveResult>;
+  cancelEdition(id: string, reason: string, adminUserId: string): Promise<EditionRecord | null>;
+  /** Torneos cerrados (fin vencido) que esperan confirmar el ganador. */
+  countPendingWinners(now: Date): Promise<number>;
 
   /** DuplicateParticipantError si el @ ya existe. */
   createParticipant(data: { instagram: string; tokenHash: string; ipHash: string | null; now: Date }): Promise<ParticipantRecord>;
@@ -365,10 +570,14 @@ export type ChallengeRepository = {
   /** Canjea el código (un solo uso): reemplaza el token; la sesión anterior deja de valer. */
   recover(instagram: string, codeHash: string, tokenHash: string, now: Date): Promise<ParticipantRecord | null>;
 
-  /** Intentos oficiales usados en la edición (iniciados, terminados o vencidos). */
+  /** Partidas del torneo (cualquier estado). */
+  countGames(editionId: string): Promise<number>;
+  /** Intentos oficiales usados en el torneo (iniciados, terminados o vencidos). */
   countAttempts(participantId: string, editionId: string): Promise<number>;
-  /** Reserva el intento `attemptNumber` de la edición. null si otro pedido simultáneo ya lo tomó. */
-  createGame(data: { editionId: string; participantId: string; attemptNumber: number; startedAt: Date; ipHash: string | null }): Promise<GameRecord | null>;
+  /** Reserva el intento `attemptNumber` del torneo. null si otro pedido simultáneo ya lo tomó. */
+  createGame(data: { editionId: string; participantId: string; attemptNumber: number; startedAt: Date; ipHash: string | null; clientRequestId: string | null }): Promise<GameRecord | null>;
+  /** Partida ya creada por ese mismo pedido (reintento o doble toque). */
+  findGameByRequest(participantId: string, clientRequestId: string): Promise<GameRecord | null>;
   getGame(id: string): Promise<GameRecord | null>;
   /** Cierre único: solo si sigue STARTED. null = ya estaba cerrada. */
   finishGame(id: string, result: GameResult): Promise<GameRecord | null>;
@@ -376,6 +585,15 @@ export type ChallengeRepository = {
 
   ranking(editionId: string): Promise<RankingRow[]>;
   isDisqualified(editionId: string, participantId: string): Promise<boolean>;
+
+  /** Enlace del participante para ese torneo (lo crea si no existe). */
+  getOrCreateInvite(editionId: string, participantId: string, ipHash: string | null): Promise<InviteRecord>;
+  findInviteByCode(code: string): Promise<InviteRecord | null>;
+  /** Visita única por visitante (y como mucho MAX_VISITS_PER_CONNECTION por conexión). true = contada. */
+  recordVisit(inviteId: string, visitorHash: string, ipHash: string | null): Promise<boolean>;
+  /** Registro nuevo atribuido (una vez por persona y torneo, nunca a sí misma). true = contado. */
+  recordReferral(data: { editionId: string; inviteId: string; referrerId: string; referredId: string; sameConnection: boolean }): Promise<boolean>;
+  inviteStats(editionId: string): Promise<InviteStats>;
 
   /** Premios del participante (más recientes primero). */
   claimsOf(participantId: string): Promise<ClaimRecord[]>;
@@ -404,24 +622,22 @@ export type ChallengeRepository = {
 
 export const handleOf = (instagram: string) => `@${instagram}`;
 
-export const publicEdition = (edition: EditionRecord, now: Date, status: ChallengeStatus) => {
-  const { reviewEndsAt, nextStartsAt } = weekSchedule(edition.weekStart);
-  return {
-    id: edition.id,
-    number: edition.number,
-    isTest: edition.isTest,
-    startsAt: edition.startsAt.toISOString(),
-    endsAt: edition.endsAt.toISOString(),
-    reviewEndsAt: reviewEndsAt.toISOString(),
-    nextStartsAt: nextStartsAt.toISOString(),
-    status,
-    gameDurationMs: edition.gameDurationMs,
-    attempts: edition.attempts,
-    bitesPerCookie: BITES_PER_COOKIE,
-    prize: edition.prize,
-    serverNow: now.toISOString(),
-  };
-};
+/** Lo que ve el jugador de un torneo (sin datos internos del admin). */
+export const publicEdition = (edition: EditionRecord, now: Date, status: ChallengeStatus) => ({
+  id: edition.id,
+  name: edition.name,
+  description: edition.description,
+  isTest: edition.isTest,
+  startsAt: edition.startsAt.toISOString(),
+  endsAt: edition.endsAt.toISOString(),
+  status,
+  gameDurationMs: edition.gameDurationMs,
+  attempts: edition.attempts,
+  bitesPerCookie: BITES_PER_COOKIE,
+  prize: edition.prize,
+  prizeDescription: edition.prizeDescription,
+  serverNow: now.toISOString(),
+});
 
 /** Fila pública: solo @, mordidas y cookies (nunca IP, teléfono ni ids). */
 export const publicRow = (row: RankingRow, position: number) => ({

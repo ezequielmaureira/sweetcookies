@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
-import { ChallengeApiError, recoverSession, register } from "@/lib/challenge/challenge-api";
+import { ChallengeApiError, loadRef, recoverSession, register } from "@/lib/challenge/challenge-api";
 import { instagramUrl } from "@/lib/challenge/challenge-format";
 import shared from "./Challenge.module.css";
 import styles from "./ChallengeForm.module.css";
@@ -15,7 +15,7 @@ export function FollowStep({ instagramHandle, onFollow }: { instagramHandle: str
   return (
     <div className={styles.form}>
       <h3 className={styles.title}>SEGUINOS Y PARTICIPÁ</h3>
-      <p className={styles.lead}>Seguí a {instagramHandle} y después escribí tu @ para competir por el premio de la semana.</p>
+      <p className={styles.lead}>Seguí a {instagramHandle} y después escribí tu @ para competir en los torneos.</p>
       <a className={`${shared.cta} ${styles.submit}`} href={instagramUrl(instagramHandle)} target="_blank" rel="noopener noreferrer" onClick={onFollow}>
         Seguir en Instagram
       </a>
@@ -43,7 +43,8 @@ export function JoinForm({ onJoined, onRecover }: { onJoined: (token: string) =>
     setSending(true);
     setMessage(null);
     try {
-      const { token } = await register(instagram, terms);
+      // Si llegó por un enlace de invitación, se manda el código: solo mide la difusión, no da ventajas.
+      const { token } = await register(instagram, terms, loadRef());
       onJoined(token);
     } catch (error) {
       if (error instanceof ChallengeApiError && (error.status === 422 || error.status === 409)) setErrors(error.fields);

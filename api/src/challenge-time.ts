@@ -1,17 +1,16 @@
 /**
- * Calendario del Sweet Click Challenge (lógica pura).
+ * Fechas y estado de los torneos del Sweet Click Challenge (lógica pura).
  *
- * La autoridad es la hora del SERVIDOR leída en America/Argentina/Cordoba
- * (nunca la zona del navegador). Se usa Intl para convertir, así no depende de
- * que Argentina siga sin horario de verano.
+ * La autoridad es la hora del SERVIDOR. Las fechas que carga el admin se
+ * interpretan en America/Argentina/Cordoba (nunca la zona del navegador). Se
+ * usa Intl para convertir, así no depende de que Argentina siga sin horario de
+ * verano.
  *
- * Semana: lunes 00:00:00.000 a viernes 23:59:59.999 se compite; el sábado se
- * revisan y publican los resultados; el domingo está cerrado; el lunes
- * siguiente empieza otra edición con 3 intentos nuevos.
+ * No hay calendario fijo: cada torneo tiene su inicio y su fin. Se activa y
+ * finaliza solo, porque el estado se calcula con la hora en cada pedido (sin
+ * cron y sin que el admin tenga que entrar al panel).
  */
 export const CHALLENGE_TIME_ZONE = "America/Argentina/Cordoba";
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const formatter = new Intl.DateTimeFormat("en-US", {
   timeZone: CHALLENGE_TIME_ZONE,
@@ -51,74 +50,51 @@ export function cordobaToUtc(year: number, month: number, day: number, hour = 0,
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const dateKey = (year: number, month: number, day: number) => `${year}-${pad(month)}-${pad(day)}`;
 
 /** Día calendario en Córdoba (YYYY-MM-DD). */
 export function cordobaDay(date: Date): string {
   const w = wall(date);
-  return dateKey(w.year, w.month, w.day);
+  return `${w.year}-${pad(w.month)}-${pad(w.day)}`;
 }
 
-/** Suma días a una fecha calendario (sin horas: no le afecta ninguna zona). */
-function addDays(key: string, days: number): { year: number; month: number; day: number } {
-  const [y, m, d] = key.split("-").map(Number);
-  const shifted = new Date(Date.UTC(y, m - 1, d) + days * DAY_MS);
-  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate() };
-}
-
-/** 00:00 del día siguiente en Córdoba. */
-export function nextCordobaMidnight(now: Date): Date {
-  const next = addDays(cordobaDay(now), 1);
-  return cordobaToUtc(next.year, next.month, next.day);
-}
-
-export type WeekWindow = {
-  /** Lunes (YYYY-MM-DD, Córdoba): identifica la edición. */
-  weekStart: string;
-  /** Lunes 00:00:00.000 en Córdoba. */
-  startsAt: Date;
-  /** Viernes 23:59:59.999 en Córdoba. */
-  endsAt: Date;
-};
-
-/** Semana (lunes a domingo, Córdoba) que contiene `now`. */
-export function weekWindow(now: Date): WeekWindow {
-  const today = cordobaDay(now);
-  const [y, m, d] = today.split("-").map(Number);
-  // 0 = lunes … 6 = domingo (el día de la semana de una fecha calendario no depende de la zona).
-  const weekday = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
-  const monday = addDays(today, -weekday);
-  const friday = addDays(today, 4 - weekday);
-  return {
-    weekStart: dateKey(monday.year, monday.month, monday.day),
-    startsAt: cordobaToUtc(monday.year, monday.month, monday.day),
-    endsAt: cordobaToUtc(friday.year, friday.month, friday.day, 23, 59, 59, 999),
-  };
+/** Fecha (YYYY-MM-DD) y hora (HH:MM) de pared en Córdoba: para volver a llenar el formulario del admin. */
+export function cordobaDateTime(date: Date): { date: string; time: string } {
+  const w = wall(date);
+  return { date: `${w.year}-${pad(w.month)}-${pad(w.day)}`, time: `${pad(w.hour)}:${pad(w.minute)}` };
 }
 
 /**
- * Sábado 23:59:59.999 (fin del día de revisión) y lunes 00:00 siguiente (nueva
- * edición con intentos nuevos) de la semana que empieza en `weekStart`.
+ * "2026-10-30" + "18:00" en Córdoba → instante UTC. `endOfMinute` = hasta el
+ * final de ese minuto (un cierre "23:59" dura hasta 23:59:59.999).
+ * null si la fecha u hora no existen.
  */
-export function weekSchedule(weekStart: string): { reviewEndsAt: Date; nextStartsAt: Date } {
-  const saturday = addDays(weekStart, 5);
-  const nextMonday = addDays(weekStart, 7);
-  return {
-    reviewEndsAt: cordobaToUtc(saturday.year, saturday.month, saturday.day, 23, 59, 59, 999),
-    nextStartsAt: cordobaToUtc(nextMonday.year, nextMonday.month, nextMonday.day),
-  };
+export function parseCordobaDateTime(date: string, time: string, endOfMinute = false): Date | null {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const t = /^(\d{2}):(\d{2})$/.exec(time);
+  if (!d || !t) return null;
+  const [year, month, day, hour, minute] = [d[1], d[2], d[3], t[1], t[2]].map(Number);
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59) return null;
+  // Rechaza fechas que no existen (ej. 31/02): el día tiene que sobrevivir la conversión.
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) return null;
+  return cordobaToUtc(year, month, day, hour, minute, endOfMinute ? 59 : 0, endOfMinute ? 999 : 0);
 }
 
-export type ChallengeStatus = "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED";
+export type ChallengeStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "FINISHED" | "RESULTS_PUBLISHED" | "CANCELLED";
+
+/** Estados guardados que significan "publicado" (ACTIVE = torneos anteriores a este cambio). */
+export const PUBLISHED_STATUSES = ["SCHEDULED", "ACTIVE", "PAUSED", "RESULTS_PUBLISHED"] as const;
 
 /**
- * Estado real de una edición: el guardado + la fecha. Después del viernes
- * 23:59:59 nunca está activa, aunque nadie la haya cerrado (cierre automático).
+ * Estado real de un torneo: el guardado + la hora del servidor.
+ * - Borrador, cancelado y ganador publicado los decide el admin.
+ * - Publicado: antes del inicio = PROGRAMADO; entre inicio y fin = ACTIVO (o
+ *   PAUSADO); después del fin = FINALIZADO, aunque nadie lo haya cerrado.
  */
 export function effectiveStatus(edition: { status: ChallengeStatus; startsAt: Date; endsAt: Date }, now: Date): ChallengeStatus {
-  if (edition.status === "RESULTS_PUBLISHED") return "RESULTS_PUBLISHED";
+  if (edition.status === "DRAFT" || edition.status === "CANCELLED" || edition.status === "RESULTS_PUBLISHED") return edition.status;
   if (now.getTime() > edition.endsAt.getTime()) return "FINISHED";
-  if (edition.status === "PAUSED") return "PAUSED";
   if (now.getTime() < edition.startsAt.getTime()) return "SCHEDULED";
+  if (edition.status === "PAUSED") return "PAUSED";
   return "ACTIVE";
 }

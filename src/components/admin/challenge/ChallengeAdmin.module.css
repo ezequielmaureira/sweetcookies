@@ -260,3 +260,284 @@
 .testMode {
   border-style: dashed;
 }
+
+.statusDRAFT {
+  color: var(--color-muted);
+}
+
+.statusCANCELLED {
+  text-decoration: line-through;
+  color: var(--color-muted);
+}
+
+/* Navegación y encabezado del torneo */
+.backLink {
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--color-chocolate);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.kicker {
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.preLine {
+  white-space: pre-line;
+  font-size: 0.9375rem;
+  color: var(--color-ink);
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.infoGrid dt {
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.infoGrid dd {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+/* Resumen */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.summaryCard:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.summaryCard:not(:disabled):hover {
+  border-color: var(--color-chocolate);
+}
+
+.summaryCard strong {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  color: var(--color-chocolate);
+}
+
+.summaryLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* Listado */
+.tagTest,
+.tagOfficial {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.tagTest {
+  border: 1px dashed var(--color-muted);
+  color: var(--color-muted);
+}
+
+.tagOfficial {
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+.rowPreview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 4px;
+}
+
+/* Formulario + vista previa */
+.formLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .formLayout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+
+  .previewWrap {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+.formGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGrid textarea {
+  min-height: auto;
+  resize: vertical;
+}
+
+.dateRow,
+.modeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dateRow legend,
+.modeRow legend {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.dateRow input {
+  flex: 1 1 160px;
+}
+
+.dateRow > p,
+.modeRow > p {
+  width: 100%;
+}
+
+.dateRow:disabled input,
+.modeRow:disabled input {
+  opacity: 0.6;
+}
+
+.radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.radio input {
+  margin-top: 3px;
+  accent-color: var(--color-chocolate);
+}
+
+.previewWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Imita la tarjeta oscura de /campeonato */
+.preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 18px;
+  border-radius: 24px;
+  background: #1c110b;
+  text-align: center;
+  color: #f6e9d4;
+}
+
+.previewTest {
+  padding: 8px 10px;
+  border: 1px dashed #d9963c;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: #f2c27b;
+}
+
+.previewLead {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.previewLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #d9963c;
+}
+
+.previewPrize strong {
+  color: #f2c27b;
+}
+
+.previewSub,
+.previewText {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  white-space: pre-line;
+  color: #d9c4a6;
+}
+
+.previewAttempts {
+  font-weight: 700;
+}
+
+.previewButton,
+.previewGhost {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 220px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.previewButton {
+  background: linear-gradient(180deg, #f2c27b 0%, #d9963c 100%);
+  color: #2a1308;
+}
+
+.previewGhost {
+  border: 1.5px solid rgba(246, 233, 212, 0.18);
+  color: #f6e9d4;
+}

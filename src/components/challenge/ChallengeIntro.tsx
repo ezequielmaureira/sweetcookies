@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { Brand } from "@/components/brand/Brand";
 import type { ChallengeInfo } from "@/lib/challenge/challenge-api";
-import { bitesText, challengePhase, formatCordobaDateTime, formatCountdown } from "@/lib/challenge/challenge-format";
+import { bitesText, formatCordobaDateTime, formatCountdown } from "@/lib/challenge/challenge-format";
 import { Leaderboard } from "./Leaderboard";
 import { PlayerPanel, type Session } from "./PlayerPanel";
 import type { ChallengeCookie } from "./useCookieImage";
@@ -40,35 +40,31 @@ type ChallengeIntroProps = {
   focusRanking: boolean;
   onFollow: () => void;
   onPlay: () => void;
-  onPractice: () => void;
   onJoined: (token: string) => void;
   onRefresh: () => void;
 };
 
 /**
- * Portada del campeonato: estado de la edición (lunes a viernes se compite,
- * sábado revisión, domingo cerrado), jugador, práctica, ranking y reglas.
+ * Portada del campeonato. Se adapta al torneo que configuró el admin: sin
+ * torneo ("Próximamente"), programado, activo, pausado, finalizado, con
+ * ganador publicado o cancelado. No hay práctica: solo se juega un torneo
+ * activo. Las cuentas regresivas son informativas: el servidor valida siempre
+ * las fechas.
  */
 export function ChallengeIntro(props: ChallengeIntroProps) {
   const { cookie, logoSrc, info, session, instagramHandle, onRefresh } = props;
   const now = useServerNow(props.offsetMs);
-  const edition = info?.edition ?? null;
-  const status = edition?.status ?? null;
-  const phase = edition ? challengePhase(edition, now) : null;
+  const tournament = info?.tournament ?? null;
+  const next = info?.next ?? null;
+  const status = tournament?.status ?? null;
 
-  // Hasta cuándo corre la cuenta regresiva según el momento de la semana.
-  const target =
-    !edition || phase === "paused"
-      ? null
-      : phase === "competition"
-        ? Date.parse(edition.endsAt)
-        : phase === "upcoming"
-          ? Date.parse(edition.startsAt)
-          : Date.parse(edition.nextStartsAt);
+  // Hasta cuándo corre la cuenta regresiva: cierre si está activo, inicio si está programado.
+  const target = !tournament ? null : status === "ACTIVE" ? Date.parse(tournament.endsAt) : status === "SCHEDULED" ? Date.parse(tournament.startsAt) : null;
   const left = target !== null && now !== null ? target - now : null;
-  const reached = left !== null && left <= 0;
+  const nextLeft = next && next.status === "SCHEDULED" && now !== null ? Date.parse(next.startsAt) - now : null;
+  const reached = (left !== null && left <= 0) || (nextLeft !== null && nextLeft <= 0);
 
-  // Al llegar a cero (cierre del viernes, inicio del lunes) se vuelve a consultar al servidor.
+  // Al llegar a cero (inicio o cierre) se vuelve a consultar al servidor, que es quien decide.
   useEffect(() => {
     if (!reached) return;
     const timer = window.setTimeout(onRefresh, 1500);
@@ -80,6 +76,7 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
   }, [props.focusRanking]);
 
   const myHandle = session.status === "ready" ? session.me.participant.handle : null;
+  const showRanking = tournament !== null && status !== "SCHEDULED";
 
   return (
     <main id="contenido" className={styles.intro}>
@@ -87,11 +84,11 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
         <Link href="/" className={styles.homeLink} aria-label="Ir a Sweet Cookies">
           <Brand logoSrc={logoSrc} size="sm" decorative />
         </Link>
-        <span className={styles.demoTag}>{edition?.isTest ? "Prueba privada" : "Río Cuarto"}</span>
+        <span className={styles.demoTag}>{tournament?.isTest ? "Torneo de prueba" : "Río Cuarto"}</span>
       </header>
-      {edition?.isTest && (
+      {tournament?.isTest && (
         <p className={styles.testBanner} role="note">
-          Campeonato en prueba: los resultados no son oficiales y no hay premios reales.
+          Torneo de prueba: los resultados no son oficiales y no hay premio real.
         </p>
       )}
 
@@ -101,7 +98,13 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
           <span className={styles.titleAccent}>Challenge</span>
         </h1>
         <p className={`${styles.lead} ${styles.enter}`} style={{ "--d": "200ms" } as React.CSSProperties}>
-          ¡Competí por una caja de 3 cookies!
+          {!info
+            ? "¡Comé la mayor cantidad de cookies en 15 segundos!"
+            : !tournament
+              ? "PRÓXIMAMENTE, NUEVO DESAFÍO"
+              : status === "RESULTS_PUBLISHED" || status === "FINISHED" || status === "CANCELLED"
+                ? tournament.name
+                : `¡Competí por ${lowerFirst(tournament.prize)}!`}
         </p>
 
         <div className={styles.cookieWrap}>
@@ -141,57 +144,86 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
         </div>
 
         <div className={`${styles.status} ${styles.enter}`} style={{ "--d": "320ms" } as React.CSSProperties} aria-live="polite">
-          {!edition ? (
+          {!info ? (
             <p className={styles.statusText}>{props.infoFailed ? "No pudimos cargar el campeonato. Revisá tu conexión." : "Cargando campeonato…"}</p>
+          ) : !tournament ? (
+            <>
+              <p className={styles.statusLabel}>Sin torneo en curso</p>
+              <p className={styles.statusText}>Estamos preparando el próximo desafío.</p>
+            </>
           ) : (
             <>
               <p className={styles.statusLabel}>
-                {edition.isTest ? "Prueba" : "Edición"} #{edition.number} · {phase ? PHASE_LABELS[phase] : ""}
+                {tournament.name} · {STATUS_LABELS[tournament.status]}
               </p>
-              {phase === "competition" && (
+              {status !== "RESULTS_PUBLISHED" && status !== "CANCELLED" && (
+                <p className={styles.prize}>
+                  🏆 Premio para el 1.º puesto: <strong>{tournament.prize}</strong>
+                  {tournament.isTest && <span className={styles.statusSub}> (prueba: no es real)</span>}
+                </p>
+              )}
+              {tournament.prizeDescription && status !== "RESULTS_PUBLISHED" && status !== "FINISHED" && <p className={styles.statusSub}>{tournament.prizeDescription}</p>}
+              {tournament.description && (status === "SCHEDULED" || status === "ACTIVE") && <p className={styles.description}>{tournament.description}</p>}
+              {status === "ACTIVE" && (
                 <p className={styles.statusText}>
                   Termina en <strong>{left === null ? "…" : formatCountdown(left)}</strong>
-                  <span className={styles.statusSub}>Cierra el {formatCordobaDateTime(edition.endsAt)} (hora de Córdoba)</span>
+                  <span className={styles.statusSub}>Cierra el {formatCordobaDateTime(tournament.endsAt)} (hora de Córdoba)</span>
                 </p>
               )}
-              {phase === "upcoming" && (
+              {status === "SCHEDULED" && (
                 <p className={styles.statusText}>
                   Empieza en <strong>{left === null ? "…" : formatCountdown(left)}</strong>
+                  <span className={styles.statusSub}>
+                    El {formatCordobaDateTime(tournament.startsAt)} (hora de Córdoba) · {tournament.attempts} {tournament.attempts === 1 ? "intento" : "intentos"} por participante
+                  </span>
                 </p>
               )}
-              {phase === "paused" && <p className={styles.statusText}>Pausamos el campeonato un momento. Volvé a entrar en un rato.</p>}
+              {status === "PAUSED" && <p className={styles.statusText}>Pausamos el torneo un momento. Volvé a entrar en un rato.</p>}
               {status === "FINISHED" && (
                 <p className={styles.statusText}>
-                  {phase === "review"
-                    ? "La competencia terminó. Hoy revisamos los resultados y publicamos al ganador."
-                    : "Campeonato cerrado. Estamos terminando de verificar los resultados."}
+                  El torneo terminó: ya no se aceptan intentos oficiales.
+                  <span className={styles.statusSub}>Ranking final pendiente de revisión. Pronto confirmamos al ganador.</span>
                 </p>
               )}
               {status === "RESULTS_PUBLISHED" && (
                 <p className={styles.statusText}>
-                  {info?.winner ? (
+                  {info.winner ? (
                     <>
-                      Ganador confirmado: <strong>{info.winner.handle}</strong> con {bitesText(info.winner.score)}
+                      Ganador confirmado: <strong>{info.winner.handle}</strong>
+                      <span className={styles.statusSub}>
+                        Con {bitesText(info.winner.score)} · Premio: {tournament.prize}
+                        {tournament.isTest ? " (prueba: no es real)" : ""}
+                      </span>
                     </>
                   ) : (
-                    "Resultados publicados: esta semana no hubo ganador."
+                    "Resultados publicados: este torneo no tuvo ganador."
                   )}
                 </p>
               )}
-              {(phase === "review" || phase === "closed") && (
-                <p className={styles.statusSub}>
-                  {phase === "closed" ? "Hoy está cerrado. " : ""}Nueva edición el lunes, en {left === null ? "…" : formatCountdown(left)}. Mientras tanto, podés practicar.
-                </p>
-              )}
+              {status === "CANCELLED" && <p className={styles.statusText}>Este torneo fue cancelado.</p>}
             </>
           )}
+          {info?.linkStatus === "invalid" && <p className={styles.statusSub}>El enlace que abriste ya no está disponible. Te mostramos el desafío actual.</p>}
+          {next &&
+            (next.status === "SCHEDULED" ? (
+              <p className={styles.nextTeaser}>
+                Próximo desafío: <strong>{next.name}</strong> · {next.prize}
+                <span className={styles.statusSub}>
+                  Empieza el {formatCordobaDateTime(next.startsAt)} · en {nextLeft === null ? "…" : formatCountdown(nextLeft)}
+                </span>
+              </p>
+            ) : (
+              <a className={styles.nextTeaser} href="/campeonato">
+                Desafío en curso: <strong>{next.name}</strong> · {next.prize}
+                <span className={styles.statusSub}>Tocá para ir a jugar</span>
+              </a>
+            ))}
         </div>
 
         <div className={`${styles.player} ${styles.enter}`} style={{ "--d": "400ms" } as React.CSSProperties}>
           <PlayerPanel
             session={session}
-            editionStatus={status}
-            serverNow={now}
+            tournament={tournament}
             followed={props.followed}
             imageReady={props.imageReady}
             imageFailed={props.imageFailed}
@@ -200,13 +232,19 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
             instagramHandle={instagramHandle}
             onFollow={props.onFollow}
             onPlay={props.onPlay}
-            onPractice={props.onPractice}
             onJoined={props.onJoined}
             onRetry={onRefresh}
           />
         </div>
 
-        <Leaderboard rows={info ? info.leaderboard : null} myHandle={myHandle} prize={edition?.prize ?? "Caja de 3 cookies"} />
+        {showRanking && tournament && (
+          <Leaderboard
+            rows={info ? info.leaderboard : null}
+            myHandle={myHandle}
+            prize={tournament.prize}
+            final={status === "FINISHED" || status === "RESULTS_PUBLISHED" || status === "CANCELLED"}
+          />
+        )}
 
         <ul className={styles.rules}>
           <li>
@@ -214,12 +252,12 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
             por partida
           </li>
           <li>
-            <strong>3 intentos</strong>
-            por semana
+            <strong>{tournament ? `${tournament.attempts} ${tournament.attempts === 1 ? "intento" : "intentos"}` : "Intentos"}</strong>
+            {tournament ? "en este torneo" : "según cada torneo"}
           </li>
           <li>
-            <strong>Lun a vie</strong>
-            el sábado, el ganador
+            <strong>Gana</strong>
+            la mejor partida
           </li>
         </ul>
         <p className={styles.basesLink}>
@@ -230,10 +268,14 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
   );
 }
 
-const PHASE_LABELS = {
-  upcoming: "Por empezar",
-  competition: "En juego",
-  paused: "En pausa",
-  review: "Revisión de resultados",
-  closed: "Cerrado",
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+const STATUS_LABELS = {
+  DRAFT: "Borrador",
+  SCHEDULED: "Programado",
+  ACTIVE: "En juego",
+  PAUSED: "En pausa",
+  FINISHED: "Finalizado",
+  RESULTS_PUBLISHED: "Ganador publicado",
+  CANCELLED: "Cancelado",
 } as const;

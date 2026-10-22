@@ -45,7 +45,7 @@
   max-width: 560px;
 }
 
-/* Partida oficial o práctica: siempre a la vista para no confundirlas. */
+/* Partida oficial: torneo e intento siempre a la vista. */
 .mode {
   padding: 6px 12px;
   border-radius: 999px;
@@ -56,11 +56,6 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.modePractice {
-  background: rgba(246, 233, 212, 0.08);
-  color: var(--ch-cream-soft);
 }
 
 .exit {

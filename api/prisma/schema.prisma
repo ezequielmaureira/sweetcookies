@@ -379,38 +379,51 @@ model RecipeExtraCost {
  * Módulo independiente: no se relaciona con productos, pedidos ni vouchers.
  */
 
-/// Estado GUARDADO de una edición. Por fecha se calcula al leer: antes del
-/// lunes = SCHEDULED, después del viernes 23:59:59 = FINISHED (ver
-/// api/src/challenge-time.ts → effectiveStatus). PAUSED y RESULTS_PUBLISHED
-/// solo los pone el admin.
+/// Estado GUARDADO de un torneo. Lo pone el admin: DRAFT (borrador),
+/// SCHEDULED (publicado), PAUSED, RESULTS_PUBLISHED y CANCELLED. ACTIVE y
+/// FINISHED se CALCULAN con la hora del servidor y las fechas del torneo (ver
+/// api/src/challenge-time.ts → effectiveStatus). ACTIVE guardado = publicado
+/// (lo usan los torneos creados antes de este cambio).
 enum ChallengeStatus {
   SCHEDULED
   ACTIVE
   PAUSED
   FINISHED
   RESULTS_PUBLISHED
+  DRAFT
+  CANCELLED
 }
 
-/// Una edición por semana (lunes 00:00 a viernes 23:59:59, hora de Córdoba;
-/// sábado revisión, domingo cerrado). Se crea sola la primera vez que alguien
-/// consulta esa semana (sin cron). Las ediciones de PRUEBA y las oficiales
-/// nunca se mezclan: cada una tiene su numeración y su ranking.
+/// Torneo (tabla histórica "challenge_editions"). Lo crea y programa el admin
+/// con fechas, premio e intentos propios; no hay calendario fijo ni creación
+/// automática. Se activa y finaliza solo según sus fechas (hora del servidor).
+/// Los torneos de PRUEBA y los oficiales nunca se mezclan: cada uno tiene su
+/// numeración, su ranking y sus resultados. Nunca se superponen dos torneos
+/// publicados.
 model ChallengeEdition {
   id                  String          @id @default(cuid()) @db.VarChar(40)
-  /// true = prueba privada (sin premio real). Las oficiales se activan con CHALLENGE_MODE=official.
+  /// true = prueba (sin premio real). Publicar uno oficial requiere CHALLENGE_MODE=official.
   isTest              Boolean         @default(true) @map("is_test")
-  /// Número visible (Edición #1, #2…), independiente para prueba y oficial.
+  /// Número interno, independiente para prueba y oficial.
   number              Int
-  /// Lunes de la semana en Córdoba (YYYY-MM-DD).
-  weekStart           String          @map("week_start") @db.VarChar(10)
+  name                String          @db.VarChar(80)
+  description         String?         @db.VarChar(500)
+  /// Solo de las ediciones semanales anteriores (YYYY-MM-DD). null en los torneos nuevos.
+  weekStart           String?         @map("week_start") @db.VarChar(10)
   startsAt            DateTime        @map("starts_at")
   endsAt              DateTime        @map("ends_at")
-  status              ChallengeStatus @default(ACTIVE)
-  /// Reglas copiadas al crear la edición (un cambio de código no altera una edición en curso).
+  status              ChallengeStatus @default(DRAFT)
+  /// Reglas copiadas al crear el torneo (un cambio de código no altera un torneo en curso).
   gameDurationMs      Int             @default(15000) @map("game_duration_ms")
-  /// Intentos oficiales por participante en TODA la edición (no por día).
+  /// Intentos oficiales por participante en TODO el torneo (los define el admin).
   attempts            Int             @default(3)
-  prize               String          @default("Caja de 3 cookies") @db.VarChar(120)
+  /// Premio del primer puesto (lo define el admin).
+  prize               String          @db.VarChar(120)
+  prizeDescription    String?         @map("prize_description") @db.VarChar(500)
+  createdBy           String?         @map("created_by") @db.VarChar(64)
+  cancelledAt         DateTime?       @map("cancelled_at")
+  cancelledBy         String?         @map("cancelled_by") @db.VarChar(64)
+  cancelReason        String?         @map("cancel_reason") @db.VarChar(300)
   pausedAt            DateTime?       @map("paused_at")
   pausedBy            String?         @map("paused_by") @db.VarChar(64)
   pauseReason         String?         @map("pause_reason") @db.VarChar(300)
@@ -427,11 +440,12 @@ model ChallengeEdition {
   disqualifications ChallengeDisqualification[]
   actions           ChallengeAdminAction[]
   claim             ChallengePrizeClaim?
+  invites           ChallengeInvite[]
+  referrals         ChallengeReferral[]
 
-  /// Nunca dos ediciones del mismo tipo por semana.
-  @@unique([weekStart, isTest])
   @@unique([isTest, number])
   @@index([startsAt])
+  @@index([status, startsAt])
   @@map("challenge_editions")
 }
 
@@ -460,13 +474,16 @@ model ChallengeParticipant {
   games             ChallengeGame[]
   disqualifications ChallengeDisqualification[]
   claims            ChallengePrizeClaim[]
+  invites           ChallengeInvite[]
+  referralsMade     ChallengeReferral[]          @relation("referrer")
+  referredBy        ChallengeReferral[]          @relation("referred")
 
   @@index([ipHash])
   @@map("challenge_participants")
 }
 
 enum ChallengeGameStatus {
-  /// Intento reservado: consume uno de los 3 de la edición aunque se abandone.
+  /// Intento reservado: consume uno de los intentos del torneo aunque se abandone.
   STARTED
   FINISHED
   /// No se cerró a tiempo: intento usado, sin puntaje.
@@ -495,7 +512,7 @@ model ChallengeGame {
   edition       ChallengeEdition     @relation(fields: [editionId], references: [id], onDelete: Restrict)
   participantId String               @map("participant_id") @db.VarChar(40)
   participant   ChallengeParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
-  /// Número de intento dentro de la edición (1..attempts).
+  /// Número de intento dentro del torneo (1..attempts).
   attemptNumber Int                  @map("attempt_number")
   status        ChallengeGameStatus  @default(STARTED)
   /// Hora del SERVIDOR.
@@ -517,12 +534,15 @@ model ChallengeGame {
   reviewedAt    DateTime?            @map("reviewed_at")
   reviewedBy    String?              @map("reviewed_by") @db.VarChar(64)
   reviewReason  String?              @map("review_reason") @db.VarChar(300)
+  /// Id aleatorio que manda el navegador al tocar "Jugar": un reintento o doble toque devuelve la MISMA partida (no consume otro intento).
+  clientRequestId String?            @map("client_request_id") @db.VarChar(40)
 
-  /// Dos pestañas o pedidos simultáneos nunca toman el mismo intento de la edición.
+  /// Dos pestañas o pedidos simultáneos nunca toman el mismo intento del torneo.
   @@unique([participantId, editionId, attemptNumber])
   @@index([editionId, status, score])
   @@index([editionId, review])
   @@index([editionId, ipHash])
+  @@unique([participantId, clientRequestId])
   @@map("challenge_games")
 }
 
@@ -550,7 +570,7 @@ enum ChallengeClaimStatus {
   DELIVERED
 }
 
-/// Premio del primer puesto confirmado (uno por edición). Se crea al publicar
+/// Premio del primer puesto confirmado (uno por torneo). Se crea al publicar
 /// resultados. Nombre y celular solo los carga el ganador desde SU sesión, y
 /// solo se ven en el panel (nunca públicos).
 model ChallengePrizeClaim {
@@ -588,4 +608,66 @@ model ChallengeAdminAction {
 
   @@index([editionId, createdAt])
   @@map("challenge_admin_actions")
+}
+
+/// Enlace personal de invitación de un participante para un torneo
+/// (/campeonato?torneo=…&ref=CODIGO). El código es público y aleatorio: no
+/// autentica a nadie ni da intentos, puntos ni ventajas. Solo sirve para medir
+/// la difusión.
+model ChallengeInvite {
+  id            String               @id @default(cuid()) @db.VarChar(40)
+  editionId     String               @map("edition_id") @db.VarChar(40)
+  edition       ChallengeEdition     @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  participantId String               @map("participant_id") @db.VarChar(40)
+  participant   ChallengeParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  /// Código público (10 caracteres aleatorios, ~50 bits).
+  code          String               @unique @db.VarChar(16)
+  /// HMAC de la IP al crear el enlace (para marcar registros desde la misma conexión).
+  ipHash        String?              @map("ip_hash") @db.VarChar(64)
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  visits    ChallengeInviteVisit[]
+  referrals ChallengeReferral[]
+
+  /// Un enlace por participante y torneo.
+  @@unique([editionId, participantId])
+  @@map("challenge_invites")
+}
+
+/// Visita atribuida a un enlace: una por visitante (id aleatorio del
+/// navegador, guardado solo como hash). No es una "invitación enviada": solo
+/// prueba que alguien abrió el enlace.
+model ChallengeInviteVisit {
+  id          String          @id @default(cuid()) @db.VarChar(40)
+  inviteId    String          @map("invite_id") @db.VarChar(40)
+  invite      ChallengeInvite @relation(fields: [inviteId], references: [id], onDelete: Restrict)
+  visitorHash String          @map("visitor_hash") @db.VarChar(64)
+  ipHash      String?         @map("ip_hash") @db.VarChar(64)
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  @@unique([inviteId, visitorHash])
+  @@index([inviteId, ipHash])
+  @@map("challenge_invite_visits")
+}
+
+/// Registro nuevo atribuido a un enlace. Lo decide el servidor al crear la
+/// identidad (nunca el navegador). Una persona cuenta como referida una sola vez
+/// por torneo y nunca de su propio enlace.
+model ChallengeReferral {
+  id             String               @id @default(cuid()) @db.VarChar(40)
+  editionId      String               @map("edition_id") @db.VarChar(40)
+  edition        ChallengeEdition     @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  inviteId       String               @map("invite_id") @db.VarChar(40)
+  invite         ChallengeInvite      @relation(fields: [inviteId], references: [id], onDelete: Restrict)
+  referrerId     String               @map("referrer_id") @db.VarChar(40)
+  referrer       ChallengeParticipant @relation("referrer", fields: [referrerId], references: [id], onDelete: Restrict)
+  referredId     String               @map("referred_id") @db.VarChar(40)
+  referred       ChallengeParticipant @relation("referred", fields: [referredId], references: [id], onDelete: Restrict)
+  /// Misma conexión que quien invitó (puede ser familia, o la misma persona): se muestra aparte, no se bloquea.
+  sameConnection Boolean              @default(false) @map("same_connection")
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  @@unique([editionId, referredId])
+  @@index([inviteId])
+  @@map("challenge_referrals")
 }

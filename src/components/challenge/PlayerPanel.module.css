@@ -75,14 +75,16 @@
   color: #ffd2c2;
 }
 
-/* Práctica: separada de la competencia por una línea. */
-.practice {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 8px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--ch-line);
+/* Intentos agotados */
+.exhausted {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 6vw, 1.625rem);
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--ch-caramel-light);
+}
+
+.instagram {
+  min-width: min(100%, 280px);
 }
