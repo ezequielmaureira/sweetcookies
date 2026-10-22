@@ -8,7 +8,8 @@ import { CrumbField } from "@/lib/challenge/crumbs";
 import { GAME_DURATION_MS, URGENT_MS, createTapCounter, formatTimer, type TapCounter } from "@/lib/challenge/scoring";
 import styles from "./ChallengeGame.module.css";
 
-export type GameResult = { bites: number; cookies: number };
+/** Resultado local (provisorio) + toques para que el servidor calcule el puntaje oficial. */
+export type GameResult = { bites: number; cookies: number; taps: number[]; untrusted: number };
 
 type Stage = "countdown" | "playing" | "over";
 
@@ -19,6 +20,8 @@ const COUNTDOWN_STEP_MS = 650;
 const RESULT_DELAY_MS = 1100;
 /** Toque válido: dentro del círculo de la cookie, con margen para el dedo (fracción del lado). */
 const HIT_RADIUS = 0.54;
+/** Toques que se guardan para enviar (más que el máximo contable). */
+const MAX_RECORDED_TAPS = 600;
 
 const SQUASH: Keyframe[] = [{ transform: "scale(1)" }, { transform: "scale(0.965)" }, { transform: "scale(1)" }];
 const POP_IN: Keyframe[] = [
@@ -42,6 +45,9 @@ type Engine = {
   cookies: number;
   cookieIndex: number;
   inCookie: number;
+  /** Toques planos [t, x, y, …] (ms desde el "¡YA!", posición 0–100). */
+  taps: number[];
+  untrusted: number;
   squash: Animation | null;
   pop: Animation | null;
 };
@@ -51,6 +57,9 @@ type ChallengeGameProps = {
   isCutout: boolean;
   alt: string;
   logoSrc: string | null;
+  /** Etiqueta visible: partida oficial o práctica (no cambia el juego). */
+  modeLabel: string;
+  practice: boolean;
   onFinish: (result: GameResult) => void;
   onExit: () => void;
 };
@@ -59,7 +68,7 @@ type ChallengeGameProps = {
  * Partida de 15 s: cuenta regresiva → toques → "¡TIEMPO!" → onFinish.
  * El cronómetro se calcula siempre contra performance.now() (no suma intervalos).
  */
-export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit }: ChallengeGameProps) {
+export function ChallengeGame({ image, isCutout, alt, logoSrc, modeLabel, practice, onFinish, onExit }: ChallengeGameProps) {
   const [stage, setStage] = useState<Stage>("countdown");
   const [step, setStep] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -101,6 +110,8 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
       inCookie: 0,
       squash: null,
       pop: null,
+      taps: [],
+      untrusted: 0,
     };
     engineRef.current = engine;
     engine.renderer.reset(sequence);
@@ -130,7 +141,7 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
       setStage("over");
       if (!engine.reduced) navigator.vibrate?.([30, 60, 30]);
       timers.push(
-        window.setTimeout(() => onFinishRef.current({ bites: engine.bites, cookies: engine.cookies }), RESULT_DELAY_MS),
+        window.setTimeout(() => onFinishRef.current({ bites: engine.bites, cookies: engine.cookies, taps: engine.taps, untrusted: engine.untrusted }), RESULT_DELAY_MS),
       );
     };
 
@@ -174,18 +185,26 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
     };
   }, [image, isCutout]);
 
-  const bite = (clientX?: number, clientY?: number) => {
+  const bite = (clientX?: number, clientY?: number, trusted = true) => {
     const engine = engineRef.current;
     const stageEl = stageRef.current;
     if (!engine || !engine.playing || !stageEl) return;
-    const at = performance.now() - engine.startAt;
+    // Milisegundos enteros: el servidor recalcula con exactamente los mismos valores.
+    const at = Math.round(performance.now() - engine.startAt);
 
+    let x = 50;
+    let y = 50;
     if (clientX !== undefined && clientY !== undefined) {
       const rect = stageEl.getBoundingClientRect();
       const dx = (clientX - rect.left) / rect.width - 0.5;
       const dy = (clientY - rect.top) / rect.height - 0.5;
       if (Math.hypot(dx, dy) > HIT_RADIUS) return;
+      x = Math.min(100, Math.max(0, Math.round((dx + 0.5) * 100)));
+      y = Math.min(100, Math.max(0, Math.round((dy + 0.5) * 100)));
     }
+    // Cada toque sobre la cookie se registra para que el servidor calcule el puntaje.
+    if (engine.taps.length < MAX_RECORDED_TAPS * 3) engine.taps.push(at, x, y);
+    if (!trusted) engine.untrusted++;
     if (!engine.counter.tap(at)) return;
 
     const current = engine.sequence[engine.inCookie];
@@ -221,13 +240,13 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
-    bite(event.clientX, event.clientY);
+    bite(event.clientX, event.clientY, event.nativeEvent.isTrusted);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== " " && event.key !== "Enter") return;
     event.preventDefault();
-    if (!event.repeat) bite();
+    if (!event.repeat) bite(undefined, undefined, event.nativeEvent.isTrusted);
   };
 
   const showCount = stage === "countdown" || (stage === "playing" && step === GO_STEP);
@@ -238,6 +257,7 @@ export function ChallengeGame({ image, isCutout, alt, logoSrc, onFinish, onExit 
 
       <header className={styles.top}>
         <Brand logoSrc={logoSrc} size="sm" decorative />
+        <span className={`${styles.mode} ${practice ? styles.modePractice : ""}`}>{modeLabel}</span>
         <button type="button" className={styles.exit} onClick={onExit}>
           Salir
         </button>

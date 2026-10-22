@@ -1,0 +1,88 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 20px 16px;
+  border: 1px solid var(--ch-line);
+  border-radius: 24px;
+  background: rgba(42, 25, 16, 0.78);
+}
+
+.play {
+  min-width: min(100%, 280px);
+}
+
+.hello {
+  font-size: 1.0625rem;
+  color: var(--ch-cream);
+}
+
+.hello strong {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--ch-caramel-light);
+}
+
+.best {
+  font-size: 0.9375rem;
+  color: var(--ch-cream-soft);
+}
+
+.best strong {
+  color: var(--ch-cream);
+}
+
+.attempts {
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--ch-cream);
+}
+
+.reset {
+  font-size: 0.9375rem;
+  color: var(--ch-cream-soft);
+}
+
+.reset strong {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ch-caramel-light);
+}
+
+.muted {
+  font-size: 0.9375rem;
+  color: var(--ch-cream-soft);
+}
+
+.small {
+  max-width: 34ch;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ch-cream-soft);
+  opacity: 0.85;
+}
+
+.warning {
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(232, 100, 60, 0.12);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: #ffd2c2;
+}
+
+/* Práctica: separada de la competencia por una línea. */
+.practice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--ch-line);
+}

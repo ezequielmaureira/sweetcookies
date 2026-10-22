@@ -1,0 +1,262 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.headerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.muted {
+  font-size: 0.9375rem;
+  color: var(--color-muted);
+}
+
+.select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.select select {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font: inherit;
+  color: var(--color-ink);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.stats div {
+  padding: 12px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-cream);
+}
+
+.stats dt {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.stats dd {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-chocolate);
+}
+
+.alert {
+  color: var(--color-terracotta) !important;
+}
+
+.alertText {
+  font-size: 0.9375rem;
+  color: var(--color-terracotta);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.notice {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-cream-deep);
+  font-size: 0.9375rem;
+  color: var(--color-chocolate);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th,
+.table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.leader {
+  background: rgba(240, 195, 90, 0.14);
+}
+
+.contact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.contact a {
+  color: var(--color-chocolate);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.flags {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.rowActions {
+  display: flex;
+  gap: 6px;
+}
+
+.approve,
+.danger {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.approve {
+  border: 1px solid rgba(58, 36, 25, 0.35);
+  color: var(--color-chocolate);
+}
+
+.danger {
+  border: 1px solid rgba(176, 78, 54, 0.45);
+  color: var(--color-terracotta);
+}
+
+.approve:disabled,
+.danger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(58, 36, 25, 0.22);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--color-chocolate);
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--color-chocolate);
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+}
+
+.list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Estados y revisión */
+.statusACTIVE {
+  color: #2f7a3e;
+}
+
+.statusPAUSED,
+.statusSCHEDULED {
+  color: #a06a12;
+}
+
+.statusFINISHED {
+  color: var(--color-terracotta);
+}
+
+.statusRESULTS_PUBLISHED {
+  color: var(--color-chocolate);
+}
+
+.reviewNONE {
+  color: var(--color-muted);
+}
+
+.reviewPENDING,
+.suspicionHIGH {
+  font-weight: 600;
+  color: var(--color-terracotta);
+}
+
+.reviewAPPROVED {
+  color: #2f7a3e;
+}
+
+.reviewREJECTED {
+  text-decoration: line-through;
+  color: var(--color-terracotta);
+}
+
+.suspicionLOW {
+  color: #a06a12;
+}
+
+.suspicionNONE {
+  color: var(--color-muted);
+}
+
+/* Aviso de modo prueba */
+.testMode {
+  border-style: dashed;
+}

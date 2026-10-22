@@ -50,6 +50,7 @@
   letter-spacing: 0.01em;
   line-height: 1;
   text-transform: uppercase;
+  text-decoration: none;
   box-shadow:
     0 6px 0 var(--ch-caramel-deep),
     0 16px 34px rgba(0, 0, 0, 0.45),

@@ -373,3 +373,219 @@ model RecipeExtraCost {
   @@index([recipeId])
   @@map("recipe_extra_costs")
 }
+
+/**
+ * ---------- Sweet Click Challenge (campeonato semanal) ----------
+ * Módulo independiente: no se relaciona con productos, pedidos ni vouchers.
+ */
+
+/// Estado GUARDADO de una edición. Por fecha se calcula al leer: antes del
+/// lunes = SCHEDULED, después del viernes 23:59:59 = FINISHED (ver
+/// api/src/challenge-time.ts → effectiveStatus). PAUSED y RESULTS_PUBLISHED
+/// solo los pone el admin.
+enum ChallengeStatus {
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  FINISHED
+  RESULTS_PUBLISHED
+}
+
+/// Una edición por semana (lunes 00:00 a viernes 23:59:59, hora de Córdoba;
+/// sábado revisión, domingo cerrado). Se crea sola la primera vez que alguien
+/// consulta esa semana (sin cron). Las ediciones de PRUEBA y las oficiales
+/// nunca se mezclan: cada una tiene su numeración y su ranking.
+model ChallengeEdition {
+  id                  String          @id @default(cuid()) @db.VarChar(40)
+  /// true = prueba privada (sin premio real). Las oficiales se activan con CHALLENGE_MODE=official.
+  isTest              Boolean         @default(true) @map("is_test")
+  /// Número visible (Edición #1, #2…), independiente para prueba y oficial.
+  number              Int
+  /// Lunes de la semana en Córdoba (YYYY-MM-DD).
+  weekStart           String          @map("week_start") @db.VarChar(10)
+  startsAt            DateTime        @map("starts_at")
+  endsAt              DateTime        @map("ends_at")
+  status              ChallengeStatus @default(ACTIVE)
+  /// Reglas copiadas al crear la edición (un cambio de código no altera una edición en curso).
+  gameDurationMs      Int             @default(15000) @map("game_duration_ms")
+  /// Intentos oficiales por participante en TODA la edición (no por día).
+  attempts            Int             @default(3)
+  prize               String          @default("Caja de 3 cookies") @db.VarChar(120)
+  pausedAt            DateTime?       @map("paused_at")
+  pausedBy            String?         @map("paused_by") @db.VarChar(64)
+  pauseReason         String?         @map("pause_reason") @db.VarChar(300)
+  /// Ganador confirmado por el admin al publicar resultados (nunca automático).
+  winnerParticipantId String?         @map("winner_participant_id") @db.VarChar(40)
+  winnerGameId        String?         @map("winner_game_id") @db.VarChar(40)
+  winnerScore         Int?            @map("winner_score")
+  resultsPublishedAt  DateTime?       @map("results_published_at")
+  resultsPublishedBy  String?         @map("results_published_by") @db.VarChar(64)
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  games             ChallengeGame[]
+  disqualifications ChallengeDisqualification[]
+  actions           ChallengeAdminAction[]
+  claim             ChallengePrizeClaim?
+
+  /// Nunca dos ediciones del mismo tipo por semana.
+  @@unique([weekStart, isTest])
+  @@unique([isTest, number])
+  @@index([startsAt])
+  @@map("challenge_editions")
+}
+
+/// Participante: solo su @ de Instagram (sin contraseña). Se lo reconoce por
+/// un token aleatorio que solo tiene su navegador; acá se guarda únicamente su
+/// hash SHA-256. El @ no prueba identidad: es un dato declarado.
+model ChallengeParticipant {
+  id                 String    @id @default(cuid()) @db.VarChar(40)
+  /// Usuario de Instagram en minúsculas, sin @. Único: el mismo @ no obtiene otra sesión (ni otros intentos) desde otro navegador.
+  instagram          String    @unique @db.VarChar(30)
+  termsAcceptedAt    DateTime  @map("terms_accepted_at")
+  termsVersion       String    @map("terms_version") @db.VarChar(30)
+  tokenHash          String    @unique @map("token_hash") @db.VarChar(64)
+  tokenIssuedAt      DateTime  @map("token_issued_at")
+  /// HMAC-SHA256 de la IP al registrarse (nunca la IP en texto plano). null = sin clave configurada.
+  ipHash             String?   @map("ip_hash") @db.VarChar(64)
+  /// Veces que alguien intentó registrar este mismo @ desde otro navegador (alerta para el admin).
+  duplicateAttempts  Int       @default(0) @map("duplicate_attempts")
+  lastDuplicateAt    DateTime? @map("last_duplicate_at")
+  /// Recuperación manual: código de un solo uso que genera el admin (solo su hash).
+  recoveryCodeHash   String?   @map("recovery_code_hash") @db.VarChar(64)
+  recoveryExpiresAt  DateTime? @map("recovery_expires_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  lastSeenAt         DateTime? @map("last_seen_at")
+
+  games             ChallengeGame[]
+  disqualifications ChallengeDisqualification[]
+  claims            ChallengePrizeClaim[]
+
+  @@index([ipHash])
+  @@map("challenge_participants")
+}
+
+enum ChallengeGameStatus {
+  /// Intento reservado: consume uno de los 3 de la edición aunque se abandone.
+  STARTED
+  FINISHED
+  /// No se cerró a tiempo: intento usado, sin puntaje.
+  EXPIRED
+}
+
+enum ChallengeSuspicion {
+  NONE
+  LOW
+  HIGH
+}
+
+enum ChallengeReview {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Una partida oficial = un intento. Nunca se borra. El puntaje lo calcula el
+/// servidor a partir de los toques; nunca se acepta un total enviado por el
+/// navegador. Las partidas de práctica no llegan al servidor.
+model ChallengeGame {
+  id            String               @id @default(cuid()) @db.VarChar(40)
+  editionId     String               @map("edition_id") @db.VarChar(40)
+  edition       ChallengeEdition     @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  participantId String               @map("participant_id") @db.VarChar(40)
+  participant   ChallengeParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  /// Número de intento dentro de la edición (1..attempts).
+  attemptNumber Int                  @map("attempt_number")
+  status        ChallengeGameStatus  @default(STARTED)
+  /// Hora del SERVIDOR.
+  startedAt     DateTime             @map("started_at")
+  finishedAt    DateTime?            @map("finished_at")
+  /// HMAC-SHA256 de la IP al reservar el intento (posibles duplicados; nunca bloquea solo).
+  ipHash        String?              @map("ip_hash") @db.VarChar(64)
+  score         Int?
+  cookies       Int?
+  tapsReceived  Int?                 @map("taps_received")
+  tapsIgnored   Int?                 @map("taps_ignored")
+  untrustedTaps Int?                 @map("untrusted_taps")
+  /// Toques recibidos, planos: [t, x, y, t, x, y, …] (ms desde el "¡YA!", posición 0–100).
+  taps          Int[]
+  /// Señales de sospecha (solas no descalifican).
+  flags         String[]
+  suspicion     ChallengeSuspicion   @default(NONE)
+  review        ChallengeReview      @default(NONE)
+  reviewedAt    DateTime?            @map("reviewed_at")
+  reviewedBy    String?              @map("reviewed_by") @db.VarChar(64)
+  reviewReason  String?              @map("review_reason") @db.VarChar(300)
+
+  /// Dos pestañas o pedidos simultáneos nunca toman el mismo intento de la edición.
+  @@unique([participantId, editionId, attemptNumber])
+  @@index([editionId, status, score])
+  @@index([editionId, review])
+  @@index([editionId, ipHash])
+  @@map("challenge_games")
+}
+
+/// Descalificación de un participante en una edición (con motivo y autor).
+model ChallengeDisqualification {
+  id            String               @id @default(cuid()) @db.VarChar(40)
+  editionId     String               @map("edition_id") @db.VarChar(40)
+  edition       ChallengeEdition     @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  participantId String               @map("participant_id") @db.VarChar(40)
+  participant   ChallengeParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  reason        String               @db.VarChar(300)
+  createdBy     String               @map("created_by") @db.VarChar(64)
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  @@unique([editionId, participantId])
+  @@map("challenge_disqualifications")
+}
+
+enum ChallengeClaimStatus {
+  /// Ganador confirmado; todavía no dejó sus datos.
+  PENDING
+  /// Dejó nombre y celular desde su sesión.
+  CLAIMED
+  CONTACTED
+  DELIVERED
+}
+
+/// Premio del primer puesto confirmado (uno por edición). Se crea al publicar
+/// resultados. Nombre y celular solo los carga el ganador desde SU sesión, y
+/// solo se ven en el panel (nunca públicos).
+model ChallengePrizeClaim {
+  id            String               @id @default(cuid()) @db.VarChar(40)
+  editionId     String               @unique @map("edition_id") @db.VarChar(40)
+  edition       ChallengeEdition     @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  participantId String               @map("participant_id") @db.VarChar(40)
+  participant   ChallengeParticipant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  gameId        String               @map("game_id") @db.VarChar(40)
+  status        ChallengeClaimStatus @default(PENDING)
+  name          String?              @db.VarChar(60)
+  /// WhatsApp normalizado (549 + 10 dígitos). Nunca público.
+  phone         String?              @db.VarChar(16)
+  claimedAt     DateTime?            @map("claimed_at")
+  contactedAt   DateTime?            @map("contacted_at")
+  deliveredAt   DateTime?            @map("delivered_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+
+  @@index([participantId])
+  @@map("challenge_prize_claims")
+}
+
+/// Registro de cada acción administrativa del campeonato (quién, qué, cuándo y por qué).
+model ChallengeAdminAction {
+  id            String            @id @default(cuid()) @db.VarChar(40)
+  editionId     String?           @map("edition_id") @db.VarChar(40)
+  edition       ChallengeEdition? @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  participantId String?           @map("participant_id") @db.VarChar(40)
+  gameId        String?           @map("game_id") @db.VarChar(40)
+  action        String            @db.VarChar(40)
+  reason        String?           @db.VarChar(300)
+  adminUserId   String            @map("admin_user_id") @db.VarChar(64)
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  @@index([editionId, createdAt])
+  @@map("challenge_admin_actions")
+}

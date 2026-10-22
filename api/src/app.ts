@@ -16,6 +16,8 @@ import { registerManagementRoutes } from "./management-routes.ts";
 import type { SiteContentRepository } from "./site-content-repository.ts";
 import { registerSiteContentRoutes } from "./site-content-routes.ts";
 import { validateOrdersPatch, validateSettingsInput, type PublicSettings } from "./settings.ts";
+import type { ChallengeRepository } from "./challenge.ts";
+import { registerChallengeRoutes, type ChallengeConfig } from "./challenge-routes.ts";
 import type { VoucherRepository } from "./voucher-repository.ts";
 import { registerVoucherRoutes } from "./voucher-routes.ts";
 
@@ -30,6 +32,10 @@ type Deps = {
   content?: SiteContentRepository;
   /** Gestión de costos: ingredientes, precios y recetas (opcional: sin él, esas rutas no existen). */
   management?: ManagementRepository;
+  /** Sweet Click Challenge (opcional: sin él, las rutas del campeonato no existen). */
+  challenge?: ChallengeRepository;
+  /** Modo (prueba/oficial), clave del HMAC de IP y proxy confiable del campeonato. */
+  challengeConfig?: ChallengeConfig;
   auth: AuthService;
   allowedOrigins: string[];
   /** Límite de pedidos por IP (por defecto 8 cada 10 minutos). */
@@ -63,6 +69,8 @@ export function createApp({
   vouchers,
   content,
   management,
+  challenge,
+  challengeConfig = { official: false, ipSecret: null, trustProxy: "socket" },
   auth,
   allowedOrigins,
   orderLimiter = createRateLimiter({ limit: 8, windowMs: 10 * 60 * 1000 }),
@@ -295,6 +303,9 @@ export function createApp({
 
   // Gestión de costos (solo admin: ingredientes, precios y recetas).
   if (management) registerManagementRoutes(app, { management, log });
+
+  // Sweet Click Challenge (público: edición y top 10 · participante: registro y partidas · admin: revisión).
+  if (challenge) registerChallengeRoutes(app, { challenge, settings: repo, allowedOrigins, log, config: challengeConfig });
 
   return app;
 }

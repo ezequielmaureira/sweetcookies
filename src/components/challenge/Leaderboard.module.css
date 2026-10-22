@@ -1,0 +1,149 @@
+.board {
+  width: 100%;
+  margin-top: 28px;
+  padding: 20px 14px 14px;
+  border: 1px solid var(--ch-line);
+  border-radius: 24px;
+  background: rgba(42, 25, 16, 0.72);
+  text-align: left;
+  scroll-margin-top: 16px;
+}
+
+.head {
+  padding: 0 6px 12px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ch-cream);
+}
+
+.note {
+  margin-top: 4px;
+  font-size: 0.875rem;
+  color: var(--ch-caramel-light);
+}
+
+.empty {
+  padding: 18px 6px 10px;
+  font-size: 0.9375rem;
+  color: var(--ch-cream-soft);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.columns,
+.row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 72px 56px;
+  align-items: center;
+  gap: 8px;
+}
+
+.columns {
+  padding: 0 10px 2px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ch-cream-soft);
+}
+
+.row {
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(246, 233, 212, 0.04);
+}
+
+.num {
+  text-align: right;
+}
+
+.position {
+  display: flex;
+}
+
+.badge {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(246, 233, 212, 0.08);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ch-cream);
+}
+
+.alias {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ch-cream);
+}
+
+.you {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ch-caramel);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2a1308;
+}
+
+.score {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ch-caramel-light);
+}
+
+.cookies {
+  font-variant-numeric: tabular-nums;
+  color: var(--ch-cream-soft);
+}
+
+/* Podio: oro, plata, bronce (solo el 1.º gana premio). */
+.gold {
+  background: linear-gradient(90deg, rgba(240, 195, 90, 0.2), rgba(240, 195, 90, 0.04));
+  box-shadow: inset 0 0 0 1px rgba(240, 195, 90, 0.45);
+}
+
+.gold .badge {
+  background: linear-gradient(180deg, #ffe08a, #e0a93a);
+  color: #3a2408;
+}
+
+.silver .badge {
+  background: linear-gradient(180deg, #f1f1f1, #a9b0b8);
+  color: #2b2f33;
+}
+
+.bronze .badge {
+  background: linear-gradient(180deg, #f0b98a, #b06a3a);
+  color: #2e1606;
+}
+
+.mine {
+  box-shadow: inset 0 0 0 2px var(--ch-caramel);
+}

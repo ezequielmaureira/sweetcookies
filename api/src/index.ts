@@ -3,6 +3,7 @@ import { createApp } from "./app.ts";
 import { createClerkAuth } from "./auth.ts";
 import { loadEnv } from "./env.ts";
 import { createProductRepository } from "./catalog-repository.ts";
+import { createChallengeRepository } from "./challenge-repository.ts";
 import { createImageRepository } from "./image-repository.ts";
 import { createOrderRepository } from "./order-repository.ts";
 import { createPrismaClient, createSettingsRepository } from "./repository.ts";
@@ -19,6 +20,7 @@ const images = createImageRepository(prisma);
 const vouchers = createVoucherRepository(prisma);
 const content = createSiteContentRepository(prisma);
 const management = createManagementRepository(prisma);
+const challenge = createChallengeRepository(prisma);
 const auth = createClerkAuth({
   secretKey: env.clerkSecretKey,
   publishableKey: env.clerkPublishableKey,
@@ -26,7 +28,9 @@ const auth = createClerkAuth({
   adminEmails: env.adminEmails,
 });
 
-const app = createApp({ repo, products, orders, images, vouchers, content, management, auth, allowedOrigins: env.allowedOrigins });
+const challengeConfig = { official: env.challengeOfficial, ipSecret: env.challengeIpSecret, trustProxy: env.trustFlyProxy ? ("fly" as const) : ("socket" as const) };
+
+const app = createApp({ repo, products, orders, images, vouchers, content, management, challenge, challengeConfig, auth, allowedOrigins: env.allowedOrigins });
 
 const server = serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, (info) => {
   // No se loguean los emails: solo cuántos admins hay configurados.
@@ -34,6 +38,7 @@ const server = serve({ fetch: app.fetch, port: env.port, hostname: "0.0.0.0" }, 
     `sweetcookies-api escuchando en :${info.port} · orígenes admin: ${env.allowedOrigins.join(", ")} · admins configurados: ${env.adminEmails.size}`,
   );
   if (env.adminEmails.size === 0) console.warn("ADMIN_EMAILS vacío: nadie puede usar /api/admin.");
+  console.log(`campeonato: modo ${env.challengeOfficial ? "OFICIAL" : "prueba"} · HMAC de IP ${env.challengeIpSecret ? "activo" : "desactivado (falta CHALLENGE_IP_SECRET)"}`);
 });
 
 const shutdown = () => {

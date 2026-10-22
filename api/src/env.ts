@@ -12,6 +12,12 @@ export type Env = {
   allowedOrigins: string[];
   /** ADMIN_EMAILS normalizado. Vacío = nadie es admin. */
   adminEmails: ReadonlySet<string>;
+  /** Sweet Click Challenge: true solo con CHALLENGE_MODE=official (por defecto, ediciones de prueba). */
+  challengeOfficial: boolean;
+  /** Clave del HMAC de IP del campeonato (CHALLENGE_IP_SECRET). null = no se guarda ningún dato de IP. */
+  challengeIpSecret: string | null;
+  /** En Fly.io (FLY_APP_NAME) la IP sale de Fly-Client-IP; en local, de la conexión. */
+  trustFlyProxy: boolean;
 };
 
 function required(name: string): string {
@@ -37,5 +43,8 @@ export function loadEnv(): Env {
     clerkPublishableKey: required("CLERK_PUBLISHABLE_KEY"),
     allowedOrigins,
     adminEmails: parseAdminEmails(process.env.ADMIN_EMAILS),
+    challengeOfficial: process.env.CHALLENGE_MODE?.trim() === "official",
+    challengeIpSecret: (process.env.CHALLENGE_IP_SECRET?.trim().length ?? 0) >= 32 ? process.env.CHALLENGE_IP_SECRET!.trim() : null,
+    trustFlyProxy: Boolean(process.env.FLY_APP_NAME),
   };
 }
