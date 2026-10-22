@@ -34,7 +34,7 @@ export const FINISH_GRACE_MS = 10 * 60 * 1000;
  * torneo, lo que sea más tarde). Nunca se aceptan partidas que empiecen después.
  */
 export const CLOSE_GRACE_MS = 2 * 60 * 1000;
-export const TERMS_VERSION = "2026-10-borrador-3";
+export const TERMS_VERSION = "2026-10-borrador-4";
 /** Vigencia del código de recuperación que genera el admin. */
 export const RECOVERY_TTL_MS = 48 * 60 * 60 * 1000;
 export const TOP_SIZE = 10;
@@ -141,7 +141,7 @@ export function parseFinishInput(body: unknown, durationMs = GAME_DURATION_MS): 
 export const flattenTaps = (taps: readonly Tap[]) => taps.flatMap(({ t, x, y }) => [t, x, y]);
 
 
-/* ---------- Participación: solo el @ de Instagram ---------- */
+/* ---------- Participación: @ de Instagram, nombre y WhatsApp ---------- */
 
 /** Usuario de Instagram: sin @ ni URL, en minúsculas. */
 export function normalizeInstagram(raw: string): string | null {
@@ -152,26 +152,16 @@ export function normalizeInstagram(raw: string): string | null {
   return value;
 }
 
-export type JoinErrors = Partial<Record<"instagram" | "terms" | "body", string>>;
-
-/** Para competir se pide únicamente el @ (y aceptar las bases). */
-export function validateJoin(body: unknown): { ok: true; instagram: string } | { ok: false; errors: JoinErrors } {
-  if (!body || typeof body !== "object") return { ok: false, errors: { body: "Datos inválidos." } };
-  const input = body as Record<string, unknown>;
-  const errors: JoinErrors = {};
-  const instagram = normalizeInstagram(typeof input.instagram === "string" ? input.instagram : "");
-  if (!instagram) errors.instagram = "Escribí tu usuario de Instagram (ej. @tuusuario).";
-  if (input.terms !== true) errors.terms = "Tenés que aceptar las bases y condiciones.";
-  if (!instagram || errors.terms) return { ok: false, errors };
-  return { ok: true, instagram };
-}
-
-/* ---------- Reclamo del premio (solo el ganador confirmado) ---------- */
-
 /** Nombre: letras, espacios, apóstrofo, punto y guion; espacios colapsados. */
 export function normalizeName(raw: string): string | null {
   const value = raw.normalize("NFC").replace(/\s+/g, " ").trim();
   return value.length >= 2 && value.length <= 60 && /^\p{L}[\p{L} '.-]*$/u.test(value) ? value : null;
+}
+
+/** Nombre y apellido: como normalizeName, con al menos dos palabras. */
+export function normalizeFullName(raw: string): string | null {
+  const value = normalizeName(raw);
+  return value && value.split(" ").filter((w) => /\p{L}/u.test(w)).length >= 2 ? value : null;
 }
 
 /**
@@ -195,6 +185,61 @@ export function normalizeArgentinePhone(raw: string): string | null {
   return /^[1-9]\d{9}$/.test(digits) ? `549${digits}` : null;
 }
 
+/**
+ * WhatsApp en formato internacional, solo dígitos (sin +). Sin código de país
+ * se toma como argentino (ver normalizeArgentinePhone). Un número de otro país
+ * se escribe con + o 00 y su código: 8 a 15 dígitos en total (E.164).
+ */
+export function normalizePhone(raw: string): string | null {
+  const value = raw.trim();
+  if (!value || /[^\d\s()+.\-/]/.test(value)) return null;
+  const international = /^(\+|00)/.test(value);
+  const digits = value.replace(/\D/g, "").replace(/^00/, "");
+  if (!international || digits.startsWith("54")) return normalizeArgentinePhone(value);
+  return /^[1-9]\d{7,14}$/.test(digits) ? digits : null;
+}
+
+/** Últimos 4 dígitos (para que el participante reconozca su número sin exponerlo entero). */
+export const phoneHint = (phone: string) => `•••• ${phone.slice(-4)}`;
+
+export type ContactInput = { name: string; phone: string };
+export type ContactErrors = Partial<Record<"name" | "phone" | "terms" | "body", string>>;
+
+const PHONE_ERROR = "Escribí tu WhatsApp con código de área (ej. 358 412-3456). Si no es de Argentina, empezá con + y el código de país.";
+
+/**
+ * Nombre y apellido + WhatsApp + aceptación de las bases (que incluyen el
+ * tratamiento de datos). Obligatorios para jugar.
+ */
+export function validateContact(body: unknown): { ok: true; data: ContactInput } | { ok: false; errors: ContactErrors } {
+  if (!body || typeof body !== "object") return { ok: false, errors: { body: "Datos inválidos." } };
+  const input = body as Record<string, unknown>;
+  const errors: ContactErrors = {};
+  const name = normalizeFullName(typeof input.name === "string" ? input.name : "");
+  const phone = normalizePhone(typeof input.phone === "string" ? input.phone : "");
+  if (!name) errors.name = "Escribí tu nombre y apellido (solo letras).";
+  if (!phone) errors.phone = PHONE_ERROR;
+  if (input.terms !== true) errors.terms = "Tenés que aceptar las bases y condiciones y el tratamiento de tus datos.";
+  if (!name || !phone || errors.terms) return { ok: false, errors };
+  return { ok: true, data: { name, phone } };
+}
+
+export type JoinErrors = Partial<Record<"instagram" | "name" | "phone" | "terms" | "body", string>>;
+
+/** Para competir: @ de Instagram, nombre y apellido, WhatsApp y aceptar las bases. */
+export function validateJoin(body: unknown): { ok: true; instagram: string; contact: ContactInput } | { ok: false; errors: JoinErrors } {
+  if (!body || typeof body !== "object") return { ok: false, errors: { body: "Datos inválidos." } };
+  const input = body as Record<string, unknown>;
+  const instagram = normalizeInstagram(typeof input.instagram === "string" ? input.instagram : "");
+  const contact = validateContact(body);
+  const errors: JoinErrors = contact.ok ? {} : { ...contact.errors };
+  if (!instagram) errors.instagram = "Escribí tu usuario de Instagram (ej. @tuusuario).";
+  if (!instagram || !contact.ok) return { ok: false, errors };
+  return { ok: true, instagram, contact: contact.data };
+}
+
+/* ---------- Reclamo del premio (ganadores sin datos de contacto) ---------- */
+
 export type ClaimInput = { name: string; phone: string };
 export type ClaimErrors = Partial<Record<"name" | "phone" | "body", string>>;
 
@@ -202,10 +247,10 @@ export function validateClaim(body: unknown): { ok: true; data: ClaimInput } | {
   if (!body || typeof body !== "object") return { ok: false, errors: { body: "Datos inválidos." } };
   const input = body as Record<string, unknown>;
   const name = normalizeName(typeof input.name === "string" ? input.name : "");
-  const phone = normalizeArgentinePhone(typeof input.phone === "string" ? input.phone : "");
+  const phone = normalizePhone(typeof input.phone === "string" ? input.phone : "");
   const errors: ClaimErrors = {};
   if (!name) errors.name = "Escribí tu nombre (solo letras).";
-  if (!phone) errors.phone = "Escribí un celular argentino con código de área (ej. 358 412-3456).";
+  if (!phone) errors.phone = PHONE_ERROR;
   if (!name || !phone) return { ok: false, errors };
   return { ok: true, data: { name, phone } };
 }
@@ -219,11 +264,17 @@ export type TournamentInput = {
   endsAt: Date;
   prize: string;
   prizeDescription: string | null;
+  /** Foto del premio (ruta de una imagen subida desde el panel) o null. */
+  prizeImageUrl: string | null;
   attempts: number;
   isTest: boolean;
 };
 
-export type TournamentErrors = Partial<Record<"name" | "description" | "start" | "end" | "prize" | "prizeDescription" | "attempts" | "body", string>>;
+export type TournamentErrors = Partial<Record<"name" | "description" | "start" | "end" | "prize" | "prizeDescription" | "prizeImage" | "attempts" | "body", string>>;
+
+/** Solo imágenes subidas desde el panel (nunca URLs externas): mismo sistema que las fotos de productos. */
+const UPLOADED_IMAGE = /^\/api\/public\/images\/[a-z0-9]{10,40}$/;
+export const isUploadedImagePath = (value: unknown): value is string => typeof value === "string" && UPLOADED_IMAGE.test(value);
 
 const cleanText = (raw: unknown) => (typeof raw === "string" ? raw.normalize("NFC").replace(/\s+/g, " ").trim() : "");
 const cleanLong = (raw: unknown) => (typeof raw === "string" ? raw.normalize("NFC").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim() : "");
@@ -245,6 +296,10 @@ export function validateTournament(body: unknown): { ok: true; data: TournamentI
   if (prize.length < 2 || prize.length > 120) errors.prize = "El premio es obligatorio (2 a 120 caracteres).";
   const prizeDescription = cleanLong(input.prizeDescription);
   if (prizeDescription.length > 500) errors.prizeDescription = "La descripción del premio puede tener hasta 500 caracteres.";
+  // Opcional: sin foto se muestra el diseño de siempre.
+  const rawImage = input.prizeImageUrl;
+  const prizeImageUrl = rawImage === undefined || rawImage === null || rawImage === "" ? null : isUploadedImagePath(rawImage) ? rawImage : undefined;
+  if (prizeImageUrl === undefined) errors.prizeImage = "La foto del premio no es válida: volvé a subirla.";
 
   const attempts = input.attempts;
   if (!Number.isInteger(attempts) || (attempts as number) < MIN_ATTEMPTS || (attempts as number) > MAX_ATTEMPTS) {
@@ -273,6 +328,7 @@ export function validateTournament(body: unknown): { ok: true; data: TournamentI
       endsAt,
       prize,
       prizeDescription: prizeDescription || null,
+      prizeImageUrl: prizeImageUrl ?? null,
       attempts: attempts as number,
       // No hay modo prueba: todos los torneos nuevos son reales.
       isTest: false,
@@ -289,6 +345,7 @@ export function tournamentChanges(current: EditionRecord, next: TournamentInput)
   if (current.endsAt.getTime() !== next.endsAt.getTime()) changes.push("endsAt");
   if (current.prize !== next.prize) changes.push("prize");
   if ((current.prizeDescription ?? null) !== next.prizeDescription) changes.push("prizeDescription");
+  if ((current.prizeImageUrl ?? null) !== next.prizeImageUrl) changes.push("prizeImage");
   if (current.attempts !== next.attempts) changes.push("attempts");
   return changes;
 }
@@ -415,6 +472,7 @@ export type EditionRecord = {
   attempts: number;
   prize: string;
   prizeDescription: string | null;
+  prizeImageUrl: string | null;
   cancelledAt: Date | null;
   cancelReason: string | null;
   deletedAt: Date | null;
@@ -434,7 +492,14 @@ export type ParticipantRecord = {
   duplicateAttempts: number;
   lastDuplicateAt: Date | null;
   createdAt: Date;
+  /** Datos de contacto (privados). null = participante anterior que todavía no los dejó. */
+  fullName: string | null;
+  phone: string | null;
+  contactUpdatedAt: Date | null;
 };
+
+/** Ya dejó nombre y WhatsApp: puede jugar. */
+export const hasContact = (p: Pick<ParticipantRecord, "fullName" | "phone">) => Boolean(p.fullName && p.phone);
 
 export type GameStatus = "STARTED" | "FINISHED" | "EXPIRED";
 export type Review = "NONE" | "PENDING" | "APPROVED" | "REJECTED";
@@ -486,15 +551,20 @@ export type ClaimRecord = {
   editionName: string;
   prize: string;
   prizeDescription: string | null;
+  prizeImageUrl: string | null;
   isTest: boolean;
   participantId: string;
   gameId: string;
   status: ClaimStatus;
+  /** Datos con los que quedó el premio (copiados del registro al confirmar el ganador, o los que dejó al reclamar). */
   name: string | null;
   phone: string | null;
   claimedAt: Date | null;
   contactedAt: Date | null;
   deliveredAt: Date | null;
+  /** @ del ganador y sus datos de contacto ACTUALES (solo para el panel). */
+  instagram: string;
+  current: { name: string | null; phone: string | null; updatedAt: Date | null };
 };
 
 export type AdminRankingRow = RankingRow & {
@@ -507,12 +577,16 @@ export type AdminRankingRow = RankingRow & {
 
 export type AdminGameRow = GameRecord & { instagram: string; taps: number[] };
 
-export type AdminParticipantRow = ParticipantRecord & {
+/** Participante en el panel: SIN teléfono (minimización); solo si tiene los datos completos. */
+export type AdminParticipantRow = Omit<ParticipantRecord, "phone"> & {
   /** Intentos usados y mejor puntaje en el torneo consultado. */
   attemptsUsed: number;
   best: number | null;
   lastSeenAt: Date | null;
   recoveryPending: boolean;
+  hasContact: boolean;
+  /** El mismo WhatsApp figura en otro @ (posible duplicado: solo se revisa). */
+  sharedPhone: boolean;
 };
 
 /** Posibles duplicados: varios @ desde la misma conexión (puede ser una familia: no se bloquea). */
@@ -586,7 +660,14 @@ export type ChallengeRepository = {
   countPendingWinners(now: Date): Promise<number>;
 
   /** DuplicateParticipantError si el @ ya existe. */
-  createParticipant(data: { instagram: string; tokenHash: string; ipHash: string | null; now: Date }): Promise<ParticipantRecord>;
+  createParticipant(data: { instagram: string; contact: ContactInput; tokenHash: string; ipHash: string | null; now: Date }): Promise<ParticipantRecord>;
+  /**
+   * El participante (su sesión) deja o actualiza su nombre y WhatsApp. Si es un
+   * ganador anterior que todavía no los había dejado, su premio pendiente los toma.
+   */
+  updateContact(participantId: string, contact: ContactInput, now: Date): Promise<ParticipantRecord | null>;
+  /** Borra los datos de contacto a pedido del participante (los vuelve a pedir antes de jugar). */
+  eraseContact(participantId: string, reason: string | null, adminUserId: string): Promise<boolean>;
   /** Alguien intentó registrar un @ que ya tiene sesión: queda como alerta para el admin. */
   noteDuplicate(instagram: string, now: Date): Promise<void>;
   findParticipantByTokenHash(tokenHash: string, now: Date): Promise<ParticipantRecord | null>;
@@ -622,7 +703,7 @@ export type ChallengeRepository = {
 
   /** Premios del participante (más recientes primero). */
   claimsOf(participantId: string): Promise<ClaimRecord[]>;
-  /** Nombre y celular del ganador: solo su sesión, solo una vez (PENDING → CLAIMED). null = no corresponde. */
+  /** Nombre y celular del ganador sin datos registrados: solo su sesión, solo una vez (PENDING → CLAIMED). null = no corresponde. */
   submitClaim(editionId: string, participantId: string, data: ClaimInput, now: Date): Promise<ClaimRecord | null>;
   getClaim(editionId: string): Promise<ClaimRecord | null>;
   setClaimStatus(editionId: string, status: "CONTACTED" | "DELIVERED", reason: string | null, adminUserId: string): Promise<ClaimRecord | null>;
@@ -639,7 +720,7 @@ export type ChallengeRepository = {
   reviewGame(gameId: string, decision: "APPROVED" | "REJECTED", reason: string, adminUserId: string): Promise<GameRecord | null>;
   disqualify(editionId: string, participantId: string, reason: string, adminUserId: string): Promise<boolean>;
   reinstate(editionId: string, participantId: string, reason: string, adminUserId: string): Promise<boolean>;
-  /** Confirma el ganador y crea su premio pendiente de reclamo. */
+  /** Confirma el ganador y crea su premio, con los datos que dejó al registrarse (si los tiene). */
   publishResults(editionId: string, winner: RankingRow | null, adminUserId: string, reason: string | null): Promise<EditionRecord | null>;
 };
 
@@ -661,6 +742,7 @@ export const publicEdition = (edition: EditionRecord, now: Date, status: Challen
   bitesPerCookie: BITES_PER_COOKIE,
   prize: edition.prize,
   prizeDescription: edition.prizeDescription,
+  prizeImageUrl: edition.prizeImageUrl,
   serverNow: now.toISOString(),
 });
 

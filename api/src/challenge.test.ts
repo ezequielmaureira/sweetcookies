@@ -10,10 +10,13 @@ import {
   finishDeadline,
   hashIp,
   normalizeArgentinePhone,
+  normalizeFullName,
   normalizeInstagram,
+  normalizePhone,
   overlaps,
   parseFinishInput,
   scoreTaps,
+  validateContact,
   validateJoin,
   validateTournament,
   type ChallengeRepository,
@@ -33,6 +36,9 @@ import { DEFAULT_SETTINGS } from "./settings.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON de respuesta en tests
 const json = async (res: Response): Promise<Record<string, any>> => (await res.json()) as Record<string, any>;
+
+/** Datos de contacto que pide el registro (nombre y apellido + WhatsApp). */
+const CONTACT = { name: "Ana Pérez", phone: "358 412-3456" };
 
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
@@ -145,6 +151,7 @@ function edition(over: Partial<EditionRecord> = {}): EditionRecord {
     attempts: 5,
     prize: "Caja de 6 cookies",
     prizeDescription: "Surtidas, para retirar en Río Cuarto.",
+    prizeImageUrl: null,
     cancelledAt: null,
     cancelReason: null,
     deletedAt: null,
@@ -205,15 +212,35 @@ describe("normalización de datos", () => {
     assert.equal(normalizeInstagram("con espacio"), null);
   });
 
-  it("para competir se pide solo el @ y aceptar las bases", () => {
-    assert.equal(validateJoin({ instagram: "@ana" }).ok, false);
-    const ok = validateJoin({ instagram: "@Ana", terms: true });
-    assert.ok(ok.ok && ok.instagram === "ana");
+  it("para competir se piden @, nombre y apellido, WhatsApp y aceptar las bases (los cuatro obligatorios)", () => {
+    assert.equal(validateJoin({ instagram: "@ana", ...CONTACT }).ok, false);
+    assert.equal(validateJoin({ instagram: "@ana", terms: true }).ok, false);
+    const missing = validateJoin({ instagram: "", name: "Ana", phone: "12", terms: false });
+    assert.ok(!missing.ok && missing.errors.instagram && missing.errors.name && missing.errors.phone && missing.errors.terms);
+    const ok = validateJoin({ instagram: "@Ana", ...CONTACT, terms: true });
+    assert.ok(ok.ok && ok.instagram === "ana" && ok.contact.name === "Ana Pérez" && ok.contact.phone === "5493584123456");
   });
 
-  it("celular del ganador en cualquier formato habitual", () => {
-    for (const raw of ["358 412-3456", "0358 15 412-3456", "+54 9 358 412 3456", "5493584123456"]) assert.equal(normalizeArgentinePhone(raw), "5493584123456", raw);
+  it("nombre y apellido: al menos dos palabras, solo letras", () => {
+    assert.equal(normalizeFullName("  ana   pérez "), "ana pérez");
+    assert.equal(normalizeFullName("María José O'Neill-Díaz"), "María José O'Neill-Díaz");
+    assert.equal(normalizeFullName("Ana"), null);
+    assert.equal(normalizeFullName("Ana 123"), null);
+    assert.equal(normalizeFullName("<script> x"), null);
+  });
+
+  it("WhatsApp argentino en cualquier formato habitual; internacional con + y código de país", () => {
+    for (const raw of ["358 412-3456", "0358 15 412-3456", "+54 9 358 412 3456", "5493584123456", "(0358) 154-123456", "0054 9 358 4123456"]) {
+      assert.equal(normalizePhone(raw), "5493584123456", raw);
+    }
+    assert.equal(normalizePhone("11 2345-6789"), "5491123456789");
+    assert.equal(normalizePhone("+1 (415) 555-0100"), "14155550100");
+    assert.equal(normalizePhone("+34 612 34 56 78"), "34612345678");
+    assert.equal(normalizePhone("0034 612 345 678"), "34612345678");
+    for (const bad of ["4123456", "", "abc", "358-412-3456 ext 2", "+1 23", "+0 1234567890", "+54 9 12", "1234567890123456"]) assert.equal(normalizePhone(bad), null, bad);
     assert.equal(normalizeArgentinePhone("4123456"), null);
+    const bad = validateContact({ name: "Ana Pérez", phone: "123", terms: true });
+    assert.ok(!bad.ok && bad.errors.phone);
   });
 
   it("la IP se guarda como HMAC (nunca en texto plano) y solo con clave", () => {
@@ -284,10 +311,24 @@ function memoryChallenge() {
     duplicateAttempts: p.duplicateAttempts,
     lastDuplicateAt: p.lastDuplicateAt,
     createdAt: p.createdAt,
+    fullName: p.fullName,
+    phone: p.phone,
+    contactUpdatedAt: p.contactUpdatedAt,
   });
   const toClaim = (c: MemoryClaim): ClaimRecord => {
     const e = editions.find((x) => x.id === c.editionId)!;
-    return { ...c, editionNumber: e.number, editionName: e.name, prize: e.prize, prizeDescription: e.prizeDescription, isTest: e.isTest };
+    const p = people.find((x) => x.id === c.participantId)!;
+    return {
+      ...c,
+      editionNumber: e.number,
+      editionName: e.name,
+      prize: e.prize,
+      prizeDescription: e.prizeDescription,
+      prizeImageUrl: e.prizeImageUrl,
+      isTest: e.isTest,
+      instagram: p.instagram,
+      current: { name: p.fullName, phone: p.phone, updatedAt: p.contactUpdatedAt },
+    };
   };
   const conflictFor = (range: { startsAt: Date; endsAt: Date }, excludeId: string | null) =>
     editions.find((e) => e.id !== excludeId && occupiesDates(e) && overlaps(e, range)) ?? null;
@@ -400,12 +441,29 @@ function memoryChallenge() {
         duplicateAttempts: 0,
         lastDuplicateAt: null,
         createdAt: d.now,
+        fullName: d.contact.name,
+        phone: d.contact.phone,
+        contactUpdatedAt: d.now,
         tokenHash: d.tokenHash,
         recoveryCodeHash: null,
         recoveryExpiresAt: null,
       };
       people.push(p);
       return strip(p);
+    },
+    updateContact: async (id, contact, now) => {
+      const p = people.find((x) => x.id === id);
+      if (!p) return null;
+      Object.assign(p, { fullName: contact.name, phone: contact.phone, contactUpdatedAt: now });
+      for (const c of claims.filter((x) => x.participantId === id && x.status === "PENDING")) Object.assign(c, { status: "CLAIMED", ...contact, claimedAt: now });
+      return strip(p);
+    },
+    eraseContact: async (id) => {
+      const p = people.find((x) => x.id === id);
+      if (!p) return false;
+      Object.assign(p, { fullName: null, phone: null });
+      for (const c of claims.filter((x) => x.participantId === id)) Object.assign(c, { name: null, phone: null });
+      return true;
     },
     noteDuplicate: async (instagram, now) => {
       const p = people.find((x) => x.instagram === instagram);
@@ -526,6 +584,8 @@ function memoryChallenge() {
       const c = claims.find((x) => x.editionId === editionId && x.participantId === pid && x.status === "PENDING");
       if (!c) return null;
       Object.assign(c, { status: "CLAIMED", ...data, claimedAt: now });
+      const p = people.find((x) => x.id === pid)!;
+      if (!p.fullName || !p.phone) Object.assign(p, { fullName: data.name, phone: data.phone, contactUpdatedAt: now });
       return toClaim(c);
     },
     getClaim: async (editionId) => {
@@ -574,11 +634,25 @@ function memoryChallenge() {
       const e = editions.find((x) => x.id === editionId);
       if (!e || e.deletedAt || e.isTest || !["SCHEDULED", "ACTIVE", "PAUSED", "FINISHED"].includes(e.status)) return null;
       Object.assign(e, { status: "RESULTS_PUBLISHED", winnerParticipantId: winner?.participantId ?? null, winnerGameId: winner?.gameId ?? null, winnerScore: winner?.score ?? null });
-      if (winner) claims.push({ editionId, participantId: winner.participantId, gameId: winner.gameId, status: "PENDING", name: null, phone: null, claimedAt: null, contactedAt: null, deliveredAt: null });
+      if (winner) {
+        const p = people.find((x) => x.id === winner.participantId)!;
+        const ready = Boolean(p.fullName && p.phone);
+        claims.push({
+          editionId,
+          participantId: winner.participantId,
+          gameId: winner.gameId,
+          status: ready ? "CLAIMED" : "PENDING",
+          name: ready ? p.fullName : null,
+          phone: ready ? p.phone : null,
+          claimedAt: ready ? new Date() : null,
+          contactedAt: null,
+          deliveredAt: null,
+        });
+      }
       return e;
     },
   };
-  return { repo, editions, people, actions, games, invites, visits, referrals };
+  return { repo, editions, people, actions, games, invites, visits, referrals, claims };
 }
 
 const ORIGIN = "https://sweetcookies-seven.vercel.app";
@@ -623,7 +697,7 @@ function setup() {
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
     });
   const join = async (handle: string, ip?: string) => {
-    const res = await call("/api/challenge/register", { method: "POST", body: { instagram: handle, terms: true }, ip });
+    const res = await call("/api/challenge/register", { method: "POST", body: { instagram: handle, ...CONTACT, terms: true }, ip });
     assert.equal(res.status, 201);
     return (await json(res)).token as string;
   };
@@ -848,7 +922,7 @@ describe("torneos: intentos configurables, ranking y premio", () => {
     assert.equal(info.next.name, "Torneo B");
   });
 
-  it("reclamo exclusivo del ganador confirmado, con el premio de SU torneo; nada privado en lo público", async () => {
+  it("ganador confirmado: el premio nace con el nombre y el WhatsApp del registro (no se piden de nuevo); nada privado en lo público", async () => {
     const { call, create, join, play, setClock } = setup();
     const t = await create(runningNow({ prize: "Caja de 6 cookies" }));
     const winner = await join("@ganadora");
@@ -862,16 +936,45 @@ describe("torneos: intentos configurables, ranking y premio", () => {
     const me = await json(await call("/api/challenge/me", { token: winner }));
     assert.equal(me.claims.length, 1);
     assert.equal(me.claims[0].prize, "Caja de 6 cookies");
+    assert.equal(me.claims[0].status, "CLAIMED");
     assert.equal(me.claims[0].isTest, false);
-    assert.equal((await call(`/api/challenge/claims/${t.data.id}`, { method: "POST", token: other, body: { name: "Intruso", phone: "358 400-0000" } })).status, 403);
-    assert.equal((await call(`/api/challenge/claims/${t.data.id}`, { method: "POST", token: winner, body: { name: "Ana Pérez", phone: "0358 15 412-3456" } })).status, 200);
-    assert.equal((await call(`/api/challenge/claims/${t.data.id}`, { method: "POST", token: winner, body: { name: "Ana Pérez", phone: "358 412-3456" } })).status, 409);
+    // Nadie más puede reclamar, y el ganador no tiene que volver a dejar datos (sin reclamos duplicados).
+    assert.equal((await call(`/api/challenge/claims/${t.data.id}`, { method: "POST", token: other, body: { name: "Intruso Malo", phone: "358 400-0000" } })).status, 403);
+    assert.equal((await call(`/api/challenge/claims/${t.data.id}`, { method: "POST", token: winner, body: CONTACT })).status, 409);
+
+    // DATOS DEL GANADOR: solo en el panel.
+    const detail = await json(await call(`/api/admin/challenge/editions/${t.data.id}`));
+    assert.deepEqual([detail.claim.instagram, detail.claim.name, detail.claim.phone, detail.claim.status], ["ganadora", "Ana Pérez", "5493584123456", "CLAIMED"]);
+    assert.equal(detail.claim.current.phone, "5493584123456");
 
     const info = await json(await call("/api/public/challenge"));
     assert.equal(info.tournament.status, "RESULTS_PUBLISHED");
     assert.equal(info.winner.handle, "@ganadora");
-    const text = JSON.stringify(info) + JSON.stringify(await json(await call("/api/challenge/me", { token: winner })));
-    assert.ok(!text.includes("5493584123456") && !text.includes("Pérez") && !text.includes("participantId") && !text.includes("181.10"));
+    const text = JSON.stringify(info) + JSON.stringify(await json(await call(`/api/public/challenge?torneo=${t.data.id}`)));
+    assert.ok(!text.includes("5493584123456") && !text.includes("4123456") && !text.includes("Pérez") && !text.includes("participantId") && !text.includes("181.10"), text);
+    // Su propia sesión ve su nombre, pero nunca el número entero.
+    const own = JSON.stringify(await json(await call("/api/challenge/me", { token: winner })));
+    assert.ok(!own.includes("4123456") && !own.includes("participantId"), own);
+  });
+
+  it("ganador histórico sin datos: se le piden al reclamar (una sola vez) o al completar sus datos; no se inventa nada", async () => {
+    const { call, create, join, play, setClock, memory } = setup();
+    const t = await create(runningNow());
+    const token = await join("@viejo");
+    await play(token, humanTaps(60));
+    // Participante anterior al requisito: sin nombre ni WhatsApp.
+    Object.assign(memory.people[0], { fullName: null, phone: null });
+    setClock("2026-10-30T12:00:00Z");
+    assert.equal((await call(`/api/admin/challenge/editions/${t.data.id}/publish`, { method: "POST", body: {} })).status, 200);
+    const detail = await json(await call(`/api/admin/challenge/editions/${t.data.id}`));
+    assert.deepEqual([detail.claim.status, detail.claim.name, detail.claim.phone, detail.claim.current.phone], ["PENDING", null, null, null]);
+    assert.equal((await json(await call("/api/challenge/me", { token }))).participant.contact.complete, false);
+    // Completa sus datos: el premio pendiente los toma; no hace falta reclamar aparte.
+    assert.equal((await call("/api/challenge/contact", { method: "POST", token, body: { name: "Beto Gómez", phone: "+54 9 358 400 1111", terms: true } })).status, 200);
+    const after = await json(await call(`/api/admin/challenge/editions/${t.data.id}`));
+    assert.deepEqual([after.claim.status, after.claim.name, after.claim.phone], ["CLAIMED", "Beto Gómez", "5493584001111"]);
+    assert.equal((await call(`/api/challenge/claims/${t.data.id}`, { method: "POST", token, body: { name: "Beto Gómez", phone: "358 400-1111" } })).status, 409);
+    assert.equal(memory.claims.length, 1);
   });
 
   it("histórico de prueba: no se reactiva, no tiene ganador con premio ni reclamos", async () => {
@@ -890,10 +993,10 @@ describe("sesión, IP y recuperación (sin cambios de reglas)", () => {
   it("el mismo @ desde otro navegador no obtiene otra sesión; con sesión no se cambia de @", async () => {
     const { call, join, memory } = setup();
     const token = await join("@ana");
-    const again = await call("/api/challenge/register", { method: "POST", body: { instagram: "@ANA", terms: true } });
+    const again = await call("/api/challenge/register", { method: "POST", body: { instagram: "@ANA", ...CONTACT, terms: true } });
     assert.equal(again.status, 409);
     assert.equal(memory.people[0].duplicateAttempts, 1);
-    assert.equal((await call("/api/challenge/register", { method: "POST", token, body: { instagram: "@otra", terms: true } })).status, 409);
+    assert.equal((await call("/api/challenge/register", { method: "POST", token, body: { instagram: "@otra", ...CONTACT, terms: true } })).status, 409);
   });
 
   it("recuperación con código de un solo uso conserva los intentos usados en el torneo", async () => {
@@ -1056,7 +1159,7 @@ describe("invitaciones entre amigos", () => {
     const t = await create(runningNow({ attempts: 3 }));
     const ana = await join("@ana", "181.10.0.1");
     const { code } = await json(await call("/api/challenge/invites", { method: "POST", token: ana, ip: "181.10.0.1" }));
-    const register = (handle: string, ip: string) => call("/api/challenge/register", { method: "POST", ip, body: { instagram: handle, terms: true, ref: code } });
+    const register = (handle: string, ip: string) => call("/api/challenge/register", { method: "POST", ip, body: { instagram: handle, ...CONTACT, terms: true, ref: code } });
     const beto = (await json(await register("@beto", "190.1.1.1"))).token;
     await register("@ana.hermana", "181.10.0.1"); // misma conexión que Ana
     // El referido tiene los mismos intentos que cualquiera.
@@ -1078,7 +1181,7 @@ describe("invitaciones entre amigos", () => {
     const ana = await join("@ana");
     await play(ana, humanTaps(20));
     const { code } = await json(await call("/api/challenge/invites", { method: "POST", token: ana }));
-    const beto = (await json(await call("/api/challenge/register", { method: "POST", ip: "190.1.1.1", body: { instagram: "@beto", terms: true, ref: code } }))).token;
+    const beto = (await json(await call("/api/challenge/register", { method: "POST", ip: "190.1.1.1", body: { instagram: "@beto", ...CONTACT, terms: true, ref: code } }))).token;
     await play(beto, humanTaps(50));
     const board = await json(await call("/api/public/challenge"));
     // Ana invitó a Beto, pero gana quien tiene más mordidas: sin puntos ni ventajas por invitar.
@@ -1097,7 +1200,7 @@ describe("invitaciones entre amigos", () => {
     const ana = await join("@ana");
     const { code } = await json(await call("/api/challenge/invites", { method: "POST", token: ana }));
     await call(`/api/admin/challenge/editions/${t.data.id}/cancel`, { method: "POST", body: { reason: "Cancelado por prueba" } });
-    await call("/api/challenge/register", { method: "POST", ip: "190.1.1.1", body: { instagram: "@beto", terms: true, ref: code } });
+    await call("/api/challenge/register", { method: "POST", ip: "190.1.1.1", body: { instagram: "@beto", ...CONTACT, terms: true, ref: code } });
     assert.equal(memory.referrals.length, 0);
   });
 });
@@ -1173,7 +1276,7 @@ describe("publicación y ciclo de vida de los torneos", () => {
     setClock("2026-10-30T12:00:00Z");
     await call(`/api/admin/challenge/editions/${t.data.id}/publish`, { method: "POST", body: {} });
     const info = await json(await call(`/api/admin/challenge/editions/${t.data.id}/deletion`));
-    assert.deepEqual([info.mode, info.participants, info.games, info.winnerPublished, info.claimStatus], ["soft", 1, 1, true, "PENDING"]);
+    assert.deepEqual([info.mode, info.participants, info.games, info.winnerPublished, info.claimStatus], ["soft", 1, 1, true, "CLAIMED"]);
     const res = await json(await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "DELETE", body: { confirm: "ELIMINAR", reason: "Limpieza" } }));
     assert.equal(res.mode, "soft");
     // Se conserva: el torneo y su partida siguen en la base.
@@ -1195,7 +1298,7 @@ describe("publicación y ciclo de vida de los torneos", () => {
   it("el histórico de prueba se puede eliminar (lógico, conserva sus resultados)", async () => {
     const { call, memory, setClock } = setup();
     memory.editions.push(edition({ id: "legacy", isTest: true, status: "PAUSED", startsAt: new Date("2026-10-19T03:00:00Z"), endsAt: new Date("2026-10-24T02:59:59.999Z") }));
-    const token = (await json(await call("/api/challenge/register", { method: "POST", body: { instagram: "@viejo", terms: true } }))).token;
+    const token = (await json(await call("/api/challenge/register", { method: "POST", body: { instagram: "@viejo", ...CONTACT, terms: true } }))).token;
     memory.games.push({ ...memory.games[0], id: "g-old", editionId: "legacy", participantId: "p1", attemptNumber: 1, status: "FINISHED", startedAt: new Date("2026-10-20T12:00:00Z"), finishedAt: new Date("2026-10-20T12:00:20Z"), ipHash: null, clientRequestId: null, score: 145, cookies: 4, tapsReceived: 145, tapsIgnored: 0, untrustedTaps: 0, flags: [], suspicion: "NONE", review: "NONE", reviewedAt: null, reviewedBy: null, reviewReason: null } as GameRecord);
     setClock("2026-10-22T18:00:00Z");
     assert.equal((await json(await call("/api/public/challenge"))).tournament.id, "legacy");
@@ -1204,5 +1307,152 @@ describe("publicación y ciclo de vida de los torneos", () => {
     assert.equal(memory.games.find((g) => g.id === "g-old")?.score, 145);
     assert.equal((await json(await call("/api/public/challenge"))).tournament, null);
     assert.ok(token);
+  });
+});
+
+describe("registro con nombre y WhatsApp, y datos privados", () => {
+  it("registro obligatorio: sin nombre, WhatsApp o aceptación no se crea la participación", async () => {
+    const { call, memory } = setup();
+    for (const body of [
+      { instagram: "@ana", terms: true },
+      { instagram: "@ana", name: "Ana", phone: "358 412-3456", terms: true },
+      { instagram: "@ana", name: "Ana Pérez", phone: "412", terms: true },
+      { instagram: "@ana", ...CONTACT, terms: false },
+    ]) {
+      const res = await call("/api/challenge/register", { method: "POST", body });
+      assert.equal(res.status, 422, JSON.stringify(body));
+    }
+    assert.equal(memory.people.length, 0);
+    const ok = await call("/api/challenge/register", { method: "POST", body: { instagram: "@Ana.Fan", name: "  ana   pérez ", phone: "0358 15 412-3456", terms: true } });
+    assert.equal(ok.status, 201);
+    const body = await json(ok);
+    // Al propio participante solo le vuelve su nombre y los últimos 4 dígitos.
+    assert.deepEqual(body.participant, { handle: "@ana.fan", contact: { complete: true, name: "ana pérez", phoneHint: "•••• 3456" } });
+    assert.equal(memory.people[0].phone, "5493584123456");
+    assert.ok(!JSON.stringify(body).includes("5493584123456"));
+  });
+
+  it("reingreso: con los datos completos no se piden; un participante anterior sin datos no juega hasta dejarlos y conserva intentos y puntaje", async () => {
+    const { call, create, join, play, memory } = setup();
+    await create(runningNow({ attempts: 3 }));
+    const token = await join("@ana");
+    assert.equal((await play(token, humanTaps(40))).status, 200);
+    assert.equal((await json(await call("/api/challenge/me", { token }))).participant.contact.complete, true);
+    // Participante histórico (sin nombre ni WhatsApp): no puede reservar un intento.
+    Object.assign(memory.people[0], { fullName: null, phone: null });
+    const me = await json(await call("/api/challenge/me", { token }));
+    assert.deepEqual(me.participant.contact, { complete: false, name: null, phoneHint: null });
+    assert.equal(me.attempts.used, 1);
+    const blocked = await call("/api/challenge/games", { method: "POST", token });
+    assert.equal(blocked.status, 409);
+    assert.equal((await json(blocked)).error, "contact_required");
+    assert.equal(memory.games.length, 1);
+    // Los deja y sigue con sus intentos y su mejor marca intactos.
+    assert.equal((await call("/api/challenge/contact", { method: "POST", token, body: { name: "Ana Pérez", phone: "+1 415 555 0100", terms: true } })).status, 200);
+    const again = await json(await call("/api/challenge/me", { token }));
+    assert.deepEqual([again.attempts.used, again.attempts.left, again.best.score], [1, 2, 40]);
+    assert.equal(memory.people[0].phone, "14155550100");
+    assert.equal((await play(token, humanTaps(20))).status, 200);
+  });
+
+  it("actualización segura: solo con la propia sesión, validada y con aceptación; no cambia el @ ni los intentos", async () => {
+    const { call, create, join, play, memory } = setup();
+    await create(runningNow());
+    const ana = await join("@ana");
+    const beto = await join("@beto");
+    await play(ana, humanTaps(30));
+    assert.equal((await call("/api/challenge/contact", { method: "POST", body: { name: "Intruso Malo", phone: "358 400-0000", terms: true } })).status, 401);
+    assert.equal((await call("/api/challenge/contact", { method: "POST", token: "x".repeat(43), body: { name: "Intruso Malo", phone: "358 400-0000", terms: true } })).status, 401);
+    assert.equal((await call("/api/challenge/contact", { method: "POST", token: ana, body: { name: "Ana", phone: "1", terms: true } })).status, 422);
+    assert.equal((await call("/api/challenge/contact", { method: "POST", token: ana, body: { name: "Ana López", phone: "358 499-1234" } })).status, 422);
+    const res = await call("/api/challenge/contact", { method: "POST", token: ana, body: { name: "Ana López", phone: "358 499-1234", terms: true, instagram: "@otra" } });
+    assert.equal(res.status, 200);
+    assert.deepEqual((await json(res)).participant, { handle: "@ana", contact: { complete: true, name: "Ana López", phoneHint: "•••• 1234" } });
+    // Beto no se tocó; Ana conserva su @ y su partida.
+    assert.deepEqual([memory.people[0].instagram, memory.people[0].phone, memory.people[1].phone], ["ana", "5493584991234", "5493584123456"]);
+    assert.equal((await json(await call("/api/challenge/me", { token: ana }))).attempts.used, 1);
+    assert.ok(beto);
+  });
+
+  it("ranking, enlaces y API pública sin datos personales; el panel los ve y puede borrarlos a pedido", async () => {
+    const { call, create, join, play, memory } = setup();
+    const t = await create(runningNow());
+    const token = await join("@ana");
+    await play(token, humanTaps(30));
+    const invite = await json(await call("/api/challenge/invites", { method: "POST", token }));
+    const publicText = [
+      JSON.stringify(await json(await call("/api/public/challenge"))),
+      JSON.stringify(await json(await call(`/api/public/challenge?torneo=${t.data.id}`))),
+      JSON.stringify(invite),
+    ].join("");
+    assert.ok(!publicText.includes("4123456") && !publicText.includes("Pérez") && !publicText.includes("phone"), publicText);
+    assert.ok(!JSON.stringify(await json(await call("/api/challenge/me", { token }))).includes("4123456"));
+    // El panel: el listado de participantes muestra si tiene los datos, sin el número.
+    const admin = await json(await call(`/api/admin/challenge/editions/${t.data.id}`));
+    assert.equal(admin.edition.name, "Desafío Halloween");
+    const erased = await call(`/api/admin/challenge/participants/${memory.people[0].id}/erase-contact`, { method: "POST", body: { reason: "Lo pidió por Instagram" } });
+    assert.equal(erased.status, 200);
+    assert.deepEqual([memory.people[0].fullName, memory.people[0].phone], [null, null]);
+    assert.equal((await call("/api/challenge/games", { method: "POST", token })).status, 409);
+    assert.equal(memory.games.length, 1);
+  });
+
+  it("mismo @ con otros datos desde otro navegador: no crea otra participación ni cambia los datos", async () => {
+    const { call, join, memory } = setup();
+    await join("@ana");
+    const res = await call("/api/challenge/register", { method: "POST", body: { instagram: "@ana", name: "Otra Persona", phone: "11 5555-0000", terms: true } });
+    assert.equal(res.status, 409);
+    assert.equal(memory.people.length, 1);
+    assert.equal(memory.people[0].phone, "5493584123456");
+  });
+});
+
+describe("foto del premio y enlace público del torneo", () => {
+  it("foto opcional: solo imágenes subidas desde el panel; se puede cambiar y quitar; se ve en lo público", async () => {
+    const { call, create } = setup();
+    const bad = await call("/api/admin/challenge/editions", { method: "POST", body: { ...form(), prizeImageUrl: "https://otro.sitio/premio.jpg" } });
+    assert.equal(bad.status, 422);
+    assert.ok((await json(bad)).fields.prizeImage);
+    const t = await create(runningNow({ prizeImageUrl: "/api/public/images/abcdefghijkl" }));
+    assert.equal(t.data.prizeImageUrl, "/api/public/images/abcdefghijkl");
+    assert.equal((await json(await call("/api/public/challenge"))).tournament.prizeImageUrl, "/api/public/images/abcdefghijkl");
+    const body = { ...form(), ...runningNow(), reason: "Cambio de foto" };
+    const changed = await json(await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "PUT", body: { ...body, prizeImageUrl: "/api/public/images/mnopqrstuvwx" } }));
+    assert.equal(changed.prizeImageUrl, "/api/public/images/mnopqrstuvwx");
+    const removed = await json(await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "PUT", body: { ...body, prizeImageUrl: null } }));
+    assert.equal(removed.prizeImageUrl, null);
+    assert.equal((await json(await call("/api/public/challenge"))).tournament.prizeImageUrl, null);
+  });
+
+  it("enlace permanente ?torneo=ID: programado, activo y finalizado se muestran; eliminado avisa; borrador y despublicado no revelan nada", async () => {
+    const { call, create, join, play, setClock } = setup();
+    const scheduled = await create({ name: "Programado", startDate: "2026-11-05", endDate: "2026-11-06" });
+    const scheduledInfo = await json(await call(`/api/public/challenge?torneo=${scheduled.data.id}`));
+    assert.deepEqual([scheduledInfo.linkStatus, scheduledInfo.tournament.status, scheduledInfo.tournament.name], ["ok", "SCHEDULED", "Programado"]);
+
+    const active = await create(runningNow({ name: "Activo" }));
+    const token = await join("@ana");
+    const activeInfo = await json(await call(`/api/public/challenge?torneo=${active.data.id}`));
+    assert.deepEqual([activeInfo.linkStatus, activeInfo.tournament.status], ["ok", "ACTIVE"]);
+    assert.equal((await play(token, humanTaps(30))).status, 200);
+
+    setClock("2026-10-30T12:00:00Z");
+    const finishedInfo = await json(await call(`/api/public/challenge?torneo=${active.data.id}`));
+    assert.deepEqual([finishedInfo.linkStatus, finishedInfo.tournament.status, finishedInfo.leaderboard.length], ["ok", "FINISHED", 1]);
+
+    const draft = await create({ name: "Borrador secreto", startDate: "2026-11-10", endDate: "2026-11-11" }, false);
+    const draftInfo = await json(await call(`/api/public/challenge?torneo=${draft.data.id}`));
+    assert.equal(draftInfo.linkStatus, "invalid");
+    assert.ok(!JSON.stringify(draftInfo).includes("Borrador secreto"));
+
+    await call(`/api/admin/challenge/editions/${scheduled.data.id}/unpublish`, { method: "POST", body: {} });
+    const hidden = await json(await call(`/api/public/challenge?torneo=${scheduled.data.id}`));
+    assert.equal(hidden.linkStatus, "invalid");
+    assert.ok(!JSON.stringify(hidden).includes("Programado"));
+
+    await call(`/api/admin/challenge/editions/${active.data.id}`, { method: "DELETE", body: { confirm: "ELIMINAR" } });
+    const removed = await json(await call(`/api/public/challenge?torneo=${active.data.id}`));
+    assert.equal(removed.linkStatus, "removed");
+    assert.ok(!JSON.stringify(removed).includes("Activo"));
   });
 });

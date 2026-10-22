@@ -19,7 +19,17 @@ import { PUBLISHED_STATUSES } from "./challenge-time.ts";
 
 const isUniqueViolation = (error: unknown) => error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 
-const participantSelect = { id: true, instagram: true, ipHash: true, duplicateAttempts: true, lastDuplicateAt: true, createdAt: true } as const;
+const participantSelect = {
+  id: true,
+  instagram: true,
+  ipHash: true,
+  duplicateAttempts: true,
+  lastDuplicateAt: true,
+  createdAt: true,
+  fullName: true,
+  phone: true,
+  contactUpdatedAt: true,
+} as const;
 
 /** Columnas de la partida sin los toques (pesan; solo se leen para revisar). */
 const gameSelect = {
@@ -55,18 +65,22 @@ const claimSelect = {
   claimedAt: true,
   contactedAt: true,
   deliveredAt: true,
-  edition: { select: { number: true, name: true, prize: true, prizeDescription: true, isTest: true } },
+  edition: { select: { number: true, name: true, prize: true, prizeDescription: true, prizeImageUrl: true, isTest: true } },
+  participant: { select: { instagram: true, fullName: true, phone: true, contactUpdatedAt: true } },
 } as const;
 
 type ClaimRow = Prisma.ChallengePrizeClaimGetPayload<{ select: typeof claimSelect }>;
 
-const toClaim = ({ edition, ...claim }: ClaimRow): ClaimRecord => ({
+const toClaim = ({ edition, participant, ...claim }: ClaimRow): ClaimRecord => ({
   ...claim,
   editionNumber: edition.number,
   editionName: edition.name,
   prize: edition.prize,
   prizeDescription: edition.prizeDescription,
+  prizeImageUrl: edition.prizeImageUrl,
   isTest: edition.isTest,
+  instagram: participant.instagram,
+  current: { name: participant.fullName, phone: participant.phone, updatedAt: participant.contactUpdatedAt },
 });
 
 /** Publicado = visible para los jugadores (no borrador, despublicado, cancelado ni eliminado). */
@@ -84,6 +98,7 @@ const tournamentData = (data: TournamentInput) => ({
   endsAt: data.endsAt,
   prize: data.prize,
   prizeDescription: data.prizeDescription,
+  prizeImageUrl: data.prizeImageUrl,
   attempts: data.attempts,
   isTest: data.isTest,
 });
@@ -308,10 +323,22 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
 
     countGames: (editionId) => prisma.challengeGame.count({ where: { editionId } }),
 
-    async createParticipant({ instagram, tokenHash, ipHash, now }) {
+    async createParticipant({ instagram, contact, tokenHash, ipHash, now }) {
       try {
         return await prisma.challengeParticipant.create({
-          data: { instagram, termsAcceptedAt: now, termsVersion: TERMS_VERSION, tokenHash, tokenIssuedAt: now, ipHash, lastSeenAt: now },
+          data: {
+            instagram,
+            termsAcceptedAt: now,
+            termsVersion: TERMS_VERSION,
+            tokenHash,
+            tokenIssuedAt: now,
+            ipHash,
+            lastSeenAt: now,
+            fullName: contact.name,
+            phone: contact.phone,
+            contactUpdatedAt: now,
+            contactTermsVersion: TERMS_VERSION,
+          },
           select: participantSelect,
         });
       } catch (error) {
@@ -319,6 +346,34 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
         if (isUniqueViolation(error)) throw new DuplicateParticipantError();
         throw error;
       }
+    },
+
+    async updateContact(participantId, { name, phone }, now) {
+      return prisma.$transaction(async (tx) => {
+        // Solo el propio participante (lo resuelve la ruta con su token). No toca intentos ni partidas.
+        const { count } = await tx.challengeParticipant.updateMany({
+          where: { id: participantId },
+          data: { fullName: name, phone, contactUpdatedAt: now, contactTermsVersion: TERMS_VERSION, termsAcceptedAt: now, termsVersion: TERMS_VERSION },
+        });
+        if (count === 0) return null;
+        // Ganador anterior que todavía no había dejado sus datos: su premio pendiente los toma (no se le vuelven a pedir).
+        await tx.challengePrizeClaim.updateMany({
+          where: { participantId, status: "PENDING", edition: { isTest: false, deletedAt: null } },
+          data: { status: "CLAIMED", name, phone, claimedAt: now },
+        });
+        return tx.challengeParticipant.findUnique({ where: { id: participantId }, select: participantSelect });
+      });
+    },
+
+    async eraseContact(participantId, reason, adminUserId) {
+      return prisma.$transaction(async (tx) => {
+        const { count } = await tx.challengeParticipant.updateMany({ where: { id: participantId }, data: { fullName: null, phone: null, contactUpdatedAt: new Date() } });
+        if (count === 0) return false;
+        // También la copia del premio (si ganó): no queda el teléfono en ninguna tabla.
+        await tx.challengePrizeClaim.updateMany({ where: { participantId }, data: { name: null, phone: null } });
+        await log(tx, { participantId, action: "CONTACT_ERASED", reason, adminUserId });
+        return true;
+      });
     },
 
     async noteDuplicate(instagram, now) {
@@ -468,13 +523,20 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
     },
 
     async submitClaim(editionId, participantId, { name, phone }, now) {
-      // Solo el ganador (su participante) y una sola vez: PENDING → CLAIMED.
-      const { count } = await prisma.challengePrizeClaim.updateMany({
-        where: { editionId, participantId, status: "PENDING", edition: { isTest: false, deletedAt: null } },
-        data: { status: "CLAIMED", name, phone, claimedAt: now },
+      return prisma.$transaction(async (tx) => {
+        // Solo el ganador (su participante) y una sola vez: PENDING → CLAIMED.
+        const { count } = await tx.challengePrizeClaim.updateMany({
+          where: { editionId, participantId, status: "PENDING", edition: { isTest: false, deletedAt: null } },
+          data: { status: "CLAIMED", name, phone, claimedAt: now },
+        });
+        if (count === 0) return null;
+        // Ganador anterior sin datos: quedan también en su registro (solo si no tenía), así no se le vuelven a pedir.
+        await tx.challengeParticipant.updateMany({
+          where: { id: participantId, OR: [{ fullName: null }, { phone: null }] },
+          data: { fullName: name, phone, contactUpdatedAt: now, contactTermsVersion: TERMS_VERSION },
+        });
+        return toClaim(await tx.challengePrizeClaim.findUniqueOrThrow({ where: { editionId }, select: claimSelect }));
       });
-      if (count === 0) return null;
-      return toClaim(await prisma.challengePrizeClaim.findUniqueOrThrow({ where: { editionId }, select: claimSelect }));
     },
 
     async getClaim(editionId) {
@@ -539,7 +601,7 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
     },
 
     async listParticipants(editionId) {
-      const [people, used, bestScores] = await Promise.all([
+      const [people, used, bestScores, phones] = await Promise.all([
         prisma.challengeParticipant.findMany({
           orderBy: { createdAt: "desc" },
           take: 500,
@@ -547,13 +609,19 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
         }),
         prisma.challengeGame.groupBy({ by: ["participantId"], where: { editionId }, _count: { _all: true } }),
         prisma.challengeGame.groupBy({ by: ["participantId"], where: { editionId, status: "FINISHED" }, _max: { score: true } }),
+        // WhatsApp repetidos en distintos @ (solo para marcar; el número no sale de acá).
+        prisma.challengeParticipant.groupBy({ by: ["phone"], where: { phone: { not: null } }, _count: { _all: true }, having: { phone: { _count: { gt: 1 } } } }),
       ]);
       const now = Date.now();
-      return people.map(({ recoveryExpiresAt, ...p }) => ({
+      const shared = new Set(phones.map((row) => row.phone));
+      // El teléfono no se devuelve en el listado: solo si tiene los datos completos.
+      return people.map(({ recoveryExpiresAt, phone, ...p }) => ({
         ...p,
         attemptsUsed: used.find((u) => u.participantId === p.id)?._count._all ?? 0,
         best: bestScores.find((b) => b.participantId === p.id)?._max.score ?? null,
         recoveryPending: recoveryExpiresAt !== null && recoveryExpiresAt.getTime() > now,
+        hasContact: Boolean(p.fullName && phone),
+        sharedPhone: phone !== null && shared.has(phone),
       }));
     },
 
@@ -661,8 +729,20 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
           },
         });
         if (count === 0) return null;
-        // Premio pendiente de reclamo, atado al participante (su token), no solo al @.
-        if (winner) await tx.challengePrizeClaim.create({ data: { editionId, participantId: winner.participantId, gameId: winner.gameId } });
+        // Premio atado al participante (su token), no solo al @. Si ya dejó nombre y WhatsApp al
+        // registrarse, se copian (no se le vuelven a pedir) y el admin puede contactarlo enseguida.
+        if (winner) {
+          const person = await tx.challengeParticipant.findUnique({ where: { id: winner.participantId }, select: { fullName: true, phone: true } });
+          const ready = Boolean(person?.fullName && person.phone);
+          await tx.challengePrizeClaim.create({
+            data: {
+              editionId,
+              participantId: winner.participantId,
+              gameId: winner.gameId,
+              ...(ready ? { status: "CLAIMED" as const, name: person!.fullName, phone: person!.phone, claimedAt: new Date() } : {}),
+            },
+          });
+        }
         await log(tx, { editionId, participantId: winner?.participantId ?? null, gameId: winner?.gameId ?? null, action: "PUBLISH_RESULTS", reason, adminUserId });
         return tx.challengeEdition.findUnique({ where: { id: editionId } });
       });

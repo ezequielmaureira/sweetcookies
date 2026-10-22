@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { attemptsText, challengeLink, formatCountdown, formatCordobaDateTime, instagramUrl, readLinkParams, shareMessage, whatsappShareUrl } from "./challenge-format.ts";
+import { attemptsText, challengeLink, firstName, formatCountdown, formatCordobaDateTime, instagramUrl, readLinkParams, shareMessage, whatsappChatUrl, whatsappShareUrl, winnerMessage } from "./challenge-format.ts";
 
 describe("textos del campeonato", () => {
   it("cuenta regresiva con días o con reloj", () => {
@@ -73,5 +73,39 @@ describe("textos del campeonato", () => {
     assert.deepEqual(readLinkParams("?torneo=cmvjvvq670000hksn8d6dgc8p&ref=abcdefghjk"), { tournamentId: "cmvjvvq670000hksn8d6dgc8p", ref: "abcdefghjk" });
     assert.deepEqual(readLinkParams("?torneo=<script>&ref=ABC"), { tournamentId: null, ref: null });
     assert.deepEqual(readLinkParams(""), { tournamentId: null, ref: null });
+  });
+});
+
+describe("enlace público del torneo y contacto con el ganador", () => {
+  it("el enlace que copia el admin es permanente y no lleva códigos de invitación", () => {
+    const url = challengeLink("https://sweetcookies-seven.vercel.app", "cmvjvvq670000hksn8d6dgc8p", null);
+    assert.equal(url, "https://sweetcookies-seven.vercel.app/campeonato?torneo=cmvjvvq670000hksn8d6dgc8p");
+    assert.ok(!url.includes("ref="));
+    assert.deepEqual(readLinkParams(new URL(url).search), { tournamentId: "cmvjvvq670000hksn8d6dgc8p", ref: null });
+  });
+
+  it("mensaje preparado para el ganador, con su nombre, el torneo y el premio", () => {
+    const text = winnerMessage({ name: "Ana Pérez", tournamentName: "Desafío Halloween", prize: "Caja de 6 cookies" });
+    assert.equal(
+      text,
+      [
+        "¡Hola, Ana! 🍪🏆",
+        "",
+        "Te contactamos desde Sweet Cookies porque resultaste ganador del torneo Desafío Halloween.",
+        "",
+        "Tu premio es: Caja de 6 cookies.",
+        "",
+        "Queremos coordinar con vos la verificación de tus datos y la entrega.",
+        "",
+        "¡Felicitaciones!",
+      ].join("\n"),
+    );
+    assert.equal(firstName("  María José  Gómez"), "María");
+  });
+
+  it("abre el chat con el número del ganador y el mensaje listo (no se envía solo)", () => {
+    const url = whatsappChatUrl("5493584123456", "¡Hola, Ana! 🍪");
+    assert.ok(url.startsWith("https://wa.me/5493584123456?text="));
+    assert.equal(decodeURIComponent(url.split("text=")[1]), "¡Hola, Ana! 🍪");
   });
 });

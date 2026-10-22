@@ -5,7 +5,8 @@
  * registrarse: se guarda solo en este navegador (localStorage) y se manda como
  * Authorization: Bearer. El servidor guarda únicamente su hash.
  *
- * Para competir se pide solo el @ de Instagram. No hay práctica: toda partida es
+ * Para competir se piden el @ de Instagram, nombre y apellido y WhatsApp (estos
+ * dos son privados: solo sirven para avisarle si gana). No hay práctica: toda partida es
  * oficial, la reserva el servidor y consume un intento del torneo activo.
  * Cada torneo (fechas, premio, intentos) lo crea el admin.
  */
@@ -29,6 +30,8 @@ export type Tournament = {
   bitesPerCookie: number;
   prize: string;
   prizeDescription: string | null;
+  /** Foto del premio (ruta en la API) o null: sin foto se muestra el diseño de siempre. */
+  prizeImageUrl: string | null;
   serverNow: string;
 };
 
@@ -44,18 +47,33 @@ export type ChallengeInfo = {
   ranked: number;
   winner: { handle: string; score: number; cookies: number } | null;
   instagramHandle: string | null;
-  /** Resultado del enlace ?torneo=: "invalid" si no existe o no es visible. */
-  linkStatus: "ok" | "invalid" | null;
+  /** Resultado del enlace ?torneo=: "invalid" si no existe o no es visible; "removed" si se eliminó. */
+  linkStatus: "ok" | "invalid" | "removed" | null;
 };
 
 export type Attempts = { limit: number; used: number; left: number };
 export type Standing = { position: number; score: number; cookies: number } | null;
 
 export type ClaimStatus = "PENDING" | "CLAIMED" | "CONTACTED" | "DELIVERED";
-export type PrizeClaim = { editionId: string; tournamentName: string; prize: string; prizeDescription: string | null; isTest: boolean; status: ClaimStatus };
+export type PrizeClaim = {
+  editionId: string;
+  tournamentName: string;
+  prize: string;
+  prizeDescription: string | null;
+  prizeImageUrl: string | null;
+  isTest: boolean;
+  status: ClaimStatus;
+};
+
+/**
+ * Lo que el participante ve de sus propios datos: si están completos, su
+ * nombre y solo los últimos 4 dígitos del WhatsApp.
+ */
+export type OwnContact = { complete: boolean; name: string | null; phoneHint: string | null };
+export type OwnParticipant = { handle: string; contact: OwnContact };
 
 export type Me = {
-  participant: { handle: string };
+  participant: OwnParticipant;
   tournament: Tournament | null;
   /** null = no hay torneo. */
   attempts: Attempts | null;
@@ -116,11 +134,15 @@ const withTournament = (path: string, tournamentId: string | null) => (tournamen
 
 export const getChallenge = (tournamentId: string | null = null) => request<ChallengeInfo>(withTournament("/api/public/challenge", tournamentId));
 export const getMe = (token: string, tournamentId: string | null = null) => request<Me>(withTournament("/api/challenge/me", tournamentId), { token });
-type SessionResponse = { token: string; participant: { handle: string } };
+type SessionResponse = { token: string; participant: OwnParticipant };
+
+export type ContactData = { name: string; phone: string; terms: boolean };
 
 /** `ref`: código del enlace por el que llegó (solo para medir la difusión; no da ventajas). */
-export const register = (instagram: string, terms: boolean, ref: string | null) =>
-  request<SessionResponse>("/api/challenge/register", { method: "POST", body: { instagram, terms, ...(ref ? { ref } : {}) } });
+export const register = (instagram: string, contact: ContactData, ref: string | null) =>
+  request<SessionResponse>("/api/challenge/register", { method: "POST", body: { instagram, ...contact, ...(ref ? { ref } : {}) } });
+/** Deja o corrige nombre y WhatsApp (solo con la propia sesión). No toca intentos ni puntajes. */
+export const updateContact = (token: string, contact: ContactData) => request<{ participant: OwnParticipant }>("/api/challenge/contact", { method: "POST", token, body: contact });
 export const recoverSession = (instagram: string, code: string) => request<SessionResponse>("/api/challenge/recover", { method: "POST", body: { instagram, code } });
 export const claimPrize = (token: string, editionId: string, data: { name: string; phone: string }) =>
   request<{ claim: PrizeClaim }>(`/api/challenge/claims/${encodeURIComponent(editionId)}`, { method: "POST", token, body: data });

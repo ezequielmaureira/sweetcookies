@@ -27,6 +27,8 @@ export type AdminEdition = {
   attempts: number;
   prize: string;
   prizeDescription: string | null;
+  /** Foto del premio (/api/public/images/<id>) o null. */
+  prizeImageUrl: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
   pausedAt: string | null;
@@ -61,6 +63,8 @@ export type TournamentForm = {
   endTime: string;
   prize: string;
   prizeDescription: string;
+  /** Foto del premio ya subida (mismo sistema que las fotos de productos) o null. */
+  prizeImageUrl: string | null;
   attempts: number;
 };
 
@@ -105,8 +109,15 @@ export type AdminGame = {
 
 export type ClaimStatus = "PENDING" | "CLAIMED" | "CONTACTED" | "DELIVERED";
 
+/**
+ * Premio del ganador con sus datos de contacto (SOLO en el panel). `name` y
+ * `phone` = con los que quedó el premio al confirmar el ganador (o al
+ * reclamarlo); `current` = los que tiene registrados ahora.
+ */
 export type AdminClaim = {
   editionId: string;
+  editionName: string;
+  prize: string;
   participantId: string;
   gameId: string;
   status: ClaimStatus;
@@ -115,6 +126,8 @@ export type AdminClaim = {
   claimedAt: string | null;
   contactedAt: string | null;
   deliveredAt: string | null;
+  instagram: string;
+  current: { name: string | null; phone: string | null; updatedAt: string | null };
 };
 
 export type DuplicateAlert = { ipHash: string; participants: { id: string; instagram: string }[] };
@@ -141,6 +154,12 @@ export type AdminParticipant = {
   attemptsUsed: number;
   best: number | null;
   recoveryPending: boolean;
+  /** Nombre (el WhatsApp no viene en el listado: solo en los datos del ganador). */
+  fullName: string | null;
+  contactUpdatedAt: string | null;
+  hasContact: boolean;
+  /** El mismo WhatsApp figura en otro @ (solo para revisar). */
+  sharedPhone: boolean;
 };
 
 export const FLAG_LABELS: Record<string, string> = {
@@ -172,11 +191,12 @@ export const ACTION_LABELS: Record<string, string> = {
   PUBLISH_RESULTS: "Confirmó y publicó el ganador",
   CLAIM_CONTACTED: "Marcó el premio como contactado",
   CLAIM_DELIVERED: "Marcó el premio como entregado",
+  CONTACT_ERASED: "Borró los datos de contacto de un participante",
 };
 
 export const CLAIM_LABELS: Record<ClaimStatus, string> = {
-  PENDING: "Pendiente (el ganador todavía no dejó sus datos)",
-  CLAIMED: "Reclamado",
+  PENDING: "Pendiente (faltan sus datos de contacto)",
+  CLAIMED: "Pendiente de contacto",
   CONTACTED: "Contactado",
   DELIVERED: "Entregado",
 };
@@ -295,6 +315,9 @@ export const reinstate = (token: string | null, id: string, participantId: strin
 
 export const setClaimStatus = (token: string | null, id: string, status: "CONTACTED" | "DELIVERED", reason: string) =>
   post<unknown>(token, `/api/admin/challenge/editions/${encodeURIComponent(id)}/claim`, { status, reason });
+/** Borra nombre y WhatsApp de un participante (pedido de eliminación). Se los vuelve a pedir antes de jugar. */
+export const eraseContact = (token: string | null, participantId: string, reason: string) =>
+  post<{ ok: true }>(token, `/api/admin/challenge/participants/${encodeURIComponent(participantId)}/erase-contact`, { reason });
 export const createRecoveryCode = (token: string | null, participantId: string) =>
   post<{ code: string; handle: string; expiresAt: string }>(token, `/api/admin/challenge/participants/${encodeURIComponent(participantId)}/recovery`, {});
 

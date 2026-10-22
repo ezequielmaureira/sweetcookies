@@ -109,3 +109,26 @@ export const instagramUrl = (handle: string) => `https://www.instagram.com/${enc
 
 export const bitesText = (n: number) => (n === 1 ? "1 mordida" : `${n} mordidas`);
 export const cookiesText = (n: number) => (n === 1 ? "1 cookie" : `${n} cookies`);
+
+/* ---------- Contacto con el ganador (panel) ---------- */
+
+/** Primer nombre de "Nombre Apellido" (para el saludo). */
+export const firstName = (fullName: string) => fullName.trim().split(/\s+/)[0] ?? "";
+
+/** Mensaje preparado para el ganador. Lo envía el admin a mano: nunca se manda solo. */
+export function winnerMessage(input: { name: string; tournamentName: string; prize: string }): string {
+  return [
+    `¡Hola, ${firstName(input.name)}! 🍪🏆`,
+    "",
+    `Te contactamos desde Sweet Cookies porque resultaste ganador del torneo ${input.tournamentName}.`,
+    "",
+    `Tu premio es: ${input.prize}.`,
+    "",
+    "Queremos coordinar con vos la verificación de tus datos y la entrega.",
+    "",
+    "¡Felicitaciones!",
+  ].join("\n");
+}
+
+/** Abre el chat de WhatsApp con ESE número (solo dígitos, formato internacional) y el mensaje listo. */
+export const whatsappChatUrl = (phone: string, text: string) => `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(text)}`;

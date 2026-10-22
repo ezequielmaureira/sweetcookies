@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { adminErrorMessage } from "@/lib/admin/admin-api";
 import { STATUS_LABELS, getOverview, listEditions, type AdminEdition, type EditionListItem, type Overview } from "@/lib/admin/challenge-admin-api";
+import { resolveImageSrc } from "@/lib/catalog";
 import { formatCordobaDateTime } from "@/lib/challenge/challenge-format";
 import admin from "@/components/admin/Admin.module.css";
 import { TournamentActions } from "./TournamentActions";
@@ -289,6 +290,10 @@ function TournamentRow({ edition: e, previewOpen, onPreview, onManage, onEdit, o
                 {e.legacy ? " (histórico de prueba: sin premio)" : ""}
               </p>
               {e.prizeDescription && <p className={styles.preLine}>{e.prizeDescription}</p>}
+              {resolveImageSrc(e.prizeImageUrl) && (
+                // eslint-disable-next-line @next/next/no-img-element -- foto subida, servida por la API
+                <img src={resolveImageSrc(e.prizeImageUrl)!} alt={`Premio: ${e.prize}`} className={styles.rowPhoto} />
+              )}
               <p className={styles.muted}>
                 {e.attempts} intentos por participante · {e.games} partidas · {e.participants} participantes
               </p>

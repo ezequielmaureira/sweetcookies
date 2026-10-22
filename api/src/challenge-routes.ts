@@ -16,6 +16,7 @@ import {
   generateRecoveryCode,
   generateToken,
   handleOf,
+  hasContact,
   hashVisitor,
   isInviteCode,
   isRequestId,
@@ -28,10 +29,12 @@ import {
   normalizeRecoveryCode,
   parseFinishInput,
   parseReason,
+  phoneHint,
   publicEdition,
   publicRow,
   scoreTaps,
   validateClaim,
+  validateContact,
   validateJoin,
   validateTournament,
   type ChallengeRepository,
@@ -67,7 +70,7 @@ type Deps = {
   log: (message: string) => void;
   config: ChallengeConfig;
   now?: () => Date;
-  limiters?: Partial<Record<"register" | "recover" | "start" | "finish" | "claim" | "visit" | "invite", RateLimiter>>;
+  limiters?: Partial<Record<"register" | "recover" | "start" | "finish" | "claim" | "contact" | "visit" | "invite", RateLimiter>>;
 };
 
 const RANKING_CACHE_MS = 10_000;
@@ -109,6 +112,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     start: deps.limiters?.start ?? createRateLimiter({ limit: 60, windowMs: 10 * 60 * 1000 }),
     finish: deps.limiters?.finish ?? createRateLimiter({ limit: 120, windowMs: 10 * 60 * 1000 }),
     claim: deps.limiters?.claim ?? createRateLimiter({ limit: 10, windowMs: 60 * 60 * 1000 }),
+    contact: deps.limiters?.contact ?? createRateLimiter({ limit: 20, windowMs: 60 * 60 * 1000 }),
     visit: deps.limiters?.visit ?? createRateLimiter({ limit: 60, windowMs: 10 * 60 * 1000 }),
     invite: deps.limiters?.invite ?? createRateLimiter({ limit: 30, windowMs: 10 * 60 * 1000 }),
   };
@@ -165,16 +169,18 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   };
 
   /**
-   * Torneo que pidió un enlace (?torneo=ID). Si existe y es visible (no
-   * borrador) se muestra ese, aunque haya terminado o se haya cancelado; el
-   * torneo vigente pasa a `next` como aviso. Un id inválido no revela nada: se
-   * muestra lo de siempre con linkStatus "invalid".
+   * Torneo que pidió un enlace (?torneo=ID): el enlace permanente que copia el
+   * admin, o el de una invitación. Si es visible se muestra ese (programado,
+   * activo, pausado, terminado o cancelado); el torneo vigente pasa a `next`
+   * como aviso. Eliminado: linkStatus "removed" (solo el aviso, ningún dato).
+   * Borrador, despublicado o inexistente: "invalid", sin revelar si existe.
    */
   const shown = async (requested: string | undefined) => {
     const base = await current();
-    if (!requested) return { ...base, linkStatus: null as "ok" | "invalid" | null };
+    if (!requested) return { ...base, linkStatus: null as "ok" | "invalid" | "removed" | null };
     const linked = /^[A-Za-z0-9_-]{1,40}$/.test(requested) ? await challenge.getEdition(requested) : null;
-    // Borradores, despublicados y eliminados no se muestran (sin revelar que existen).
+    if (linked?.deletedAt && !linked.isTest) return { ...base, linkStatus: "removed" as const };
+    // Borradores, despublicados e históricos eliminados no se muestran (sin revelar que existen).
     if (!linked || linked.deletedAt || linked.status === "DRAFT" || linked.status === "UNPUBLISHED") return { ...base, linkStatus: "invalid" as const };
     if (base.edition?.id === linked.id) return { ...base, linkStatus: "ok" as const };
     const other = base.edition && (base.status === "ACTIVE" || base.status === "SCHEDULED" || base.status === "PAUSED") ? base.edition : base.next;
@@ -198,15 +204,27 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     return challenge.findParticipantByTokenHash(hashToken(token), now());
   };
 
-  /** Premio del jugador (sin datos de contacto: esos solo se cargan y se ven en el panel). */
+  /** Premio del jugador (sin datos de contacto: esos solo se ven en el panel). */
   const publicClaim = (claim: ClaimRecord) => ({
     editionId: claim.editionId,
     tournamentName: claim.editionName,
     prize: claim.prize,
     prizeDescription: claim.prizeDescription,
+    prizeImageUrl: claim.prizeImageUrl,
     isTest: claim.isTest,
     status: claim.status,
   });
+
+  /**
+   * Lo que el propio participante ve de sus datos: si están completos, su
+   * nombre y solo los últimos 4 dígitos del WhatsApp (nunca el número entero).
+   */
+  const ownContact = (participant: ParticipantRecord) => ({
+    complete: hasContact(participant),
+    name: participant.fullName,
+    phoneHint: participant.phone ? phoneHint(participant.phone) : null,
+  });
+  const ownParticipant = (participant: ParticipantRecord) => ({ handle: handleOf(participant.instagram), contact: ownContact(participant) });
 
   /* ---------- Público ---------- */
 
@@ -246,8 +264,9 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     await next();
   });
 
-  // Participar: solo el @. No se comprueba si sigue la cuenta (no hay forma
-  // confiable sin la API de Meta); ese paso lo recuerda el navegador.
+  // Participar: @ de Instagram + nombre y apellido + WhatsApp + aceptar las bases.
+  // Los datos de contacto son privados: solo sirven para avisarle si gana. No se
+  // comprueba si sigue la cuenta (no hay forma confiable sin la API de Meta).
   app.post("/api/challenge/register", bodyLimit({ maxSize: 2 * 1024, onError: tooLarge }), async (c) => {
     if (!allow(limit.register, c)) return c.json({ error: "too_many_requests" }, 429);
     // Con una sesión válida no se registra otro @: cambiar de usuario no reinicia los intentos.
@@ -260,11 +279,11 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const token = generateToken();
     const ipHash = ipHashOf(c);
     try {
-      const participant = await challenge.createParticipant({ instagram: result.instagram, tokenHash: hashToken(token), ipHash, now: now() });
+      const participant = await challenge.createParticipant({ instagram: result.instagram, contact: result.contact, tokenHash: hashToken(token), ipHash, now: now() });
       log(`[challenge] participant ${participant.id} joined`);
       await attributeReferral((parsed.body as Record<string, unknown>).ref, participant.id, ipHash);
       // El token se entrega UNA sola vez: la base guarda solo su hash.
-      return c.json({ token, participant: { handle: handleOf(participant.instagram) } }, 201);
+      return c.json({ token, participant: ownParticipant(participant) }, 201);
     } catch (error) {
       if (!(error instanceof DuplicateParticipantError)) throw error;
       // El mismo @ desde otro navegador NO obtiene otra sesión ni más intentos. Queda como alerta.
@@ -328,6 +347,23 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     return c.body(null, 204);
   });
 
+  // Datos de contacto del propio participante (su token): los deja si es un
+  // participante anterior o los corrige. No toca intentos, partidas ni puntajes.
+  // Nunca devuelve el número entero.
+  app.post("/api/challenge/contact", bodyLimit({ maxSize: 1024, onError: tooLarge }), async (c) => {
+    if (!allow(limit.contact, c)) return c.json({ error: "too_many_requests" }, 429);
+    const participant = await participantOf(c);
+    if (!participant) return c.json({ error: "no_session" }, 401);
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const input = validateContact(parsed.body);
+    if (!input.ok) return c.json({ error: "validation_error", fields: input.errors }, 422);
+    const updated = await challenge.updateContact(participant.id, input.data, now());
+    if (!updated) return c.json({ error: "no_session" }, 401);
+    log(`[challenge] participant ${participant.id} ${hasContact(participant) ? "updated" : "added"} contact data`);
+    return c.json({ participant: ownParticipant(updated) });
+  });
+
   // Recuperación manual: el admin genera un código de un solo uso y se lo manda por Instagram.
   app.post("/api/challenge/recover", bodyLimit({ maxSize: 1024, onError: tooLarge }), async (c) => {
     if (!allow(limit.recover, c)) return c.json({ error: "too_many_requests" }, 429);
@@ -341,7 +377,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const participant = await challenge.recover(instagram, hashRecoveryCode(code), hashToken(token), now());
     if (!participant) return c.json({ error: "invalid_code" }, 422);
     log(`[challenge] participant ${participant.id} recovered a session`);
-    return c.json({ token, participant: { handle: handleOf(participant.instagram) } });
+    return c.json({ token, participant: ownParticipant(participant) });
   });
 
   app.get("/api/challenge/me", async (c) => {
@@ -355,7 +391,7 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
       challenge.claimsOf(participant.id),
     ]);
     return c.json({
-      participant: { handle: handleOf(participant.instagram) },
+      participant: ownParticipant(participant),
       tournament: edition && status ? publicEdition(edition, t, status) : null,
       attempts,
       best: standing(rows, participant.id),
@@ -376,6 +412,8 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const { edition, status, t } = await current(true);
     if (!edition || status !== "ACTIVE" || edition.isTest || edition.deletedAt) return c.json({ error: "edition_not_active", status }, 409);
     if (await challenge.isDisqualified(edition.id, participant.id)) return c.json({ error: "disqualified" }, 403);
+    // Sin nombre y WhatsApp no se juega (participantes anteriores: los dejan primero; sus intentos y puntajes se conservan).
+    if (!hasContact(participant)) return c.json({ error: "contact_required" }, 409);
 
     // Idempotencia: el navegador manda un id por cada toque de "Jugar". Un doble
     // toque o un reintento de red con el mismo id devuelve la MISMA partida y no
@@ -477,7 +515,9 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     return c.json(await summary(finished, edition, before));
   });
 
-  // Reclamo del premio: solo la sesión del ganador confirmado, una sola vez.
+  // Reclamo del premio de un ganador que NO tenía datos registrados (participantes
+  // anteriores): solo su sesión, una sola vez. Con datos registrados el premio ya
+  // nace con ellos y no se piden de nuevo.
   app.post("/api/challenge/claims/:editionId", bodyLimit({ maxSize: 1024, onError: tooLarge }), async (c) => {
     if (!allow(limit.claim, c)) return c.json({ error: "too_many_requests" }, 429);
     const participant = await participantOf(c);
@@ -855,6 +895,17 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     if (!claim) return c.json({ error: "invalid_transition" }, 409);
     log(`[admin] challenge #${edition.number} prize ${status} by ${c.get("userId")}`);
     return c.json({ claim });
+  });
+
+  // Borrar nombre y WhatsApp de un participante (pedido de eliminación). Se los
+  // vuelve a pedir antes de jugar; sus partidas y resultados se conservan.
+  app.post("/api/admin/challenge/participants/:id/erase-contact", small, async (c: AppContext) => {
+    const input = await reasonOf(c, false);
+    if (!input) return reasonError(c);
+    const done = await challenge.eraseContact(c.req.param("id") ?? "", input.reason, c.get("userId"));
+    if (!done) return c.json({ error: "not_found" }, 404);
+    log(`[admin] challenge contact data erased for ${c.req.param("id")} by ${c.get("userId")}`);
+    return c.json({ ok: true });
   });
 
   // Código de recuperación de sesión (se muestra UNA vez; se manda por Instagram).

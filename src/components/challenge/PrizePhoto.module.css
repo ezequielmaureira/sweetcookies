@@ -1,0 +1,32 @@
+.frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 340px;
+  margin: 10px auto 4px;
+  padding: 8px;
+  border: 1px solid var(--ch-line);
+  border-radius: 20px;
+  background: radial-gradient(circle at 50% 35%, rgb(255 255 255 / 0.06), transparent 70%), rgb(0 0 0 / 0.18);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.35);
+}
+
+.small {
+  max-width: 220px;
+}
+
+.image {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: min(42svh, 300px);
+  border-radius: 14px;
+  /* Siempre entera, con su proporción original. */
+  object-fit: contain;
+}
+
+.small .image {
+  max-height: 180px;
+}

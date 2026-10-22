@@ -48,7 +48,12 @@ export default async function ChallengeRulesPage() {
           <h2>3. Quiénes pueden participar</h2>
           <p>
             Exclusivo para residentes de Río Cuarto, Córdoba. Al participar confirmás que vivís en Río Cuarto. La persona que gane deberá acreditar su
-            elegibilidad antes de recibir el premio. Para competir solo se pide tu usuario de Instagram (@), que tiene que ser tuyo.
+            elegibilidad antes de recibir el premio.
+          </p>
+          <p>
+            Antes de jugar, cada participante deja su usuario de Instagram (@), que tiene que ser suyo, su nombre y apellido y su número de WhatsApp, y
+            acepta estas bases y el tratamiento de esos datos para la finalidad que se explica en el punto 13. Los tres datos son obligatorios. Quien ya
+            participaba antes de este requisito los completa antes de su próxima partida, sin perder sus intentos ni sus resultados.
           </p>
         </section>
 
@@ -102,9 +107,12 @@ export default async function ChallengeRulesPage() {
           <h2>8. Premio</h2>
           <p>
             Cada torneo informa su premio antes de participar. Solo el primer puesto confirmado gana ese premio; el resto de los puestos no recibe premio. El
-            premio no se puede cambiar por dinero. Una vez confirmado, el ganador lo reclama desde el mismo navegador con el que jugó, dejando su nombre y su celular para que Sweet Cookies
-            lo contacte. Si perdió el acceso, puede escribir por Instagram a {instagram} desde la cuenta ganadora para recuperarlo.
+            premio no se puede cambiar por dinero. Una vez confirmado el ganador, Sweet Cookies lo contacta por el WhatsApp que dejó al registrarse para
+            coordinar la verificación de sus datos y la entrega; no hace falta volver a cargarlos. Si un ganador no tiene esos datos registrados (por haber
+            participado antes de este requisito), los deja desde el mismo navegador con el que jugó o escribe por Instagram a {instagram} desde la cuenta
+            ganadora.
           </p>
+          <p>La entrega del premio estará sujeta a la confirmación del ganador y a la verificación de los datos necesarios para coordinarla.</p>
           <p>Los torneos históricos de prueba (anteriores a los torneos reales) no entregan premios.</p>
           <p className={styles.pending}>A definir: forma de entrega en Río Cuarto y plazo para reclamar el premio.</p>
         </section>
@@ -121,15 +129,31 @@ export default async function ChallengeRulesPage() {
         <section>
           <h2>10. Instagram</h2>
           <p>
-            Para participar te invitamos a seguir a {instagram}. No se comprueba automáticamente: la página solo recuerda ese paso en tu navegador. Para
-            entregar el premio, la organización puede confirmar por mensaje de Instagram que la cuenta ganadora es de quien lo reclama. Nunca vamos a
-            pedir contraseñas ni acceso a cuentas.
+            Para participar te invitamos a seguir a {instagram}. El sistema no comprueba automáticamente si seguís la cuenta: la página solo recuerda ese
+            paso en tu navegador. Nunca vamos a pedir contraseñas ni acceso a cuentas.
           </p>
           <p>Esta promoción no está patrocinada, avalada ni administrada por Instagram ni por Meta, ni está asociada a ellas.</p>
         </section>
 
         <section>
-          <h2>11. Revisión de resultados y descalificación</h2>
+          <h2>11. Verificación de la cuenta y de los datos</h2>
+          <p>
+            Sweet Cookies podrá verificar la autenticidad de la cuenta de Instagram utilizada para participar y la veracidad de los datos proporcionados
+            por los participantes, especialmente por quien resulte ganador.
+          </p>
+          <p>
+            La utilización de cuentas falsas, suplantación de identidad, información deliberadamente incorrecta o mecanismos fraudulentos podrá dar lugar a
+            la descalificación, previa revisión del caso.
+          </p>
+          <p>La entrega del premio estará sujeta a la confirmación del ganador y a la verificación de los datos necesarios para coordinarla.</p>
+          <p>
+            Esta verificación la hace la organización de forma manual cuando resulta necesaria (por ejemplo, por mensaje de Instagram o de WhatsApp). No es
+            automática y no usa servicios de Instagram, Meta ni de terceros.
+          </p>
+        </section>
+
+        <section>
+          <h2>12. Revisión de resultados y descalificación</h2>
           <p>
             La organización puede revisar resultados con patrones anormales (por ejemplo, programas que tocan solos, scripts, registros múltiples o datos
             falsos) y descalificar participaciones de forma justificada. Jugar muy rápido no es, por sí solo, motivo de descalificación. Compartir la conexión
@@ -138,24 +162,55 @@ export default async function ChallengeRulesPage() {
         </section>
 
         <section>
-          <h2>12. Datos personales</h2>
+          <h2>13. Datos personales y privacidad</h2>
+          <p>
+            <strong>Quién los administra:</strong> Sweet Cookies, organizadora del campeonato, es responsable de los datos que dejás para participar.
+          </p>
+          <p className={styles.pending}>A definir: nombre o razón social del responsable, CUIT y domicilio o medio de contacto formal.</p>
+          <p>
+            <strong>Qué datos recopilamos:</strong>
+          </p>
           <ul>
-            <li>Para competir pedimos solo tu usuario de Instagram, que se muestra en el ranking público junto con tu puntaje.</li>
+            <li>Tu usuario de Instagram (@): se muestra en el ranking público junto con tu puntaje.</li>
+            <li>Tu nombre y apellido y tu número de WhatsApp: nunca se publican ni aparecen en el ranking, en los enlaces para compartir ni en la página.</li>
             <li>
-              Para cuidar el campeonato registramos la hora de cada partida y una huella cifrada de la conexión (no la dirección IP en sí). Sirve solo para
-              detectar posibles registros duplicados.
+              Para cuidar el campeonato, la hora de cada partida y una huella cifrada de la conexión (no la dirección IP en sí). Sirve solo para detectar
+              posibles registros duplicados.
             </li>
             <li>
-              Si abrís un enlace de invitación, guardamos en tu navegador un identificador aleatorio para no contar dos veces la misma visita. No usamos
+              Si abrís un enlace de invitación, un identificador aleatorio guardado en tu navegador para no contar dos veces la misma visita. No usamos
               cookies publicitarias ni rastreo entre sitios.
             </li>
-            <li>Solo al ganador confirmado le pedimos nombre y celular, únicamente para coordinar la entrega del premio. Esos datos nunca se publican. No pedimos DNI ni domicilio.</li>
-            <li>Podés pedir acceder, corregir o eliminar tus datos escribiéndonos a {instagram}.</li>
+            <li>No pedimos DNI ni domicilio para participar.</li>
           </ul>
+          <p>
+            <strong>Para qué los usamos:</strong> únicamente para gestionar el campeonato (registrarte, cuidar que cada persona participe una sola vez y
+            revisar los resultados) y para contactarte por WhatsApp si resultás ganador, para verificar tus datos y coordinar la entrega del premio. No
+            usamos tu número para publicidad ni promociones: para eso te pediríamos un consentimiento aparte. No vendemos ni cedemos tus datos.
+          </p>
+          <p>
+            <strong>Quién los ve:</strong> solo las personas autorizadas de Sweet Cookies, desde el panel de administración protegido. El número completo
+            se muestra únicamente en los datos del ganador de cada torneo.
+          </p>
+          <p>
+            <strong>Cuánto tiempo los conservamos:</strong> mientras participes en los torneos y, para quien gane, hasta completar la entrega del premio y
+            durante el tiempo que exijan las obligaciones aplicables. Después se eliminan o se anonimizan.
+          </p>
+          <p className={styles.pending}>A definir: plazo concreto de conservación después de cada torneo.</p>
+          <p>
+            <strong>Tus derechos:</strong> podés pedir acceder a tus datos, corregirlos o eliminarlos escribiéndonos por Instagram a {instagram}. También
+            podés corregir tu nombre y tu WhatsApp desde la página del campeonato, con el mismo navegador con el que participás. Si pedís eliminarlos, no
+            vas a poder seguir jugando hasta volver a dejarlos; tus resultados en el ranking se conservan.
+          </p>
+          <p>
+            La Agencia de Acceso a la Información Pública, en su carácter de órgano de control de la Ley N.º 25.326, tiene la atribución de atender las
+            denuncias y reclamos que interpongan quienes resulten afectados en sus derechos por incumplimiento de las normas vigentes en materia de
+            protección de datos personales.
+          </p>
         </section>
 
         <section>
-          <h2>13. Suspensiones y cambios</h2>
+          <h2>14. Suspensiones y cambios</h2>
           <p>
             Ante problemas técnicos u otras causas de fuerza mayor, la organización puede pausar o cancelar un torneo. Cualquier cambio en estas bases se publicará en
             esta página.

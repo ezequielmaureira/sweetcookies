@@ -8,6 +8,7 @@ import type { ChallengeInfo } from "@/lib/challenge/challenge-api";
 import { bitesText, formatCordobaDateTime, formatCountdown } from "@/lib/challenge/challenge-format";
 import { Leaderboard } from "./Leaderboard";
 import { PlayerPanel, type Session } from "./PlayerPanel";
+import { PrizePhoto } from "./PrizePhoto";
 import type { ChallengeCookie } from "./useCookieImage";
 import { useServerNow } from "./useServerNow";
 import styles from "./ChallengeIntro.module.css";
@@ -48,8 +49,9 @@ type ChallengeIntroProps = {
  * Portada del campeonato. Se adapta al torneo que configuró el admin: sin
  * torneo ("Próximamente"), programado, activo, pausado, finalizado, con
  * ganador publicado o cancelado. No hay práctica: solo se juega un torneo
- * activo. Las cuentas regresivas son informativas: el servidor valida siempre
- * las fechas.
+ * activo. Un torneo terminado agradece y muestra el ranking final (sin invitar
+ * a jugar). Las cuentas regresivas son informativas: el servidor valida
+ * siempre las fechas.
  */
 export function ChallengeIntro(props: ChallengeIntroProps) {
   const { cookie, logoSrc, info, session, instagramHandle, onRefresh } = props;
@@ -156,11 +158,38 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
               <p className={styles.statusLabel}>
                 {tournament.name} · {STATUS_LABELS[tournament.status]}
               </p>
+              {status === "FINISHED" && (
+                <div className={styles.ended}>
+                  <p className={styles.endedTitle}>🏆 DESAFÍO TERMINADO</p>
+                  <p className={styles.endedThanks}>¡Gracias por participar!</p>
+                  <p className={styles.statusSub}>Estamos verificando los resultados para confirmar al ganador.</p>
+                  <p className={styles.statusSub}>
+                    {info.ranked} {info.ranked === 1 ? "participante" : "participantes"} con resultado
+                  </p>
+                </div>
+              )}
+              {status === "RESULTS_PUBLISHED" &&
+                (info.winner ? (
+                  <div className={styles.ended}>
+                    <p className={styles.endedTitle}>🏆 TENEMOS GANADOR</p>
+                    <p className={styles.winner}>{info.winner.handle}</p>
+                    <p className={styles.statusSub}>Con {bitesText(info.winner.score)}</p>
+                    <p className={styles.prize}>
+                      Premio: <strong>{tournament.prize}</strong>
+                      {tournament.isTest && <span className={styles.statusSub}> (histórico: sin premio)</span>}
+                    </p>
+                  </div>
+                ) : (
+                  <p className={styles.statusText}>Resultados publicados: este torneo no tuvo ganador.</p>
+                ))}
               {status !== "RESULTS_PUBLISHED" && status !== "CANCELLED" && (
                 <p className={styles.prize}>
                   🏆 Premio para el 1.º puesto: <strong>{tournament.prize}</strong>
                   {tournament.isTest && <span className={styles.statusSub}> (histórico: sin premio)</span>}
                 </p>
+              )}
+              {status !== "CANCELLED" && (status !== "RESULTS_PUBLISHED" || info.winner) && (
+                <PrizePhoto src={tournament.prizeImageUrl} prize={tournament.prize} size={status === "FINISHED" ? "sm" : "md"} />
               )}
               {tournament.prizeDescription && status !== "RESULTS_PUBLISHED" && status !== "FINISHED" && <p className={styles.statusSub}>{tournament.prizeDescription}</p>}
               {tournament.description && (status === "SCHEDULED" || status === "ACTIVE") && <p className={styles.description}>{tournament.description}</p>}
@@ -179,31 +208,15 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
                 </p>
               )}
               {status === "PAUSED" && <p className={styles.statusText}>Pausamos el torneo un momento. Volvé a entrar en un rato.</p>}
-              {status === "FINISHED" && (
-                <p className={styles.statusText}>
-                  El torneo terminó: ya no se aceptan intentos oficiales.
-                  <span className={styles.statusSub}>Ranking final pendiente de revisión. Pronto confirmamos al ganador.</span>
-                </p>
-              )}
-              {status === "RESULTS_PUBLISHED" && (
-                <p className={styles.statusText}>
-                  {info.winner ? (
-                    <>
-                      Ganador confirmado: <strong>{info.winner.handle}</strong>
-                      <span className={styles.statusSub}>
-                        Con {bitesText(info.winner.score)} · Premio: {tournament.prize}
-                        {tournament.isTest ? " (histórico: sin premio)" : ""}
-                      </span>
-                    </>
-                  ) : (
-                    "Resultados publicados: este torneo no tuvo ganador."
-                  )}
-                </p>
-              )}
               {status === "CANCELLED" && <p className={styles.statusText}>Este torneo fue cancelado.</p>}
             </>
           )}
-          {info?.linkStatus === "invalid" && <p className={styles.statusSub}>El enlace que abriste ya no está disponible. Te mostramos el desafío actual.</p>}
+          {info?.linkStatus === "invalid" && <p className={styles.statusSub}>El enlace que abriste no corresponde a un desafío disponible. Te mostramos el desafío actual.</p>}
+          {info?.linkStatus === "removed" && (
+            <p className={styles.linkNotice} role="note">
+              Este torneo ya no está disponible.{tournament ? " Te mostramos el desafío actual." : ""}
+            </p>
+          )}
           {next &&
             (next.status === "SCHEDULED" ? (
               <p className={styles.nextTeaser}>
@@ -243,6 +256,7 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
             myHandle={myHandle}
             prize={tournament.prize}
             final={status === "FINISHED" || status === "RESULTS_PUBLISHED" || status === "CANCELLED"}
+            pendingReview={status === "FINISHED"}
           />
         )}
 

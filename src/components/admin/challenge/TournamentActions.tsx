@@ -16,7 +16,8 @@ import {
   type AdminEdition,
   type DeletionInfo,
 } from "@/lib/admin/challenge-admin-api";
-import { formatCordobaDateTime } from "@/lib/challenge/challenge-format";
+import { challengeLink, formatCordobaDateTime } from "@/lib/challenge/challenge-format";
+import { copyText } from "@/lib/clipboard";
 import styles from "./ChallengeAdmin.module.css";
 
 type TournamentActionsProps = {
@@ -46,19 +47,35 @@ export function availableActions(e: AdminEdition) {
     resume: !deleted && !e.legacy && s === "PAUSED",
     finish: !deleted && (s === "ACTIVE" || s === "PAUSED"),
     remove: !deleted,
+    copyLink: !deleted,
   };
 }
 
 /**
+ * Enlace público y permanente del torneo (/campeonato?torneo=ID), para la
+ * biografía de Instagram o para compartir. Sin códigos de invitación.
+ */
+export const tournamentUrl = (origin: string, id: string) => challengeLink(origin, id, null);
+
+/**
  * Botones de un torneo: Editar, Publicar, Despublicar, Pausar, Reanudar,
- * Finalizar, Administrar y Eliminar. Publicar es siempre una decisión explícita.
+ * Finalizar, Copiar enlace, Administrar y Eliminar. Publicar es siempre una decisión explícita.
  * Eliminar muestra qué tiene el torneo y pide escribir ELIMINAR.
  */
 export function TournamentActions({ edition: e, onManage, onEdit, onDone, compact = false }: TournamentActionsProps) {
   const { getToken } = useAuth();
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [copied, setCopied] = useState<"ok" | "failed" | null>(null);
   const can = availableActions(e);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  const copyLink = async () => setCopied((await copyText(tournamentUrl(window.location.origin, e.id))) ? "ok" : "failed");
 
   const run = async (action: (token: string | null) => Promise<unknown>, done: string) => {
     setBusy(true);
@@ -116,8 +133,18 @@ export function TournamentActions({ edition: e, onManage, onEdit, onDone, compac
         {can.resume && button("Reanudar", resume)}
         {can.finish && button("Finalizar", finish)}
         {can.unpublish && button("Despublicar", unpublish)}
+        {can.copyLink && button("Copiar enlace del torneo", () => void copyLink())}
         {onManage && button("Administrar", onManage)}
         {can.remove && button("Eliminar", () => setDeleting(true), true)}
+        <span className={styles.copied} role="status" aria-live="polite">
+          {copied === "ok"
+            ? e.published
+              ? "¡Enlace copiado!"
+              : "¡Enlace copiado! Todavía no es visible: publicalo para que funcione."
+            : copied === "failed"
+              ? `No pudimos copiarlo: ${tournamentUrl(window.location.origin, e.id)}`
+              : ""}
+        </span>
       </div>
       {deleting && (
         <DeleteDialog

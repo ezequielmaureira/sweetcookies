@@ -13,8 +13,10 @@ type PrizeClaimProps = {
 };
 
 /**
- * Premio del primer puesto CONFIRMADO. Recién acá se piden nombre y celular,
- * solo para coordinar la entrega. El reclamo va atado a la sesión del ganador.
+ * Premio del primer puesto CONFIRMADO. Si el ganador dejó nombre y WhatsApp al
+ * registrarse, el premio ya los tiene y solo se le avisa que lo vamos a
+ * contactar. Solo a ganadores anteriores sin esos datos se les piden acá. El
+ * reclamo va atado a la sesión del ganador.
  */
 export function PrizeClaim({ token, claim, onClaimed }: PrizeClaimProps) {
   const id = useId();
@@ -31,7 +33,8 @@ export function PrizeClaim({ token, claim, onClaimed }: PrizeClaimProps) {
     return (
       <div className={styles.form}>
         <p className={styles.success} role="status">
-          🏆 ¡Ganaste «{claim.tournamentName}»! Ya recibimos tus datos: te vamos a contactar para coordinar la entrega.
+          🏆 ¡Ganaste «{claim.tournamentName}»! Tu premio: <strong>{claim.prize}</strong>. Te vamos a contactar por WhatsApp para verificar tus datos y
+          coordinar la entrega.
         </p>
         {testNote}
       </div>

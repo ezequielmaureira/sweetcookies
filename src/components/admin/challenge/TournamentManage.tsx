@@ -20,6 +20,7 @@ import {
   reinstate,
   reviewGame,
   rhythm,
+  eraseContact,
   setClaimStatus,
   type AdminEdition,
   type AdminGame,
@@ -28,7 +29,8 @@ import {
   type InviteStats,
   type Review,
 } from "@/lib/admin/challenge-admin-api";
-import { formatCordobaDateTime } from "@/lib/challenge/challenge-format";
+import { resolveImageSrc } from "@/lib/catalog";
+import { formatCordobaDateTime, whatsappChatUrl, winnerMessage } from "@/lib/challenge/challenge-format";
 import admin from "@/components/admin/Admin.module.css";
 import { TournamentActions } from "./TournamentActions";
 import styles from "./ChallengeAdmin.module.css";
@@ -136,6 +138,14 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
     }
   };
 
+  /** Borra nombre y WhatsApp a pedido del participante (se los vuelve a pedir antes de jugar). */
+  const erase = (participantId: string, instagram: string) => {
+    if (!window.confirm(`¿Borrar el nombre y el WhatsApp de @${instagram}? Hacelo solo si lo pidió. Sus partidas y resultados se conservan, y para volver a jugar tendrá que dejarlos de nuevo.`)) return;
+    const reason = askReason("Motivo (por ejemplo, “lo pidió por Instagram”):");
+    if (reason === null) return;
+    void run((t) => eraseContact(t, participantId, reason), `Datos de contacto de @${instagram} borrados.`, "No se pudieron borrar los datos.");
+  };
+
   /** Código de un solo uso para recuperar la sesión (se muestra una vez; se manda por Instagram). */
   const recovery = async (participantId: string, instagram: string) => {
     if (
@@ -161,7 +171,13 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
 
   const { edition, stats, ranking, alerts, claim, disqualifications, actions } = detail;
   const leader = ranking[0] ?? null;
-  const winnerHandle = claim ? (ranking.find((r) => r.participantId === claim.participantId)?.instagram ?? null) : null;
+  const winnerHandle = claim?.instagram ?? null;
+  // Datos del ganador: los que tiene registrados ahora (o, si no, con los que quedó el premio).
+  const winnerName = claim ? (claim.current.name ?? claim.name) : null;
+  const winnerPhone = claim ? (claim.current.phone ?? claim.phone) : null;
+  const changedAfterWin =
+    !!claim && !!claim.phone && !!claim.current.phone && (claim.current.phone !== claim.phone || claim.current.name !== claim.name);
+  const photo = resolveImageSrc(edition.prizeImageUrl);
   const published = edition.status === "RESULTS_PUBLISHED";
   // Eliminado o histórico de prueba: solo lectura (no se aprueban, descalifican ni publican resultados).
   const closed = published || edition.status === "CANCELLED" || edition.deletedAt !== null || edition.legacy;
@@ -204,6 +220,10 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
           </div>
         </dl>
         {edition.prizeDescription && <p className={styles.preLine}>{edition.prizeDescription}</p>}
+        {photo && (
+          // eslint-disable-next-line @next/next/no-img-element -- foto subida, servida por la API
+          <img src={photo} alt={`Premio: ${edition.prize}`} className={styles.rowPhoto} />
+        )}
         <p className={styles.muted}>
           Hora de Córdoba. {edition.published ? "Publicado: se ve en /campeonato y se puede jugar entre estas fechas." : "No visible al público."}
         </p>
@@ -261,7 +281,7 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
                 if (reason !== null)
                   void run(
                     (t) => publishResults(t, edition.id, reason),
-                    "Ganador confirmado y publicado. Ya puede reclamar su premio desde su sesión.",
+                    "Ganador confirmado y publicado. Sus datos de contacto están en “Datos del ganador”.",
                     "No se pudo publicar: el primer puesto tiene una revisión pendiente o el torneo cambió.",
                   );
               }}
@@ -287,27 +307,64 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
 
       {claim && (
         <section className={admin.section}>
-          <h2 className={admin.sectionTitle}>Premio del ganador{edition.isTest ? " (prueba: no es real)" : ""}</h2>
-          <p>
-            Estado: <strong>{CLAIM_LABELS[claim.status]}</strong> · Ganador: {winnerHandle ? igLink(winnerHandle) : "—"}
-          </p>
-          {claim.name && claim.phone ? (
-            <p className={styles.contact}>
-              <span>{claim.name}</span>
-              <a href={`https://wa.me/${claim.phone}`} target="_blank" rel="noreferrer">
-                +{claim.phone}
-              </a>
-              <span className={styles.flags}>Reclamado {when(claim.claimedAt)}</span>
-            </p>
-          ) : (
-            <p className={styles.muted}>
-              Todavía no dejó sus datos. Si perdió la sesión, confirmá por Instagram que es la cuenta ganadora y generale un código de recuperación.
+          <h2 className={admin.sectionTitle}>Datos del ganador</h2>
+          <p className={styles.muted}>Solo visibles para administradores. No se muestran en la página pública.</p>
+          <dl className={styles.winnerData}>
+            <div>
+              <dt>Usuario de Instagram</dt>
+              <dd>{igLink(claim.instagram)}</dd>
+            </div>
+            <div>
+              <dt>Nombre y apellido</dt>
+              <dd>{winnerName ?? "— (no registrado)"}</dd>
+            </div>
+            <div>
+              <dt>WhatsApp</dt>
+              <dd>{winnerPhone ? `+${winnerPhone}` : "— (no registrado)"}</dd>
+            </div>
+            <div>
+              <dt>Premio ganado</dt>
+              <dd>
+                {edition.prize}
+                {edition.prizeDescription ? <span className={styles.flags}>{edition.prizeDescription}</span> : null}
+              </dd>
+            </div>
+            <div>
+              <dt>Estado del premio</dt>
+              <dd>
+                <strong>{CLAIM_LABELS[claim.status]}</strong>
+              </dd>
+            </div>
+            <div>
+              <dt>Contacto y entrega</dt>
+              <dd>
+                Contactado: {when(claim.contactedAt)} · Entregado: {when(claim.deliveredAt)}
+              </dd>
+            </div>
+          </dl>
+          {changedAfterWin && (
+            <p className={styles.alertText}>
+              ⚠ El participante cambió sus datos el {when(claim.current.updatedAt)}, después de confirmarse el ganador. Datos que tenía al ganar: {claim.name ?? "—"} ·{" "}
+              {claim.phone ? `+${claim.phone}` : "—"}. Verificá por Instagram que es la misma persona antes de entregar el premio.
             </p>
           )}
-          <p className={styles.muted}>
-            Contactado: {when(claim.contactedAt)} · Entregado: {when(claim.deliveredAt)}
-          </p>
+          {!winnerPhone && (
+            <p className={styles.muted}>
+              Este ganador no tiene nombre ni WhatsApp registrados (participó antes de que se pidieran). Se le piden la próxima vez que entre al campeonato. Si
+              perdió la sesión, confirmá por Instagram que es la cuenta ganadora y generale un código de recuperación. No cargues datos que no te haya dado.
+            </p>
+          )}
           <div className={styles.actions}>
+            {winnerPhone && winnerName && claim.status !== "DELIVERED" && (
+              <a
+                className={styles.whatsapp}
+                href={whatsappChatUrl(winnerPhone, winnerMessage({ name: winnerName, tournamentName: edition.name, prize: edition.prize }))}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Contactar por WhatsApp
+              </a>
+            )}
             {(claim.status === "PENDING" || claim.status === "CLAIMED") && (
               <Button
                 variant="secondary"
@@ -332,12 +389,15 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
                 Marcar entregado
               </Button>
             )}
-            {claim.status === "PENDING" && winnerHandle && (
-              <Button variant="secondary" disabled={busy} onClick={() => void recovery(claim.participantId, winnerHandle)}>
+            {!winnerPhone && (
+              <Button variant="secondary" disabled={busy} onClick={() => void recovery(claim.participantId, claim.instagram)}>
                 Código de recuperación
               </Button>
             )}
           </div>
+          {winnerPhone && claim.status !== "DELIVERED" && (
+            <p className={styles.muted}>“Contactar por WhatsApp” abre el chat con un mensaje preparado: no se envía nada hasta que vos lo mandes.</p>
+          )}
         </section>
       )}
 
@@ -633,13 +693,16 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
           <>
             <p className={styles.muted}>
               {participants.length} registrados · {participants.filter((p) => p.attemptsUsed > 0).length} jugaron este torneo ·{" "}
-              {participants.filter((p) => p.duplicateAttempts > 0).length} con intentos de registro duplicado
+              {participants.filter((p) => p.duplicateAttempts > 0).length} con intentos de registro duplicado · {participants.filter((p) => !p.hasContact).length} sin
+              nombre o WhatsApp
             </p>
+            <p className={styles.muted}>El WhatsApp no se muestra en este listado: solo en los datos del ganador de cada torneo.</p>
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
                   <tr>
                     <th>Instagram</th>
+                    <th>Nombre y WhatsApp</th>
                     <th>Intentos (usados / disponibles)</th>
                     <th>Mejor</th>
                     <th>Conexión</th>
@@ -655,6 +718,16 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
                         {igLink(p.instagram)}
                         <span className={styles.flags}>Desde {when(p.createdAt)}</span>
                       </td>
+                      <td className={p.sharedPhone ? styles.alert : undefined}>
+                        {p.hasContact ? (
+                          <>
+                            {p.fullName}
+                            <span className={styles.flags}>WhatsApp cargado{p.sharedPhone ? " · repetido en otro @ (revisar)" : ""}</span>
+                          </>
+                        ) : (
+                          "Faltan (participante anterior)"
+                        )}
+                      </td>
                       <td>
                         {p.attemptsUsed} / {Math.max(0, edition.attempts - p.attemptsUsed)}
                       </td>
@@ -665,9 +738,16 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
                       </td>
                       <td>{when(p.lastSeenAt)}</td>
                       <td>
-                        <button type="button" className={styles.approve} disabled={busy} onClick={() => void recovery(p.id, p.instagram)}>
-                          {p.recoveryPending ? "Nuevo código" : "Código de recuperación"}
-                        </button>
+                        <div className={styles.rowActions}>
+                          <button type="button" className={styles.approve} disabled={busy} onClick={() => void recovery(p.id, p.instagram)}>
+                            {p.recoveryPending ? "Nuevo código" : "Código de recuperación"}
+                          </button>
+                          {p.hasContact && (
+                            <button type="button" className={styles.danger} disabled={busy} onClick={() => erase(p.id, p.instagram)}>
+                              Borrar datos de contacto
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

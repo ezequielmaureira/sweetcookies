@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { adminErrorMessage } from "@/lib/admin/admin-api";
 import {
@@ -11,6 +11,8 @@ import {
   type AdminEdition,
   type TournamentForm as Form,
 } from "@/lib/admin/challenge-admin-api";
+import { uploadProductImage } from "@/lib/admin/product-upload";
+import { resolveImageSrc } from "@/lib/catalog";
 import { formatCordobaDateTime } from "@/lib/challenge/challenge-format";
 import admin from "@/components/admin/Admin.module.css";
 import styles from "./ChallengeAdmin.module.css";
@@ -33,6 +35,7 @@ const fromEdition = (e: AdminEdition): Form => ({
   endTime: e.end.time,
   prize: e.prize,
   prizeDescription: e.prizeDescription ?? "",
+  prizeImageUrl: e.prizeImageUrl,
   attempts: e.attempts,
 });
 
@@ -45,6 +48,7 @@ const EMPTY: Form = {
   endTime: "23:59",
   prize: "",
   prizeDescription: "",
+  prizeImageUrl: null,
   attempts: 3,
 };
 
@@ -53,7 +57,7 @@ const previewDate = (date: string, time: string) => (date && time ? new Date(`${
 
 /**
  * Crear o editar un torneo: nombre, descripción, fechas y horas (Córdoba),
- * premio, intentos y modo, con vista previa de lo que verá el jugador. El
+ * premio (con foto opcional) e intentos, con vista previa de lo que verá el jugador. El
  * servidor valida todo (fechas, superposición y reglas de edición) y responde
  * con el motivo si algo no se puede.
  */
@@ -66,6 +70,8 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Borrador o despublicado: no visible al público.
   const isDraft = !edition || edition.status === "DRAFT" || edition.status === "UNPUBLISHED";
@@ -74,6 +80,21 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
   const prizeChanged = !!edition && (form.prize.trim() !== edition.prize || form.prizeDescription.trim() !== (edition.prizeDescription ?? ""));
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
+
+  // Foto del premio: se reduce en el navegador y se sube con el mismo sistema que las fotos de productos.
+  // Queda asociada al torneo al guardar.
+  const uploadPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    setErrors((e) => ({ ...e, prizeImage: "" }));
+    const result = await uploadProductImage(getToken, file, "main");
+    setUploading(false);
+    if ("error" in result) setErrors((e) => ({ ...e, prizeImage: result.error }));
+    else set("prizeImageUrl", result.url);
+  };
+  const photoSrc = resolveImageSrc(form.prizeImageUrl);
 
   // Guardar NUNCA publica: el torneo nuevo queda en borrador y se publica aparte.
   const submit = async () => {
@@ -165,6 +186,35 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
             "Descripción del premio (opcional)",
             <textarea id={`${id}-prizeDescription`} className={admin.input} value={form.prizeDescription} onChange={(e) => set("prizeDescription", e.target.value)} maxLength={500} rows={2} />,
           )}
+          <div className={admin.field}>
+            <span className={admin.label}>Foto del premio (opcional)</span>
+            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="visually-hidden" tabIndex={-1} onChange={uploadPhoto} aria-hidden="true" />
+            {photoSrc ? (
+              <div className={styles.prizePhotoEdit}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- foto subida, servida por la API */}
+                <img src={photoSrc} alt="Foto del premio" className={styles.prizePhotoThumb} />
+                <div className={styles.rowActions}>
+                  <button type="button" className={styles.approve} disabled={uploading || busy} onClick={() => fileRef.current?.click()}>
+                    {uploading ? "Subiendo…" : "Cambiar foto"}
+                  </button>
+                  <button type="button" className={styles.danger} disabled={uploading || busy} onClick={() => set("prizeImageUrl", null)}>
+                    Quitar foto
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.rowActions}>
+                <button type="button" className={styles.approve} disabled={uploading || busy} onClick={() => fileRef.current?.click()}>
+                  {uploading ? "Subiendo…" : "Subir foto del premio"}
+                </button>
+              </div>
+            )}
+            {errors.prizeImage ? (
+              <p className={admin.error}>{errors.prizeImage}</p>
+            ) : (
+              <p className={admin.help}>JPG, PNG o WebP. Se muestra entera, sin recortes. Sin foto, la página queda como siempre. Los cambios se guardan al tocar “Guardar”.</p>
+            )}
+          </div>
           {field(
             "attempts",
             "Intentos por participante",
@@ -207,7 +257,7 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
           )}
 
           <div className={styles.actions}>
-            <Button disabled={busy} onClick={() => void submit()}>
+            <Button disabled={busy || uploading} onClick={() => void submit()}>
               {busy ? "Guardando…" : !edition ? "Guardar borrador" : "Guardar cambios"}
             </Button>
           </div>
@@ -227,6 +277,10 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
           <p className={styles.previewPrize}>
             🏆 Premio para el 1.º puesto: <strong>{form.prize.trim() || "—"}</strong>
           </p>
+          {photoSrc && (
+            // eslint-disable-next-line @next/next/no-img-element -- foto subida, servida por la API
+            <img src={photoSrc} alt="Foto del premio" className={styles.previewPhoto} />
+          )}
           {form.prizeDescription.trim() && <p className={styles.previewSub}>{form.prizeDescription.trim()}</p>}
           {form.description.trim() && <p className={styles.previewText}>{form.description.trim()}</p>}
           <p className={styles.previewSub}>
