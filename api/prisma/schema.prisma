@@ -421,6 +421,10 @@ model ChallengeEdition {
   gameDurationMs      Int             @default(15000) @map("game_duration_ms")
   /// Intentos oficiales por participante en TODO el torneo (los define el admin).
   attempts            Int             @default(3)
+  /// Mínimo de participantes válidos (al menos una partida oficial válida, sin
+  /// descalificar) para que haya ganador con premio. Se fija al crear el torneo y
+  /// queda fijo al publicarlo. null = torneos anteriores a esta regla (sin mínimo).
+  minParticipants     Int?            @map("min_participants")
   /// Premio del primer puesto (lo define el admin).
   prize               String          @db.VarChar(120)
   prizeDescription    String?         @map("prize_description") @db.VarChar(500)

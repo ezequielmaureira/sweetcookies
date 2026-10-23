@@ -152,6 +152,7 @@ function edition(over: Partial<EditionRecord> = {}): EditionRecord {
     prize: "Caja de 6 cookies",
     prizeDescription: "Surtidas, para retirar en Río Cuarto.",
     prizeImageUrl: null,
+    minParticipants: null,
     cancelledAt: null,
     cancelReason: null,
     deletedAt: null,
@@ -333,6 +334,9 @@ function memoryChallenge() {
   const conflictFor = (range: { startsAt: Date; endsAt: Date }, excludeId: string | null) =>
     editions.find((e) => e.id !== excludeId && occupiesDates(e) && overlaps(e, range)) ?? null;
   const nextNumber = (isTest: boolean) => editions.filter((e) => e.isTest === isTest).length + 1;
+  /** Participantes válidos: misma regla que el ranking (terminada, no rechazada, sin descalificar). */
+  const validOf = (editionId: string) =>
+    new Set(games.filter((g) => g.editionId === editionId && g.status === "FINISHED" && g.review !== "REJECTED" && !disqualified.has(`${editionId}:${g.participantId}`)).map((g) => g.participantId)).size;
   const unused = async (): Promise<never> => {
     throw new Error("no usado en estos tests");
   };
@@ -350,10 +354,10 @@ function memoryChallenge() {
     listEditions: async () =>
       editions.map((e) => {
         const own = games.filter((g) => g.editionId === e.id);
-        return { ...e, games: own.length, participants: new Set(own.map((g) => g.participantId)).size };
+        return { ...e, games: own.length, participants: new Set(own.map((g) => g.participantId)).size, validParticipants: validOf(e.id) };
       }),
     createEdition: async (data): Promise<SaveResult> => {
-      const e = edition({ ...data, isTest: false, id: `t${editions.length + 1}`, number: nextNumber(false), status: "DRAFT" });
+      const e = edition({ ...data, minParticipants: data.minParticipants ?? 2, isTest: false, id: `t${editions.length + 1}`, number: nextNumber(false), status: "DRAFT" });
       editions.push(e);
       actions.push("CREATE_DRAFT");
       return { ok: true, edition: e };
@@ -365,7 +369,7 @@ function memoryChallenge() {
         const conflict = conflictFor(data, id);
         if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
       }
-      Object.assign(e, { ...data, isTest: e.isTest });
+      Object.assign(e, { ...data, minParticipants: e.status === "DRAFT" ? (data.minParticipants ?? e.minParticipants) : e.minParticipants, isTest: e.isTest });
       actions.push(`UPDATE:${changes.join(",")}`);
       return { ok: true, edition: e };
     },
@@ -429,8 +433,8 @@ function memoryChallenge() {
       actions.push("CANCEL");
       return e;
     },
-    countPendingWinners: async (now) =>
-      editions.filter((e) => !e.deletedAt && !e.isTest && (e.status === "FINISHED" || (["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status) && e.endsAt < now))).length,
+    pendingWinnerEditions: async (now) =>
+      editions.filter((e) => !e.deletedAt && !e.isTest && (e.status === "FINISHED" || (["SCHEDULED", "ACTIVE", "PAUSED"].includes(e.status) && e.endsAt < now))),
     countGames: async (editionId) => games.filter((g) => g.editionId === editionId).length,
     createParticipant: async (d) => {
       if (people.some((p) => p.instagram === d.instagram)) throw new DuplicateParticipantError();
@@ -600,7 +604,7 @@ function memoryChallenge() {
     },
     stats: async (editionId) => {
       const own = games.filter((g) => g.editionId === editionId);
-      return { participants: new Set(own.map((g) => g.participantId)).size, games: own.length, finished: own.filter((g) => g.status === "FINISHED").length, pendingReview: 0 };
+      return { participants: new Set(own.map((g) => g.participantId)).size, validParticipants: validOf(editionId), games: own.length, finished: own.filter((g) => g.status === "FINISHED").length, pendingReview: 0 };
     },
     adminRanking: async () => [],
     listGames: unused,
@@ -652,7 +656,7 @@ function memoryChallenge() {
       return e;
     },
   };
-  return { repo, editions, people, actions, games, invites, visits, referrals, claims };
+  return { repo, editions, people, actions, games, invites, visits, referrals, claims, disqualified };
 }
 
 const ORIGIN = "https://sweetcookies-seven.vercel.app";
@@ -962,6 +966,7 @@ describe("torneos: intentos configurables, ranking y premio", () => {
     const t = await create(runningNow());
     const token = await join("@viejo");
     await play(token, humanTaps(60));
+    await play(await join("@segundo"), humanTaps(20)); // mínimo por defecto: 2 participantes válidos
     // Participante anterior al requisito: sin nombre ni WhatsApp.
     Object.assign(memory.people[0], { fullName: null, phone: null });
     setClock("2026-10-30T12:00:00Z");
@@ -1249,6 +1254,7 @@ describe("publicación y ciclo de vida de los torneos", () => {
     const t = await create(runningNow());
     const token = await join("@ana");
     await play(token, humanTaps(40));
+    await play(await join("@beto"), humanTaps(20));
     const done = await json(await call(`/api/admin/challenge/editions/${t.data.id}/finish`, { method: "POST", body: { reason: "Cierre anticipado" } }));
     assert.equal(done.status, "FINISHED");
     assert.equal((await call("/api/challenge/games", { method: "POST", token })).status, 409);
@@ -1273,16 +1279,17 @@ describe("publicación y ciclo de vida de los torneos", () => {
     const t = await create(runningNow());
     const token = await join("@ana");
     await play(token, humanTaps(30));
+    await play(await join("@beto"), humanTaps(20));
     setClock("2026-10-30T12:00:00Z");
     await call(`/api/admin/challenge/editions/${t.data.id}/publish`, { method: "POST", body: {} });
     const info = await json(await call(`/api/admin/challenge/editions/${t.data.id}/deletion`));
-    assert.deepEqual([info.mode, info.participants, info.games, info.winnerPublished, info.claimStatus], ["soft", 1, 1, true, "CLAIMED"]);
+    assert.deepEqual([info.mode, info.participants, info.games, info.winnerPublished, info.claimStatus], ["soft", 2, 2, true, "CLAIMED"]);
     const res = await json(await call(`/api/admin/challenge/editions/${t.data.id}`, { method: "DELETE", body: { confirm: "ELIMINAR", reason: "Limpieza" } }));
     assert.equal(res.mode, "soft");
     // Se conserva: el torneo y su partida siguen en la base.
     assert.equal(memory.editions.length, 1);
     assert.ok(memory.editions[0].deletedAt);
-    assert.equal(memory.games.length, 1);
+    assert.equal(memory.games.length, 2);
     // No se ve, no permite reclamar y no se puede volver a eliminar ni editar.
     assert.equal((await json(await call("/api/public/challenge"))).tournament, null);
     assert.deepEqual((await json(await call("/api/challenge/me", { token }))).claims, []);
@@ -1454,5 +1461,128 @@ describe("foto del premio y enlace público del torneo", () => {
     const removed = await json(await call(`/api/public/challenge?torneo=${active.data.id}`));
     assert.equal(removed.linkStatus, "removed");
     assert.ok(!JSON.stringify(removed).includes("Activo"));
+  });
+});
+
+describe("mínimo de participantes válidos", () => {
+  /** n participantes distintos juegan una partida válida cada uno. */
+  const players = async (ctx: ReturnType<typeof setup>, n: number, prefix = "p") => {
+    const tokens: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const token = await ctx.join(`@${prefix}${i}`, `190.0.${Math.floor(i / 200)}.${i % 200}`);
+      assert.equal((await ctx.play(token, humanTaps(20 + i))).status, 200);
+      tokens.push(token);
+    }
+    return tokens;
+  };
+  const publishWinner = (ctx: ReturnType<typeof setup>, id: string) => ctx.call(`/api/admin/challenge/editions/${id}/publish`, { method: "POST", body: {} });
+
+  it("se configura entre 2 y 1000; sugerido 2; se muestra en el detalle y en lo público", async () => {
+    const ctx = setup();
+    for (const bad of [1, 0, 1001, 2.5, "10"]) {
+      const res = await ctx.call("/api/admin/challenge/editions", { method: "POST", body: { ...form(), minParticipants: bad } });
+      assert.equal(res.status, 422, String(bad));
+      assert.ok((await json(res)).fields.minParticipants);
+    }
+    const byDefault = await ctx.create({}, false);
+    assert.equal(byDefault.data.minParticipants, 2);
+    const t = await ctx.create(runningNow({ minParticipants: 1000 }));
+    assert.equal(t.data.minParticipants, 1000);
+    const detail = await json(await ctx.call(`/api/admin/challenge/editions/${t.data.id}`));
+    assert.deepEqual(detail.minimum, { required: 1000, valid: 0, reached: false });
+    assert.equal((await json(await ctx.call("/api/public/challenge"))).tournament.minParticipants, 1000);
+  });
+
+  it("mínimo 10: con 1 y con 9 participantes no hay ganador ni reclamo; con 10 se habilita la confirmación", async () => {
+    for (const [n, ok] of [
+      [1, false],
+      [9, false],
+      [10, true],
+    ] as const) {
+      const ctx = setup();
+      const t = await ctx.create(runningNow({ minParticipants: 10 }));
+      const tokens = await players(ctx, n);
+      ctx.setClock("2026-10-30T12:00:00Z");
+      const info = await json(await ctx.call("/api/public/challenge"));
+      assert.deepEqual(info.minimum, { required: 10, valid: n, reached: ok });
+      const res = await publishWinner(ctx, t.data.id);
+      if (ok) {
+        assert.equal(res.status, 200);
+        assert.equal(ctx.memory.claims.length, 1);
+        continue;
+      }
+      assert.equal(res.status, 409);
+      assert.equal((await json(res)).error, "minimum_not_met");
+      // Sin ganador ni reclamo; ranking, participantes y partidas se conservan.
+      assert.equal(ctx.memory.claims.length, 0);
+      const after = await json(await ctx.call("/api/public/challenge"));
+      assert.deepEqual([after.tournament.status, after.winner, after.leaderboard.length], ["FINISHED", null, n]);
+      assert.deepEqual((await json(await ctx.call("/api/challenge/me", { token: tokens[0] }))).claims, []);
+      assert.equal(ctx.memory.games.length, n);
+      // No queda como "ganador por confirmar": no requiere tareas del admin.
+      assert.equal((await json(await ctx.call("/api/admin/challenge/overview"))).pendingWinners, 0);
+    }
+  });
+
+  it("cuenta personas, no intentos; no cuentan descalificados, partidas rechazadas ni registros sin partida válida", async () => {
+    const ctx = setup();
+    const t = await ctx.create(runningNow({ minParticipants: 3, attempts: 20 }));
+    const ana = await ctx.join("@ana");
+    for (let i = 0; i < 20; i++) assert.equal((await ctx.play(ana, humanTaps(10 + i))).status, 200);
+    await ctx.join("@solo.registro");
+    // Abandonó la partida: vence sin puntaje.
+    const tardio = await ctx.join("@tardio");
+    assert.equal((await ctx.call("/api/challenge/games", { method: "POST", token: tardio })).status, 201);
+    ctx.memory.games[ctx.memory.games.length - 1].status = "EXPIRED";
+    await ctx.play(await ctx.join("@beto"), humanTaps(30));
+    await ctx.play(await ctx.join("@carla"), humanTaps(25));
+    ctx.memory.games[ctx.memory.games.length - 1].review = "REJECTED";
+    await ctx.play(await ctx.join("@dani"), humanTaps(25));
+    const daniId = ctx.memory.people.find((p) => p.instagram === "dani")!.id;
+    assert.equal((await ctx.call(`/api/admin/challenge/editions/${t.data.id}/disqualify`, { method: "POST", body: { participantId: daniId, reason: "Cuenta duplicada confirmada" } })).status, 200);
+    const detail = await json(await ctx.call(`/api/admin/challenge/editions/${t.data.id}`));
+    // ana (20 intentos = 1 persona) y beto.
+    assert.deepEqual(detail.minimum, { required: 3, valid: 2, reached: false });
+    assert.equal(detail.stats.validParticipants, 2);
+    assert.equal(detail.stats.participants, 5);
+    ctx.setClock("2026-10-30T12:00:00Z");
+    assert.equal((await json(await publishWinner(ctx, t.data.id))).error, "minimum_not_met");
+    // Rehabilitar a dani (revisión justificada) completa el mínimo.
+    assert.equal((await ctx.call(`/api/admin/challenge/editions/${t.data.id}/reinstate`, { method: "POST", body: { participantId: daniId, reason: "Revisado: es otra persona" } })).status, 200);
+    assert.equal((await publishWinner(ctx, t.data.id)).status, 200);
+    const list = await json(await ctx.call("/api/admin/challenge/editions"));
+    assert.deepEqual([list.editions[0].validParticipants, list.editions[0].minimumReached], [3, true]);
+  });
+
+  it("el mínimo solo se cambia en borrador: publicado (o despublicado) no se sube ni se baja", async () => {
+    const ctx = setup();
+    const draft = await ctx.create({ minParticipants: 5 }, false);
+    const edited = await json(await ctx.call(`/api/admin/challenge/editions/${draft.data.id}`, { method: "PUT", body: { ...form(), minParticipants: 8 } }));
+    assert.equal(edited.minParticipants, 8);
+    assert.equal((await ctx.call(`/api/admin/challenge/editions/${draft.data.id}/schedule`, { method: "POST" })).status, 200);
+    for (const value of [2, 50]) {
+      const res = await ctx.call(`/api/admin/challenge/editions/${draft.data.id}`, { method: "PUT", body: { ...form(), minParticipants: value, reason: "Cambio" } });
+      assert.equal(res.status, 409);
+      assert.equal((await json(res)).error, "min_locked");
+    }
+    // Los demás cambios siguen funcionando (con el mismo valor o sin enviarlo).
+    assert.equal((await ctx.call(`/api/admin/challenge/editions/${draft.data.id}`, { method: "PUT", body: { ...form({ name: "Otro nombre" }), minParticipants: 8 } })).status, 200);
+    assert.equal((await ctx.call(`/api/admin/challenge/editions/${draft.data.id}`, { method: "PUT", body: { ...form({ name: "Otro más" }) } })).status, 200);
+    await ctx.call(`/api/admin/challenge/editions/${draft.data.id}/unpublish`, { method: "POST", body: {} });
+    assert.equal((await json(await ctx.call(`/api/admin/challenge/editions/${draft.data.id}`, { method: "PUT", body: { ...form(), minParticipants: 3 } }))).error, "min_locked");
+    assert.equal(ctx.memory.editions[0].minParticipants, 8);
+  });
+
+  it("torneos anteriores (sin mínimo) conservan su comportamiento: un solo participante puede ganar", async () => {
+    const ctx = setup();
+    ctx.memory.editions.push(edition({ id: "viejo", minParticipants: null, startsAt: new Date("2026-10-28T14:00:00Z"), endsAt: new Date("2026-10-29T02:59:59.999Z") }));
+    const token = await ctx.join("@ana");
+    await ctx.play(token, humanTaps(40));
+    ctx.setClock("2026-10-30T12:00:00Z");
+    assert.equal((await json(await ctx.call("/api/public/challenge?torneo=viejo"))).minimum, null);
+    assert.equal((await json(await ctx.call("/api/admin/challenge/overview"))).pendingWinners, 1);
+    assert.equal((await publishWinner(ctx, "viejo")).status, 200);
+    assert.equal(ctx.memory.claims.length, 1);
+    assert.equal(ctx.memory.editions[0].minParticipants, null);
   });
 });

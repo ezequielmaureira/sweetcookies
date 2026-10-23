@@ -391,3 +391,10 @@ a.nextTeaser {
   font-size: 0.875rem;
   color: var(--ch-caramel-light);
 }
+
+.minimumNote {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  color: var(--ch-cream-soft);
+}

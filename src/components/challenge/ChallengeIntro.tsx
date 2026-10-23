@@ -79,6 +79,12 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
 
   const myHandle = session.status === "ready" ? session.me.participant.handle : null;
   const showRanking = tournament !== null && status !== "SCHEDULED";
+  // Terminó sin el mínimo de participantes válidos: sin ganador ni premio (lo decide el servidor).
+  const minimumMissed = status === "FINISHED" && info?.minimum?.reached === false;
+  const minimumText =
+    tournament?.minParticipants && !tournament.isTest
+      ? `El premio se entrega solo si participan al menos ${tournament.minParticipants} personas con una partida válida.`
+      : null;
 
   return (
     <main id="contenido" className={styles.intro}>
@@ -158,7 +164,19 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
               <p className={styles.statusLabel}>
                 {tournament.name} · {STATUS_LABELS[tournament.status]}
               </p>
-              {status === "FINISHED" && (
+              {minimumMissed && (
+                <div className={styles.ended}>
+                  <p className={styles.endedTitle}>DESAFÍO FINALIZADO</p>
+                  <p className={styles.statusText}>Este torneo no alcanzó el mínimo de participantes requerido para entregar el premio.</p>
+                  <p className={styles.endedThanks}>¡Gracias por participar!</p>
+                  {info.minimum && (
+                    <p className={styles.statusSub}>
+                      {info.minimum.valid} de {info.minimum.required} participantes válidos
+                    </p>
+                  )}
+                </div>
+              )}
+              {status === "FINISHED" && !minimumMissed && (
                 <div className={styles.ended}>
                   <p className={styles.endedTitle}>🏆 DESAFÍO TERMINADO</p>
                   <p className={styles.endedThanks}>¡Gracias por participar!</p>
@@ -182,13 +200,14 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
                 ) : (
                   <p className={styles.statusText}>Resultados publicados: este torneo no tuvo ganador.</p>
                 ))}
-              {status !== "RESULTS_PUBLISHED" && status !== "CANCELLED" && (
+              {status !== "RESULTS_PUBLISHED" && status !== "CANCELLED" && !minimumMissed && (
                 <p className={styles.prize}>
                   🏆 Premio para el 1.º puesto: <strong>{tournament.prize}</strong>
                   {tournament.isTest && <span className={styles.statusSub}> (histórico: sin premio)</span>}
+                  {minimumText && (status === "SCHEDULED" || status === "ACTIVE" || status === "PAUSED") && <span className={styles.minimumNote}>{minimumText}</span>}
                 </p>
               )}
-              {status !== "CANCELLED" && (status !== "RESULTS_PUBLISHED" || info.winner) && (
+              {status !== "CANCELLED" && !minimumMissed && (status !== "RESULTS_PUBLISHED" || info.winner) && (
                 <PrizePhoto src={tournament.prizeImageUrl} prize={tournament.prize} size={status === "FINISHED" ? "sm" : "md"} />
               )}
               {tournament.prizeDescription && status !== "RESULTS_PUBLISHED" && status !== "FINISHED" && <p className={styles.statusSub}>{tournament.prizeDescription}</p>}
@@ -256,7 +275,8 @@ export function ChallengeIntro(props: ChallengeIntroProps) {
             myHandle={myHandle}
             prize={tournament.prize}
             final={status === "FINISHED" || status === "RESULTS_PUBLISHED" || status === "CANCELLED"}
-            pendingReview={status === "FINISHED"}
+            pendingReview={status === "FINISHED" && !minimumMissed}
+            noPrize={minimumMissed}
           />
         )}
 

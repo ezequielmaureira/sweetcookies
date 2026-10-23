@@ -5,7 +5,9 @@ import { cors } from "hono/cors";
 import {
   DuplicateParticipantError,
   MAX_ATTEMPTS,
+  MAX_PARTICIPANTS,
   MIN_ATTEMPTS,
+  MIN_PARTICIPANTS,
   RECOVERY_TTL_MS,
   TOP_SIZE,
   assessGame,
@@ -25,6 +27,7 @@ import {
   hashRecoveryCode,
   hashToken,
   isTokenShaped,
+  minimumReached,
   normalizeInstagram,
   normalizeRecoveryCode,
   parseFinishInput,
@@ -187,6 +190,14 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     return { edition: linked, status: effectiveStatus(linked, base.t), next: other, t: base.t, linkStatus: "ok" as const };
   };
 
+  /**
+   * Mínimo de participantes válidos: los del ranking (al menos una partida
+   * oficial válida y sin descalificar). Lo calcula siempre el servidor. null =
+   * torneo anterior a la regla.
+   */
+  const minimumOf = (edition: EditionRecord, rows: RankingRow[]) =>
+    edition.minParticipants === null ? null : { required: edition.minParticipants, valid: rows.length, reached: minimumReached(edition.minParticipants, rows.length) };
+
   const standing = (rows: RankingRow[], participantId: string) => {
     const index = rows.findIndex((r) => r.participantId === participantId);
     return index < 0 ? null : { position: index + 1, score: rows[index].score, cookies: cookiesFor(rows[index].score) };
@@ -243,6 +254,8 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
       leaderboard: rows.slice(0, TOP_SIZE).map((row, i) => publicRow(row, i + 1)),
       ranked: rows.length,
       winner: edition && winner ? { handle: handleOf(winner.instagram), score: edition.winnerScore ?? winner.score, cookies: cookiesFor(edition.winnerScore ?? winner.score) } : null,
+      // Solo conteos (nunca quiénes): para "no alcanzó el mínimo" al terminar.
+      minimum: edition ? minimumOf(edition, rows) : null,
       instagramHandle: siteSettings.instagramHandle,
       linkStatus,
     });
@@ -570,14 +583,17 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   app.get("/api/admin/challenge/overview", async (c) => {
     const t = now();
     const { live, next } = await challenge.publicTournaments(t);
-    const [liveStats, liveAlerts, pendingWinners] = await Promise.all([
+    const [liveStats, liveAlerts, pending] = await Promise.all([
       live ? challenge.stats(live.id) : Promise.resolve(null),
       live ? challenge.duplicateAlerts(live.id) : Promise.resolve([]),
-      challenge.countPendingWinners(t),
+      challenge.pendingWinnerEditions(t),
     ]);
+    // Los que no alcanzaron el mínimo no esperan nada del admin: terminan sin premio.
+    const reached = await Promise.all(pending.map(async (e) => minimumReached(e.minParticipants, (await ranking(e.id)).length)));
+    const pendingWinners = reached.filter(Boolean).length;
     return c.json({
       ipTracking: config.ipSecret !== null,
-      limits: { minAttempts: MIN_ATTEMPTS, maxAttempts: MAX_ATTEMPTS },
+      limits: { minAttempts: MIN_ATTEMPTS, maxAttempts: MAX_ATTEMPTS, minParticipants: MIN_PARTICIPANTS, maxParticipants: MAX_PARTICIPANTS },
       live: live ? adminEdition(live, t) : null,
       next: next ? adminEdition(next, t) : null,
       liveStats,
@@ -590,7 +606,15 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   app.get("/api/admin/challenge/editions", async (c) => {
     const t = now();
     const rows = await challenge.listEditions();
-    return c.json({ editions: rows.map((e) => ({ ...adminEdition(e, t), participants: e.participants, games: e.games })) });
+    return c.json({
+      editions: rows.map((e) => ({
+        ...adminEdition(e, t),
+        participants: e.participants,
+        validParticipants: e.validParticipants,
+        minimumReached: minimumReached(e.minParticipants, e.validParticipants),
+        games: e.games,
+      })),
+    });
   });
 
   const saveError = (c: Context, result: Exclude<SaveResult, { ok: true }>) =>
@@ -722,17 +746,19 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
   app.get("/api/admin/challenge/editions/:id", async (c) => {
     const edition = await editionParam(c);
     if (!edition) return c.json({ error: "not_found" }, 404);
-    const [stats, rankingRows, disqualifications, actions, alerts, claim] = await Promise.all([
+    const [stats, rankingRows, disqualifications, actions, alerts, claim, rows] = await Promise.all([
       challenge.stats(edition.id),
       challenge.adminRanking(edition.id),
       challenge.listDisqualifications(edition.id),
       challenge.listActions(edition.id),
       challenge.duplicateAlerts(edition.id),
       challenge.getClaim(edition.id),
+      ranking(edition.id, true),
     ]);
     return c.json({
       edition: adminEdition(edition, now()),
       stats,
+      minimum: minimumOf(edition, rows),
       ranking: rankingRows.map((row, i) => ({ ...row, position: i + 1, cookies: cookiesFor(row.score), achievedAt: row.achievedAt.toISOString() })),
       disqualifications,
       actions,
@@ -871,6 +897,18 @@ export function registerChallengeRoutes(app: Hono<{ Variables: Variables }>, dep
     const input = await reasonOf(c, false);
     if (!input) return reasonError(c);
     const rows = await ranking(edition.id, true);
+    // Sin el mínimo de participantes válidos no hay ganador ni reclamo de premio.
+    const minimum = minimumOf(edition, rows);
+    if (minimum && !minimum.reached) {
+      return c.json(
+        {
+          error: "minimum_not_met",
+          message: `Mínimo de participantes no alcanzado: ${minimum.valid} de ${minimum.required}. El torneo termina sin adjudicar el premio.`,
+          minimum,
+        },
+        409,
+      );
+    }
     const leader = rows[0] ?? null;
     if (leader) {
       const game = await challenge.getGame(leader.gameId);

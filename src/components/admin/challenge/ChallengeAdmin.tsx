@@ -136,7 +136,10 @@ export function ChallengeAdmin() {
         <dl className={styles.stats}>
           <div>
             <dt>Participantes (activo)</dt>
-            <dd>{liveStats?.participants ?? "—"}</dd>
+            <dd>
+              {liveStats?.participants ?? "—"}
+              {live?.minParticipants != null && liveStats && <span className={styles.flags}>Válidos: {liveStats.validParticipants} / {live.minParticipants}</span>}
+            </dd>
           </div>
           <div>
             <dt>Partidas (activo)</dt>
@@ -275,7 +278,15 @@ function TournamentRow({ edition: e, previewOpen, onPreview, onManage, onEdit, o
         </td>
         <td>{e.prize}</td>
         <td>{e.attempts}</td>
-        <td>{e.participants}</td>
+        <td>
+          {e.participants}
+          {e.minParticipants !== null && (
+            <span className={e.status === "FINISHED" && !e.minimumReached ? `${styles.flags} ${styles.alert}` : styles.flags}>
+              Válidos: {e.validParticipants} / {e.minParticipants}
+              {e.status === "FINISHED" && !e.minimumReached ? " · mínimo no alcanzado" : ""}
+            </span>
+          )}
+        </td>
         <td>
           <TournamentActions edition={e} compact onManage={onManage} onEdit={onEdit} onDone={onDone} />
         </td>

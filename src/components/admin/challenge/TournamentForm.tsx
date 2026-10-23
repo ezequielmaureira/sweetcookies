@@ -20,7 +20,7 @@ import styles from "./ChallengeAdmin.module.css";
 type TournamentFormProps = {
   /** null = torneo nuevo. */
   edition: AdminEdition | null;
-  limits: { minAttempts: number; maxAttempts: number };
+  limits: { minAttempts: number; maxAttempts: number; minParticipants: number; maxParticipants: number };
   serverNow: number;
   onDone: (edition: AdminEdition) => void;
   onCancel: () => void;
@@ -37,6 +37,8 @@ const fromEdition = (e: AdminEdition): Form => ({
   prizeDescription: e.prizeDescription ?? "",
   prizeImageUrl: e.prizeImageUrl,
   attempts: e.attempts,
+  // Un borrador anterior a la regla arranca con el sugerido; uno ya publicado sin mínimo lo conserva.
+  minParticipants: e.minParticipants ?? (e.status === "DRAFT" ? 2 : null),
 });
 
 const EMPTY: Form = {
@@ -50,6 +52,7 @@ const EMPTY: Form = {
   prizeDescription: "",
   prizeImageUrl: null,
   attempts: 3,
+  minParticipants: 2,
 };
 
 /** Fecha y hora del formulario como instante (solo para la vista previa; el servidor valida en hora de Córdoba). */
@@ -77,6 +80,8 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
   const isDraft = !edition || edition.status === "DRAFT" || edition.status === "UNPUBLISHED";
   // Ya empezó (o tiene partidas: el servidor lo vuelve a comprobar): inicio y modo fijos.
   const started = !!edition && !isDraft && (Date.parse(edition.startsAt) <= serverNow || edition.status === "ACTIVE" || edition.status === "PAUSED");
+  // El mínimo es una condición anunciada: solo se cambia mientras el torneo es borrador.
+  const minEditable = !edition || edition.status === "DRAFT";
   const prizeChanged = !!edition && (form.prize.trim() !== edition.prize || form.prizeDescription.trim() !== (edition.prizeDescription ?? ""));
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
@@ -99,6 +104,12 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
   // Guardar NUNCA publica: el torneo nuevo queda en borrador y se publica aparte.
   const submit = async () => {
     if (busy) return;
+    // Vacío viajaría como null (= no enviado): se pide explícitamente.
+    if (form.minParticipants !== null && !Number.isInteger(form.minParticipants)) {
+      setErrors({ minParticipants: `Elegí un mínimo entre ${limits.minParticipants} y ${limits.maxParticipants} participantes.` });
+      setMessage("Revisá los campos marcados.");
+      return;
+    }
     setBusy(true);
     setMessage(null);
     setErrors({});
@@ -234,6 +245,38 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
           )}
 
 
+          <div className={admin.field}>
+            <label htmlFor={`${id}-minParticipants`} className={admin.label}>
+              Mínimo de participantes
+            </label>
+            {form.minParticipants === null ? (
+              <p className={admin.help}>Sin mínimo: este torneo es anterior a la regla y se conserva tal como se publicó.</p>
+            ) : (
+              <input
+                id={`${id}-minParticipants`}
+                type="number"
+                inputMode="numeric"
+                className={admin.input}
+                min={limits.minParticipants}
+                max={limits.maxParticipants}
+                step={1}
+                disabled={!minEditable}
+                value={Number.isFinite(form.minParticipants) ? form.minParticipants : ""}
+                onChange={(e) => set("minParticipants", e.target.value === "" ? Number.NaN : Number(e.target.value))}
+                aria-invalid={!!errors.minParticipants || undefined}
+              />
+            )}
+            {errors.minParticipants ? (
+              <p className={admin.error}>{errors.minParticipants}</p>
+            ) : (
+              <p className={admin.help}>
+                El premio se entrega únicamente si se alcanza este mínimo de participantes válidos. Entre {limits.minParticipants} y {limits.maxParticipants}.
+                Cuentan personas con al menos una partida válida (no intentos ni registros).{" "}
+                {minEditable ? "Se puede cambiar mientras sea borrador." : "Ya se publicó: no se puede cambiar."}
+              </p>
+            )}
+          </div>
+
           {edition && edition.status !== "DRAFT" && (
             <div className={admin.field}>
               <label htmlFor={`${id}-reason`} className={admin.label}>
@@ -288,6 +331,9 @@ export function TournamentForm({ edition, limits, serverNow, onDone, onCancel }:
             <br />
             Termina: {endIso ? formatCordobaDateTime(endIso) : "—"}
           </p>
+          {form.minParticipants !== null && Number.isFinite(form.minParticipants) && (
+            <p className={styles.previewSub}>El premio se entrega solo si participan al menos {form.minParticipants} personas con una partida válida.</p>
+          )}
           <p className={styles.previewAttempts}>
             Te quedan {Number.isFinite(form.attempts) ? form.attempts : "—"} de {Number.isFinite(form.attempts) ? form.attempts : "—"} intentos en este torneo
           </p>

@@ -169,7 +169,9 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
   if (error && !detail) return <p className={admin.error}>{error}</p>;
   if (!detail) return <p className={styles.muted}>Cargando torneo…</p>;
 
-  const { edition, stats, ranking, alerts, claim, disqualifications, actions } = detail;
+  const { edition, stats, ranking, alerts, claim, disqualifications, actions, minimum } = detail;
+  // Terminó sin el mínimo: no hay ganador ni premio (el servidor lo bloquea); no requiere nada del admin.
+  const minimumMissed = edition.status === "FINISHED" && minimum !== null && !minimum.reached;
   const leader = ranking[0] ?? null;
   const winnerHandle = claim?.instagram ?? null;
   // Datos del ganador: los que tiene registrados ahora (o, si no, con los que quedó el premio).
@@ -212,6 +214,10 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
             <dd>{edition.attempts}</dd>
           </div>
           <div>
+            <dt>Mínimo de participantes</dt>
+            <dd>{edition.minParticipants ?? "Sin mínimo (anterior a la regla)"}</dd>
+          </div>
+          <div>
             <dt>Premio del 1.º puesto</dt>
             <dd>
               {edition.prize}
@@ -252,6 +258,17 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
             <dt>Participantes</dt>
             <dd>{stats.participants}</dd>
           </div>
+          {minimum && (
+            <div>
+              <dt>Válidos / mínimo</dt>
+              <dd className={minimum.reached ? undefined : styles.alert}>
+                {minimum.valid} / {minimum.required}
+                <span className={styles.progress} aria-hidden="true">
+                  <span style={{ width: `${Math.min(100, Math.round((minimum.valid / minimum.required) * 100))}%` }} />
+                </span>
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Partidas oficiales</dt>
             <dd>{stats.games}</dd>
@@ -271,7 +288,7 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
         </dl>
 
         <div className={styles.actions}>
-          {edition.status === "FINISHED" && !closed && (
+          {edition.status === "FINISHED" && !closed && !minimumMissed && (
             <Button
               disabled={busy}
               onClick={() => {
@@ -290,7 +307,13 @@ export function TournamentManage({ id, onBack, onEdit, onChanged, onDeleted }: T
             </Button>
           )}
         </div>
-        {edition.status === "FINISHED" && leader && leader.review === "PENDING" && (
+        {minimumMissed && minimum && (
+          <p className={styles.alertText} role="status">
+            MÍNIMO DE PARTICIPANTES NO ALCANZADO: {minimum.valid} participantes válidos de {minimum.required} requeridos. El torneo termina sin ganador ni
+            premio; el ranking y las partidas se conservan. No hace falta hacer nada.
+          </p>
+        )}
+        {edition.status === "FINISHED" && !minimumMissed && leader && leader.review === "PENDING" && (
           <p className={styles.alertText}>El primer puesto tiene una partida marcada: aprobala o rechazala antes de publicar.</p>
         )}
         {published && (

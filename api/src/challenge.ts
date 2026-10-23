@@ -16,6 +16,18 @@ export const GAME_DURATION_MS = 15_000;
 /** Intentos oficiales por participante: los define el admin en cada torneo, dentro de este rango. */
 export const MIN_ATTEMPTS = 1;
 export const MAX_ATTEMPTS = 20;
+/** Mínimo de participantes válidos para adjudicar el premio (lo define el admin en cada torneo). */
+export const MIN_PARTICIPANTS = 2;
+export const MAX_PARTICIPANTS = 1000;
+export const DEFAULT_MIN_PARTICIPANTS = 2;
+
+/**
+ * ¿Se alcanzó el mínimo? `valid` = participantes únicos con al menos una
+ * partida oficial válida (terminada, no rechazada) y sin descalificar: los
+ * mismos que entran al ranking. null = torneo anterior a la regla (sin mínimo).
+ */
+export const minimumReached = (minParticipants: number | null, valid: number) => minParticipants === null || valid >= minParticipants;
+
 /** Duración de un torneo: de 15 minutos a 90 días. */
 export const MIN_TOURNAMENT_MS = 15 * 60 * 1000;
 export const MAX_TOURNAMENT_MS = 90 * 24 * 60 * 60 * 1000;
@@ -267,10 +279,12 @@ export type TournamentInput = {
   /** Foto del premio (ruta de una imagen subida desde el panel) o null. */
   prizeImageUrl: string | null;
   attempts: number;
+  /** Mínimo de participantes válidos. null = no se envió (al crear se usa el valor sugerido; al editar se conserva). */
+  minParticipants: number | null;
   isTest: boolean;
 };
 
-export type TournamentErrors = Partial<Record<"name" | "description" | "start" | "end" | "prize" | "prizeDescription" | "prizeImage" | "attempts" | "body", string>>;
+export type TournamentErrors = Partial<Record<"name" | "description" | "start" | "end" | "prize" | "prizeDescription" | "prizeImage" | "attempts" | "minParticipants" | "body", string>>;
 
 /** Solo imágenes subidas desde el panel (nunca URLs externas): mismo sistema que las fotos de productos. */
 const UPLOADED_IMAGE = /^\/api\/public\/images\/[a-z0-9]{10,40}$/;
@@ -306,6 +320,12 @@ export function validateTournament(body: unknown): { ok: true; data: TournamentI
     errors.attempts = `Elegí entre ${MIN_ATTEMPTS} y ${MAX_ATTEMPTS} intentos.`;
   }
 
+  const rawMin = input.minParticipants;
+  const minParticipants = rawMin === undefined || rawMin === null ? null : rawMin;
+  if (minParticipants !== null && (!Number.isInteger(minParticipants) || (minParticipants as number) < MIN_PARTICIPANTS || (minParticipants as number) > MAX_PARTICIPANTS)) {
+    errors.minParticipants = `Elegí un mínimo entre ${MIN_PARTICIPANTS} y ${MAX_PARTICIPANTS} participantes.`;
+  }
+
   const text = (key: string) => (typeof input[key] === "string" ? (input[key] as string) : "");
   const startsAt = parseCordobaDateTime(text("startDate"), text("startTime"));
   const endsAt = parseCordobaDateTime(text("endDate"), text("endTime"), true);
@@ -330,6 +350,7 @@ export function validateTournament(body: unknown): { ok: true; data: TournamentI
       prizeDescription: prizeDescription || null,
       prizeImageUrl: prizeImageUrl ?? null,
       attempts: attempts as number,
+      minParticipants: minParticipants as number | null,
       // No hay modo prueba: todos los torneos nuevos son reales.
       isTest: false,
     },
@@ -347,6 +368,7 @@ export function tournamentChanges(current: EditionRecord, next: TournamentInput)
   if ((current.prizeDescription ?? null) !== next.prizeDescription) changes.push("prizeDescription");
   if ((current.prizeImageUrl ?? null) !== next.prizeImageUrl) changes.push("prizeImage");
   if (current.attempts !== next.attempts) changes.push("attempts");
+  if (next.minParticipants !== null && current.minParticipants !== next.minParticipants) changes.push("minParticipants");
   return changes;
 }
 
@@ -360,6 +382,7 @@ export type EditCheck = { ok: true; changes: string[] } | { ok: false; error: st
  *   solo se puede extender; los intentos solo pueden subir; cambiar el premio
  *   exige confirmación explícita; todo cambio exige motivo y queda registrado.
  * - Finalizado, con ganador publicado o cancelado: no se edita.
+ * - El mínimo de participantes solo se cambia en borrador.
  */
 export function checkTournamentEdit(
   current: EditionRecord,
@@ -372,6 +395,10 @@ export function checkTournamentEdit(
   if (current.isTest) return { ok: false, error: "legacy", message: "Los torneos históricos de prueba no se editan. Podés eliminarlo y crear uno nuevo." };
   if (status === "FINISHED" || status === "RESULTS_PUBLISHED" || status === "CANCELLED") {
     return { ok: false, error: "locked", message: "Este torneo ya terminó: no se puede editar." };
+  }
+  // El mínimo es una condición anunciada: solo se cambia mientras el torneo es borrador (nunca publicado).
+  if (changes.includes("minParticipants") && current.status !== "DRAFT") {
+    return { ok: false, error: "min_locked", message: "El torneo ya se publicó: el mínimo de participantes no se puede cambiar." };
   }
   const started = status !== "DRAFT" && (ctx.games > 0 || current.startsAt.getTime() <= ctx.now.getTime());
   if (!started) return { ok: true, changes };
@@ -473,6 +500,8 @@ export type EditionRecord = {
   prize: string;
   prizeDescription: string | null;
   prizeImageUrl: string | null;
+  /** null = torneo anterior a la regla del mínimo. */
+  minParticipants: number | null;
   cancelledAt: Date | null;
   cancelReason: string | null;
   deletedAt: Date | null;
@@ -604,10 +633,11 @@ export type AdminAction = {
 
 export type DisqualificationRecord = { participantId: string; instagram: string; reason: string; createdBy: string; createdAt: Date };
 
-export type EditionStats = { participants: number; games: number; finished: number; pendingReview: number };
+/** `participants` = jugaron alguna partida; `validParticipants` = cuentan para el mínimo (ver minimumReached). */
+export type EditionStats = { participants: number; validParticipants: number; games: number; finished: number; pendingReview: number };
 
-/** Torneo + cuántos participantes y partidas tiene (listado del panel). */
-export type EditionSummary = EditionRecord & { participants: number; games: number };
+/** Torneo + cuántos participantes (y válidos) y partidas tiene (listado del panel). */
+export type EditionSummary = EditionRecord & { participants: number; validParticipants: number; games: number };
 
 export type DeletionInfo = {
   participants: number;
@@ -656,8 +686,8 @@ export type ChallengeRepository = {
   deletionInfo(id: string): Promise<DeletionInfo | null>;
   /** Sin actividad: se borra de verdad. Con actividad: eliminación lógica (conserva el historial). */
   deleteEdition(id: string, reason: string | null, adminUserId: string): Promise<{ mode: "hard" | "soft" } | null>;
-  /** Torneos cerrados (fin vencido) que esperan confirmar el ganador. */
-  countPendingWinners(now: Date): Promise<number>;
+  /** Torneos cerrados (fin vencido) sin ganador confirmado todavía (la ruta descarta los que no alcanzaron el mínimo). */
+  pendingWinnerEditions(now: Date): Promise<EditionRecord[]>;
 
   /** DuplicateParticipantError si el @ ya existe. */
   createParticipant(data: { instagram: string; contact: ContactInput; tokenHash: string; ipHash: string | null; now: Date }): Promise<ParticipantRecord>;
@@ -739,6 +769,7 @@ export const publicEdition = (edition: EditionRecord, now: Date, status: Challen
   status,
   gameDurationMs: edition.gameDurationMs,
   attempts: edition.attempts,
+  minParticipants: edition.minParticipants,
   bitesPerCookie: BITES_PER_COOKIE,
   prize: edition.prize,
   prizeDescription: edition.prizeDescription,

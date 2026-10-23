@@ -12,17 +12,25 @@ type LeaderboardProps = {
   final: boolean;
   /** Terminado pero el ganador todavía no se confirmó. */
   pendingReview?: boolean;
+  /** Terminó sin el mínimo de participantes: no hay premio. */
+  noPrize?: boolean;
 };
 
 /** Top 10 del torneo: solo @, mordidas y cookies (nunca IP, teléfonos ni identificadores privados). */
-export function Leaderboard({ rows, myHandle, prize, final, pendingReview = false }: LeaderboardProps) {
+export function Leaderboard({ rows, myHandle, prize, final, pendingReview = false, noPrize = false }: LeaderboardProps) {
   return (
     <section id="ranking" className={styles.board} aria-labelledby="ranking-title">
       <div className={styles.head}>
         <h2 id="ranking-title" className={styles.title}>
           {final ? "Ranking final" : "Ranking del torneo"}
         </h2>
-        <p className={styles.note}>{pendingReview ? "Pendiente de revisión: el ganador se confirma después de verificar los resultados." : `Solo el primer puesto gana: ${prize}.`}</p>
+        <p className={styles.note}>
+          {noPrize
+            ? "No se alcanzó el mínimo de participantes: este torneo no entrega premio."
+            : pendingReview
+              ? "Pendiente de revisión: el ganador se confirma después de verificar los resultados."
+              : `Solo el primer puesto gana: ${prize}.`}
+        </p>
       </div>
 
       {rows === null ? (

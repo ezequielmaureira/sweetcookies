@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "./generated/prisma/client.ts";
 import {
+  DEFAULT_MIN_PARTICIPANTS,
   DuplicateParticipantError,
   GAME_DURATION_MS,
   MAX_VISITS_PER_CONNECTION,
@@ -107,6 +108,24 @@ type BestRow = { participant_id: string; instagram: string; score: number; finis
 
 export function createChallengeRepository(prisma: PrismaClient): ChallengeRepository {
   /**
+   * Participantes VÁLIDOS por torneo (los que cuentan para el mínimo): únicos,
+   * con al menos una partida oficial terminada y no rechazada, y sin
+   * descalificar en ese torneo. Es la misma regla del ranking. Los intentos no
+   * suman: un participante con 20 partidas cuenta una vez.
+   */
+  const validCounts = (editionIds: string[] | null) => prisma.$queryRaw<{ edition_id: string; valid: bigint }[]>`
+    SELECT g.edition_id, COUNT(DISTINCT g.participant_id) AS valid
+    FROM challenge_games g
+    WHERE g.status = 'FINISHED'
+      AND g.review <> 'REJECTED'
+      ${editionIds ? Prisma.sql`AND g.edition_id IN (${Prisma.join(editionIds)})` : Prisma.empty}
+      AND NOT EXISTS (
+        SELECT 1 FROM challenge_disqualifications d
+        WHERE d.edition_id = g.edition_id AND d.participant_id = g.participant_id
+      )
+    GROUP BY g.edition_id`;
+
+  /**
    * Mejor partida de cada participante: puntaje más alto y, a igual puntaje, la
    * que se logró primero (hora del servidor). Excluye partidas rechazadas y
    * participantes descalificados en el torneo.
@@ -171,24 +190,30 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
     getEdition: (id) => prisma.challengeEdition.findUnique({ where: { id } }),
 
     async listEditions() {
-      const [rows, counts] = await Promise.all([
+      const [rows, counts, valid] = await Promise.all([
         prisma.challengeEdition.findMany({ orderBy: [{ startsAt: "desc" }], take: 200 }),
         prisma.$queryRaw<{ edition_id: string; participants: bigint; games: bigint }[]>`
           SELECT edition_id, COUNT(DISTINCT participant_id) AS participants, COUNT(*) AS games
           FROM challenge_games GROUP BY edition_id`,
+        validCounts(null),
       ]);
       return rows.map((edition) => {
         const count = counts.find((c) => c.edition_id === edition.id);
-        return { ...edition, participants: Number(count?.participants ?? 0), games: Number(count?.games ?? 0) };
+        return {
+          ...edition,
+          participants: Number(count?.participants ?? 0),
+          validParticipants: Number(valid.find((v) => v.edition_id === edition.id)?.valid ?? 0),
+          games: Number(count?.games ?? 0),
+        };
       });
     },
 
     async createEdition(data, adminUserId): Promise<SaveResult> {
       return prisma.$transaction(async (tx) => {
         await lock(tx);
-        // Crear nunca publica: el torneo nace en borrador.
+        // Crear nunca publica: el torneo nace en borrador. Sin mínimo indicado, el sugerido.
         const edition = await tx.challengeEdition.create({
-          data: { ...tournamentData(data), isTest: false, status: "DRAFT", number: await nextNumber(tx, false), gameDurationMs: GAME_DURATION_MS, createdBy: adminUserId },
+          data: { ...tournamentData(data), minParticipants: data.minParticipants ?? DEFAULT_MIN_PARTICIPANTS, isTest: false, status: "DRAFT", number: await nextNumber(tx, false), gameDurationMs: GAME_DURATION_MS, createdBy: adminUserId },
         });
         await log(tx, { editionId: edition.id, action: "CREATE_DRAFT", reason: null, adminUserId });
         return { ok: true, edition };
@@ -205,8 +230,10 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
           const conflict = await conflictFor(tx, data, id);
           if (conflict) return { ok: false, conflict: { id: conflict.id, name: conflict.name } };
         }
-        // El tipo (real / histórico) nunca cambia al editar.
-        const edition = await tx.challengeEdition.update({ where: { id }, data: { ...tournamentData(data), isTest: current.isTest } });
+        // El tipo (real / histórico) nunca cambia al editar. El mínimo solo cambia en borrador
+        // (lo valida checkTournamentEdit); si no se envía, se conserva (los torneos anteriores siguen sin mínimo).
+        const minParticipants = current.status === "DRAFT" ? (data.minParticipants ?? current.minParticipants) : current.minParticipants;
+        const edition = await tx.challengeEdition.update({ where: { id }, data: { ...tournamentData(data), minParticipants, isTest: current.isTest } });
         const detail = `Cambios: ${changes.join(", ") || "ninguno"}${reason ? ` · ${reason}` : ""}`;
         await log(tx, { editionId: id, action: changes.includes("prize") || changes.includes("prizeDescription") ? "UPDATE_PRIZE" : "UPDATE", reason: detail.slice(0, 300), adminUserId });
         return { ok: true, edition };
@@ -316,9 +343,10 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
       });
     },
 
-    countPendingWinners: (now) =>
-      prisma.challengeEdition.count({
+    pendingWinnerEditions: (now) =>
+      prisma.challengeEdition.findMany({
         where: { deletedAt: null, isTest: false, OR: [{ status: "FINISHED" }, { status: { in: ["SCHEDULED", "ACTIVE", "PAUSED"] }, endsAt: { lt: now } }] },
+        take: 50,
       }),
 
     countGames: (editionId) => prisma.challengeGame.count({ where: { editionId } }),
@@ -561,13 +589,14 @@ export function createChallengeRepository(prisma: PrismaClient): ChallengeReposi
     },
 
     async stats(editionId) {
-      const [participants, games, finished, pendingReview] = await Promise.all([
+      const [participants, valid, games, finished, pendingReview] = await Promise.all([
         prisma.challengeGame.groupBy({ by: ["participantId"], where: { editionId } }).then((rows) => rows.length),
+        validCounts([editionId]).then((rows) => Number(rows[0]?.valid ?? 0)),
         prisma.challengeGame.count({ where: { editionId } }),
         prisma.challengeGame.count({ where: { editionId, status: "FINISHED" } }),
         prisma.challengeGame.count({ where: { editionId, review: "PENDING" } }),
       ]);
-      return { participants, games, finished, pendingReview };
+      return { participants, validParticipants: valid, games, finished, pendingReview };
     },
 
     async adminRanking(editionId) {

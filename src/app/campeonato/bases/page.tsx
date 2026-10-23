@@ -113,6 +113,16 @@ export default async function ChallengeRulesPage() {
             ganadora.
           </p>
           <p>La entrega del premio estará sujeta a la confirmación del ganador y a la verificación de los datos necesarios para coordinarla.</p>
+          <p>
+            Para que el torneo tenga un ganador con derecho al premio, deberá alcanzarse la cantidad mínima de participantes válidos indicada al momento de
+            su publicación. Se considera participante válido a quien haya completado al menos una partida oficial válida y no haya sido descalificado. Si no
+            se alcanza dicho mínimo, el torneo finalizará sin adjudicación del premio.
+          </p>
+          <p>
+            El mínimo de cada torneo se informa en la página del torneo junto al premio, antes de participar, y no cambia una vez publicado. Cuentan las
+            personas, no los intentos: quien juega varias partidas cuenta una sola vez. No cuentan quienes solo se registraron o abrieron un enlace, las
+            partidas rechazadas en la revisión ni los participantes descalificados.
+          </p>
           <p>Los torneos históricos de prueba (anteriores a los torneos reales) no entregan premios.</p>
           <p className={styles.pending}>A definir: forma de entrega en Río Cuarto y plazo para reclamar el premio.</p>
         </section>

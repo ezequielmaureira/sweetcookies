@@ -29,6 +29,8 @@ export type AdminEdition = {
   prizeDescription: string | null;
   /** Foto del premio (/api/public/images/<id>) o null. */
   prizeImageUrl: string | null;
+  /** Mínimo de participantes válidos para adjudicar el premio. null = torneo anterior a la regla. */
+  minParticipants: number | null;
   cancelledAt: string | null;
   cancelReason: string | null;
   pausedAt: string | null;
@@ -39,15 +41,20 @@ export type AdminEdition = {
   resultsPublishedAt: string | null;
 };
 
-/** Torneo en el listado: con participantes y partidas. */
-export type EditionListItem = AdminEdition & { participants: number; games: number };
+/** Torneo en el listado: con participantes (y válidos para el mínimo) y partidas. */
+export type EditionListItem = AdminEdition & { participants: number; validParticipants: number; minimumReached: boolean; games: number };
+
+/** Progreso del mínimo (lo calcula el servidor). null = torneo sin mínimo. */
+export type MinimumStatus = { required: number; valid: number; reached: boolean } | null;
+
+type Stats = { participants: number; validParticipants: number; games: number; finished: number; pendingReview: number };
 
 export type Overview = {
   ipTracking: boolean;
-  limits: { minAttempts: number; maxAttempts: number };
+  limits: { minAttempts: number; maxAttempts: number; minParticipants: number; maxParticipants: number };
   live: AdminEdition | null;
   next: AdminEdition | null;
-  liveStats: { participants: number; games: number; finished: number; pendingReview: number } | null;
+  liveStats: Stats | null;
   liveAlerts: number;
   pendingWinners: number;
   serverNow: string;
@@ -66,6 +73,8 @@ export type TournamentForm = {
   /** Foto del premio ya subida (mismo sistema que las fotos de productos) o null. */
   prizeImageUrl: string | null;
   attempts: number;
+  /** Solo se puede cambiar en borrador. null = se conserva (torneos anteriores sin mínimo). */
+  minParticipants: number | null;
 };
 
 export type Suspicion = "NONE" | "LOW" | "HIGH";
@@ -134,7 +143,8 @@ export type DuplicateAlert = { ipHash: string; participants: { id: string; insta
 
 export type EditionDetail = {
   edition: AdminEdition;
-  stats: { participants: number; games: number; finished: number; pendingReview: number };
+  stats: Stats;
+  minimum: MinimumStatus;
   ranking: AdminRankingRow[];
   alerts: DuplicateAlert[];
   claim: AdminClaim | null;

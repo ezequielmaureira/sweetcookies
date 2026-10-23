@@ -27,6 +27,8 @@ export type Tournament = {
   gameDurationMs: number;
   /** Intentos oficiales por participante en este torneo. */
   attempts: number;
+  /** Mínimo de participantes válidos para entregar el premio. null = torneo anterior a la regla. */
+  minParticipants: number | null;
   bitesPerCookie: number;
   prize: string;
   prizeDescription: string | null;
@@ -46,6 +48,8 @@ export type ChallengeInfo = {
   leaderboard: LeaderRow[];
   ranked: number;
   winner: { handle: string; score: number; cookies: number } | null;
+  /** Mínimo del torneo que se muestra (solo conteos). null = sin mínimo. */
+  minimum: { required: number; valid: number; reached: boolean } | null;
   instagramHandle: string | null;
   /** Resultado del enlace ?torneo=: "invalid" si no existe o no es visible; "removed" si se eliminó. */
   linkStatus: "ok" | "invalid" | "removed" | null;
