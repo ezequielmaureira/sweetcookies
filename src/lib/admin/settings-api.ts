@@ -10,6 +10,10 @@ export type AdminSettings = {
   ordersEnabled: boolean;
   /** Mensaje opcional para el comprador mientras los pedidos están pausados. */
   ordersDisabledMessage: string | null;
+  /** Interruptor "Modo mantenimiento": true = la web pública muestra la pantalla de mantenimiento. */
+  maintenanceEnabled: boolean;
+  maintenanceTitle: string | null;
+  maintenanceSubtitle: string | null;
   updatedAt: string | null;
 };
 
@@ -31,3 +35,9 @@ export const saveAdminSettings = (token: string | null, input: SettingsInput) =>
 /** Interruptor "Pedidos activos" y su mensaje: PATCH parcial, no toca el resto de la configuración. */
 export const saveOrdersStatus = (token: string | null, patch: OrdersPatch) =>
   adminRequest<AdminSettings>("/api/admin/settings/orders", token, { method: "PATCH", body: JSON.stringify(patch) });
+
+export type MaintenancePatch = { maintenanceEnabled?: boolean; maintenanceTitle?: string | null; maintenanceSubtitle?: string | null };
+
+/** Interruptor "Modo mantenimiento" y sus 2 textos: PATCH parcial, no toca el resto de la configuración. */
+export const saveMaintenanceStatus = (token: string | null, patch: MaintenancePatch) =>
+  adminRequest<AdminSettings>("/api/admin/settings/maintenance", token, { method: "PATCH", body: JSON.stringify(patch) });

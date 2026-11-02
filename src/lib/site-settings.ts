@@ -20,6 +20,10 @@ export const FALLBACK_SETTINGS: PublicSettings = {
   instagramHandle: site.instagram.handle,
   ordersEnabled: true,
   ordersDisabledMessage: null,
+  // Si la API no responde, nunca se muestra mantenimiento por error: la web sigue sirviendo lo que pueda.
+  maintenanceEnabled: false,
+  maintenanceTitle: null,
+  maintenanceSubtitle: null,
 };
 
 /** Tiempo de revalidación de las páginas que muestran settings (Footer). */

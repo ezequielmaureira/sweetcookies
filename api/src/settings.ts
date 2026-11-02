@@ -10,6 +10,12 @@ export type SiteSettingsData = {
   ordersEnabled: boolean;
   /** Mensaje opcional para el comprador mientras los pedidos están pausados. */
   ordersDisabledMessage: string | null;
+  /** Interruptor maestro "Modo mantenimiento". true = la web pública muestra la pantalla de mantenimiento. */
+  maintenanceEnabled: boolean;
+  /** Frase principal de la pantalla de mantenimiento. null = texto por defecto. */
+  maintenanceTitle: string | null;
+  /** Subfrase de la pantalla de mantenimiento. null = texto por defecto. */
+  maintenanceSubtitle: string | null;
 };
 
 /** Datos que puede ver cualquiera (la web pública). */
@@ -26,22 +32,32 @@ export const DEFAULT_SETTINGS: SiteSettingsData = {
   instagramHandle: null,
   ordersEnabled: true,
   ordersDisabledMessage: null,
+  maintenanceEnabled: false,
+  maintenanceTitle: null,
+  maintenanceSubtitle: null,
 };
 
 export const ORDERS_MESSAGE_MAX = 200;
+export const MAINTENANCE_TITLE_MAX = 80;
+export const MAINTENANCE_SUBTITLE_MAX = 160;
 
 /** Nombre anterior del interruptor (se acepta durante la transición de versiones). */
 function ordersEnabledFrom(input: Record<string, unknown>): unknown {
   return input.ordersEnabled !== undefined ? input.ordersEnabled : input.whatsappOrdersEnabled;
 }
 
-/** Mensaje de pausa: texto de una o dos líneas; vacío = mensaje por defecto de la web. */
-function messageFrom(value: unknown): { ok: true; value: string | null } | { ok: false } {
+/** Texto corto de una o dos líneas; vacío = valor por defecto de la web. Recorta espacios y límites de saltos de línea. */
+function textFrom(value: unknown, max: number): { ok: true; value: string | null } | { ok: false } {
   if (value === null || value === undefined) return { ok: true, value: null };
   if (typeof value !== "string") return { ok: false };
   const text = value.replace(/\r\n?/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-  if (text.length > ORDERS_MESSAGE_MAX) return { ok: false };
+  if (text.length > max) return { ok: false };
   return { ok: true, value: text || null };
+}
+
+/** Mensaje de pausa: texto de una o dos líneas; vacío = mensaje por defecto de la web. */
+function messageFrom(value: unknown): { ok: true; value: string | null } | { ok: false } {
+  return textFrom(value, ORDERS_MESSAGE_MAX);
 }
 
 /** Solo dígitos, con código de país. 8 a 15 dígitos (E.164), sin 0 inicial. */
@@ -143,6 +159,38 @@ export function validateOrdersPatch(body: unknown): { ok: true; data: OrdersPatc
     const message = messageFrom(input.ordersDisabledMessage);
     if (message.ok) data.ordersDisabledMessage = message.value;
     else errors.ordersDisabledMessage = `Máximo ${ORDERS_MESSAGE_MAX} caracteres.`;
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+  if (Object.keys(data).length === 0) return { ok: false, errors: { body: "No hay cambios." } };
+  return { ok: true, data };
+}
+
+export type MaintenancePatch = Partial<Pick<SiteSettingsData, "maintenanceEnabled" | "maintenanceTitle" | "maintenanceSubtitle">>;
+
+/**
+ * Valida el cambio del modo mantenimiento (PATCH /api/admin/settings/maintenance):
+ * maintenanceEnabled (interruptor), maintenanceTitle y maintenanceSubtitle
+ * (textos de la pantalla pública, vacío/null = usar el texto por defecto).
+ * El resto de la configuración no se toca.
+ */
+export function validateMaintenancePatch(body: unknown): { ok: true; data: MaintenancePatch } | { ok: false; errors: Partial<Record<SettingsField | "body", string>> } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return { ok: false, errors: { body: "Body inválido." } };
+  const input = body as Record<string, unknown>;
+  const data: MaintenancePatch = {};
+  const errors: Partial<Record<SettingsField | "body", string>> = {};
+  if ("maintenanceEnabled" in input) {
+    if (typeof input.maintenanceEnabled === "boolean") data.maintenanceEnabled = input.maintenanceEnabled;
+    else errors.maintenanceEnabled = "Valor inválido.";
+  }
+  if ("maintenanceTitle" in input) {
+    const title = textFrom(input.maintenanceTitle, MAINTENANCE_TITLE_MAX);
+    if (title.ok) data.maintenanceTitle = title.value;
+    else errors.maintenanceTitle = `Máximo ${MAINTENANCE_TITLE_MAX} caracteres.`;
+  }
+  if ("maintenanceSubtitle" in input) {
+    const subtitle = textFrom(input.maintenanceSubtitle, MAINTENANCE_SUBTITLE_MAX);
+    if (subtitle.ok) data.maintenanceSubtitle = subtitle.value;
+    else errors.maintenanceSubtitle = `Máximo ${MAINTENANCE_SUBTITLE_MAX} caracteres.`;
   }
   if (Object.keys(errors).length > 0) return { ok: false, errors };
   if (Object.keys(data).length === 0) return { ok: false, errors: { body: "No hay cambios." } };

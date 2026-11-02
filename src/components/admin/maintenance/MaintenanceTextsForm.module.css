@@ -1,0 +1,87 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.previewSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-line);
+}
+
+.previewHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.previewToggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--color-beige);
+}
+
+.previewBtn,
+.previewBtnActive {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.previewBtnActive {
+  background: var(--color-chocolate);
+  color: var(--color-cream);
+}
+
+.previewFrameDesktop,
+.previewFrameMobile {
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-ink);
+}
+
+.previewFrameDesktop {
+  width: 100%;
+  height: min(60vh, 460px);
+}
+
+.previewFrameMobile {
+  width: min(100%, 320px);
+  height: min(60vh, 560px);
+  margin-inline: auto;
+}
+
+/* Siempre se renderiza a tamaño real y se escala visualmente para caber en el marco. */
+.previewScale {
+  width: 1280px;
+  height: 800px;
+  transform-origin: top left;
+  transform: scale(calc(var(--preview-scale, 0.3)));
+  pointer-events: none;
+}
+
+.previewFrameDesktop .previewScale {
+  --preview-scale: 0.36;
+}
+
+.previewFrameMobile .previewScale {
+  width: 390px;
+  height: 844px;
+  --preview-scale: 0.82;
+}
+
+.previewVariant {
+  min-height: 100% !important;
+}
