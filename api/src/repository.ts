@@ -1,12 +1,14 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client.ts";
-import { DEFAULT_SETTINGS, SETTINGS_ID, type AdminSettings, type OrdersPatch, type SettingsUpdate } from "./settings.ts";
+import { DEFAULT_SETTINGS, SETTINGS_ID, type AdminSettings, type MaintenancePatch, type OrdersPatch, type SettingsUpdate } from "./settings.ts";
 
 export type SettingsRepository = {
   get(): Promise<AdminSettings>;
   update(data: SettingsUpdate, updatedBy: string): Promise<AdminSettings>;
   /** Cambio parcial del interruptor de pedidos (no toca el resto). */
   updateOrders(data: OrdersPatch, updatedBy: string): Promise<AdminSettings>;
+  /** Cambio parcial del modo mantenimiento (no toca el resto). */
+  updateMaintenance(data: MaintenancePatch, updatedBy: string): Promise<AdminSettings>;
   ping(): Promise<void>;
 };
 
@@ -20,6 +22,9 @@ type SettingsRow = {
   instagramHandle: string | null;
   ordersEnabled: boolean;
   ordersDisabledMessage: string | null;
+  maintenanceEnabled: boolean;
+  maintenanceTitle: string | null;
+  maintenanceSubtitle: string | null;
   updatedAt: Date;
 };
 
@@ -30,6 +35,9 @@ export const toSettings = (row: SettingsRow | null): AdminSettings =>
         instagramHandle: row.instagramHandle,
         ordersEnabled: row.ordersEnabled,
         ordersDisabledMessage: row.ordersDisabledMessage,
+        maintenanceEnabled: row.maintenanceEnabled,
+        maintenanceTitle: row.maintenanceTitle,
+        maintenanceSubtitle: row.maintenanceSubtitle,
         updatedAt: row.updatedAt.toISOString(),
       }
     : { ...DEFAULT_SETTINGS, updatedAt: null };
@@ -49,6 +57,14 @@ export function createSettingsRepository(prisma: PrismaClient): SettingsReposito
       return toSettings(row);
     },
     async updateOrders(data, updatedBy) {
+      const row = await prisma.siteSettings.upsert({
+        where: { id: SETTINGS_ID },
+        create: { id: SETTINGS_ID, ...DEFAULT_SETTINGS, ...data, updatedBy },
+        update: { ...data, updatedBy },
+      });
+      return toSettings(row);
+    },
+    async updateMaintenance(data, updatedBy) {
       const row = await prisma.siteSettings.upsert({
         where: { id: SETTINGS_ID },
         create: { id: SETTINGS_ID, ...DEFAULT_SETTINGS, ...data, updatedBy },

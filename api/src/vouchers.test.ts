@@ -144,7 +144,7 @@ function setup() {
     throw new Error("no usado");
   };
   const app = createApp({
-    repo: { get: unused, update: unused, updateOrders: unused, ping: unused },
+    repo: { get: unused, update: unused, updateOrders: unused, updateMaintenance: unused, ping: unused },
     products: { listPublic: unused, listAll: unused, get: unused, create: unused, update: unused, remove: unused, duplicate: unused, reorder: unused },
     orders: { create: unused, list: unused, get: unused },
     images: { save: unused, get: unused },

@@ -15,7 +15,7 @@ import type { ManagementRepository } from "./management-repository.ts";
 import { registerManagementRoutes } from "./management-routes.ts";
 import type { SiteContentRepository } from "./site-content-repository.ts";
 import { registerSiteContentRoutes } from "./site-content-routes.ts";
-import { validateOrdersPatch, validateSettingsInput, type PublicSettings } from "./settings.ts";
+import { validateMaintenancePatch, validateOrdersPatch, validateSettingsInput, type PublicSettings } from "./settings.ts";
 import type { ChallengeRepository } from "./challenge.ts";
 import { registerChallengeRoutes, type ChallengeConfig } from "./challenge-routes.ts";
 import type { VoucherRepository } from "./voucher-repository.ts";
@@ -111,6 +111,9 @@ export function createApp({
       instagramHandle: settings.instagramHandle,
       ordersEnabled: settings.ordersEnabled,
       ordersDisabledMessage: settings.ordersDisabledMessage,
+      maintenanceEnabled: settings.maintenanceEnabled,
+      maintenanceTitle: settings.maintenanceTitle,
+      maintenanceSubtitle: settings.maintenanceSubtitle,
     };
     c.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=30");
     // whatsappOrdersEnabled: nombre anterior, para la web que todavía no se actualizó.
@@ -212,6 +215,17 @@ export function createApp({
     if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
     const saved = await repo.updateOrders(result.data, c.get("userId"));
     log(`[admin] orders ${saved.ordersEnabled ? "enabled" : "paused"} by ${c.get("userId")}`);
+    return c.json(saved);
+  });
+
+  // Interruptor maestro "Modo mantenimiento": se guarda al instante, sin tocar el resto.
+  app.patch("/api/admin/settings/maintenance", bodyLimit({ maxSize: 2 * 1024, onError: tooLarge }), async (c: AppContext) => {
+    const parsed = await readJson(c);
+    if (!parsed.ok) return c.json({ error: "invalid_json" }, 400);
+    const result = validateMaintenancePatch(parsed.body);
+    if (!result.ok) return c.json({ error: "validation_error", fields: result.errors }, 422);
+    const saved = await repo.updateMaintenance(result.data, c.get("userId"));
+    log(`[admin] maintenance ${saved.maintenanceEnabled ? "activado" : "desactivado"} by ${c.get("userId")}`);
     return c.json(saved);
   });
 

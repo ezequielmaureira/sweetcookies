@@ -6,7 +6,7 @@ describe("parsePublicSettings", () => {
   it("acepta la respuesta de la API", () => {
     assert.deepEqual(
       parsePublicSettings({ whatsappNumber: "5493584123456", instagramHandle: "@sweet.cookies.rio4", ordersEnabled: true, extra: 1 }),
-      { whatsappNumber: "5493584123456", instagramHandle: "@sweet.cookies.rio4", ordersEnabled: true, ordersDisabledMessage: null },
+      { whatsappNumber: "5493584123456", instagramHandle: "@sweet.cookies.rio4", ordersEnabled: true, ordersDisabledMessage: null, maintenanceEnabled: false, maintenanceTitle: null, maintenanceSubtitle: null },
     );
   });
   it("pedidos pausados con mensaje del negocio", () => {
@@ -15,6 +15,9 @@ describe("parsePublicSettings", () => {
       instagramHandle: null,
       ordersEnabled: false,
       ordersDisabledMessage: "De vacaciones hasta el 15.",
+      maintenanceEnabled: false,
+      maintenanceTitle: null,
+      maintenanceSubtitle: null,
     });
   });
   it("acepta el nombre anterior del interruptor (API sin actualizar)", () => {
@@ -26,7 +29,23 @@ describe("parsePublicSettings", () => {
       instagramHandle: null,
       ordersEnabled: false,
       ordersDisabledMessage: null,
+      maintenanceEnabled: false,
+      maintenanceTitle: null,
+      maintenanceSubtitle: null,
     });
+  });
+  it("mantenimiento: lee el interruptor y los textos, o usa valores por defecto si faltan", () => {
+    assert.deepEqual(parsePublicSettings({ whatsappNumber: null, instagramHandle: null, ordersEnabled: true, maintenanceEnabled: true, maintenanceTitle: "  Volvemos pronto  ", maintenanceSubtitle: "  Ya volvemos  " }), {
+      whatsappNumber: null,
+      instagramHandle: null,
+      ordersEnabled: true,
+      ordersDisabledMessage: null,
+      maintenanceEnabled: true,
+      maintenanceTitle: "Volvemos pronto",
+      maintenanceSubtitle: "Ya volvemos",
+    });
+    // Dato raro → nunca se cierra la tienda sola.
+    assert.equal(parsePublicSettings({ whatsappNumber: null, instagramHandle: null, ordersEnabled: true, maintenanceEnabled: "si" })?.maintenanceEnabled, false);
   });
   it("respuesta rota → null (usar respaldo)", () => {
     assert.equal(parsePublicSettings(null), null);

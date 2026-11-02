@@ -11,6 +11,7 @@ const LINKS = [
   { href: "/admin/campeonato", label: "Campeonato" },
   { href: "/admin/gestion", label: "Gestión" },
   { href: "/admin/configuracion", label: "Configuración" },
+  { href: "/admin/mantenimiento", label: "🍪 Modo mantenimiento" },
 ];
 
 export function AdminNav() {

@@ -97,6 +97,11 @@ function setup({ orderLimit = 100 } = {}) {
       state = { ...state, ...data, updatedAt: new Date(0).toISOString() };
       return state;
     },
+    updateMaintenance: async (data, by) => {
+      updates.push(by);
+      state = { ...state, ...data, updatedAt: new Date(0).toISOString() };
+      return state;
+    },
     ping: async () => {},
   };
   // Tokens falsos: "admin-token" → admin, "user-token" → usuario sin rol.
@@ -151,7 +156,10 @@ describe("API", () => {
     const res = await setup().app.request("/api/public/settings", { headers: { Origin: "https://otro.com" } });
     assert.equal(res.status, 200);
     // whatsappOrdersEnabled: alias del nombre anterior, para la web que todavía no se actualizó.
-    assert.deepEqual(Object.keys(await json(res)).sort(), ["instagramHandle", "ordersDisabledMessage", "ordersEnabled", "whatsappNumber", "whatsappOrdersEnabled"]);
+    assert.deepEqual(
+      Object.keys(await json(res)).sort(),
+      ["instagramHandle", "maintenanceEnabled", "maintenanceSubtitle", "maintenanceTitle", "ordersDisabledMessage", "ordersEnabled", "whatsappNumber", "whatsappOrdersEnabled"],
+    );
     assert.equal(res.headers.get("access-control-allow-origin"), "*");
   });
 
@@ -210,7 +218,7 @@ describe("API", () => {
       products: memory.products,
       orders: memory.orders,
       images: memory.images,
-      repo: { get: async () => { throw new Error("postgres://user:secret@host/db"); }, update: async () => { throw new Error(); }, updateOrders: async () => { throw new Error(); }, ping: async () => {} },
+      repo: { get: async () => { throw new Error("postgres://user:secret@host/db"); }, update: async () => { throw new Error(); }, updateOrders: async () => { throw new Error(); }, updateMaintenance: async () => { throw new Error(); }, ping: async () => {} },
       auth: { authenticate: async () => null, isAdmin: async () => false },
       allowedOrigins: [ORIGIN],
       log: (m) => logs.push(m),
@@ -479,5 +487,32 @@ describe("API", () => {
     const res = await app.request(put("admin-token", { whatsappNumber: "5493581234567", whatsappOrdersEnabled: false }));
     assert.equal(res.status, 200);
     assert.equal((await json(res)).ordersEnabled, false);
+  });
+
+  it("interruptor de mantenimiento: solo admin, guarda al instante y no toca el resto", async () => {
+    const { app } = setup();
+    const patch = (token: string | null, body: unknown) =>
+      app.request("/api/admin/settings/maintenance", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(body),
+      });
+    assert.equal((await patch(null, { maintenanceEnabled: true })).status, 401);
+    assert.equal((await patch("user-token", { maintenanceEnabled: true })).status, 403);
+    assert.equal((await patch("admin-token", { maintenanceEnabled: "si" })).status, 422);
+    assert.equal((await patch("admin-token", { maintenanceTitle: "x".repeat(81) })).status, 422);
+    assert.equal((await patch("admin-token", { maintenanceSubtitle: "x".repeat(161) })).status, 422);
+    assert.equal((await patch("admin-token", {})).status, 422);
+    const saved = await json(
+      await patch("admin-token", { maintenanceEnabled: true, maintenanceTitle: "  Volvemos pronto  ", maintenanceSubtitle: "Estamos mejorando la web." }),
+    );
+    assert.equal(saved.maintenanceEnabled, true);
+    assert.equal(saved.maintenanceTitle, "Volvemos pronto");
+    assert.equal(saved.maintenanceSubtitle, "Estamos mejorando la web.");
+    assert.equal(saved.whatsappNumber, "5493581234567", "el resto de la configuración no se toca");
+    const pub = await json(await app.request("/api/public/settings"));
+    assert.equal(pub.maintenanceEnabled, true);
+    assert.equal(pub.maintenanceTitle, "Volvemos pronto");
+    assert.equal(pub.maintenanceSubtitle, "Estamos mejorando la web.");
   });
 });

@@ -8,6 +8,12 @@ export type PublicSettings = {
   ordersEnabled: boolean;
   /** Mensaje opcional del negocio mientras los pedidos están pausados. */
   ordersDisabledMessage: string | null;
+  /** Interruptor maestro "Modo mantenimiento". true = se muestra la pantalla de mantenimiento. */
+  maintenanceEnabled: boolean;
+  /** Frase principal de la pantalla de mantenimiento. null = texto por defecto. */
+  maintenanceTitle: string | null;
+  /** Subfrase de la pantalla de mantenimiento. null = texto por defecto. */
+  maintenanceSubtitle: string | null;
 };
 
 const INSTAGRAM_HANDLE = /^@[a-z0-9._]{1,30}$/i;
@@ -20,12 +26,19 @@ export function parsePublicSettings(data: unknown): PublicSettings | null {
   const ordersEnabled = typeof raw.ordersEnabled === "boolean" ? raw.ordersEnabled : raw.whatsappOrdersEnabled;
   if (typeof ordersEnabled !== "boolean") return null;
   const message = typeof raw.ordersDisabledMessage === "string" ? raw.ordersDisabledMessage.trim().slice(0, 200) : "";
+  // Si falta o es inválido, se interpreta "sin mantenimiento" (nunca se cierra la tienda por un dato raro).
+  const maintenanceEnabled = typeof raw.maintenanceEnabled === "boolean" ? raw.maintenanceEnabled : false;
+  const title = typeof raw.maintenanceTitle === "string" ? raw.maintenanceTitle.trim().slice(0, 80) : "";
+  const subtitle = typeof raw.maintenanceSubtitle === "string" ? raw.maintenanceSubtitle.trim().slice(0, 160) : "";
   return {
     whatsappNumber: typeof raw.whatsappNumber === "string" ? normalizeWhatsAppNumber(raw.whatsappNumber) : null,
     instagramHandle:
       typeof raw.instagramHandle === "string" && INSTAGRAM_HANDLE.test(raw.instagramHandle) ? raw.instagramHandle : null,
     ordersEnabled,
     ordersDisabledMessage: message || null,
+    maintenanceEnabled,
+    maintenanceTitle: title || null,
+    maintenanceSubtitle: subtitle || null,
   };
 }
 

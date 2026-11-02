@@ -22,6 +22,12 @@ model SiteSettings {
   ordersEnabled         Boolean  @default(true) @map("orders_enabled")
   /// Mensaje opcional para el comprador cuando los pedidos están pausados (ej. vacaciones).
   ordersDisabledMessage String?  @map("orders_disabled_message") @db.VarChar(200)
+  /// Interruptor maestro "Modo mantenimiento": true = la web pública muestra la pantalla de mantenimiento.
+  maintenanceEnabled    Boolean  @default(false) @map("maintenance_enabled")
+  /// Frase principal de la pantalla de mantenimiento. null = texto por defecto.
+  maintenanceTitle      String?  @map("maintenance_title") @db.VarChar(80)
+  /// Subfrase de la pantalla de mantenimiento. null = texto por defecto.
+  maintenanceSubtitle   String?  @map("maintenance_subtitle") @db.VarChar(160)
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
   /// Id de Clerk del último admin que modificó la configuración (auditoría mínima).

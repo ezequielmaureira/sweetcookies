@@ -672,6 +672,9 @@ function setup() {
     updateOrders: async () => {
       throw new Error("no usado");
     },
+    updateMaintenance: async () => {
+      throw new Error("no usado");
+    },
     ping: async () => undefined,
   };
   const memory = memoryChallenge();
