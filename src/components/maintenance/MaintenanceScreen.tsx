@@ -18,27 +18,23 @@ type MaintenanceScreenProps = {
 };
 
 /**
- * Pantalla pública de mantenimiento: fotos reales de cookies horneándose
- * (recortes del diseño aprobado, sin el texto ni el logo originales) como
- * paneles laterales, el logo original de Sweet Cookies, la frase y subfrase
- * configurables, y el mensaje fijo "¡Volvemos muy pronto!". Puramente
- * presentacional: la usan tanto el gate público como la vista previa del
- * admin, para que el texto que se guarda sea siempre el que se ve.
+ * Pantalla pública de mantenimiento: foto real del interior de un horno con
+ * una bandeja de cookies horneándose (sin texto ni logo), a pantalla
+ * completa, con una capa oscura para legibilidad. Encima: el logo original
+ * de Sweet Cookies, la frase y subfrase configurables, y el mensaje fijo
+ * "¡Volvemos muy pronto!". Puramente presentacional: la usan tanto el gate
+ * público como la vista previa del admin, para que el texto que se guarda
+ * sea siempre el que se ve.
  */
 export function MaintenanceScreen({ title, subtitle, className }: MaintenanceScreenProps) {
   const copy = resolveMaintenanceCopy({ title, subtitle });
 
   return (
     <div className={[styles.screen, className].filter(Boolean).join(" ")}>
-      <div className={`${styles.sidePanel} ${styles.sidePanelLeft}`} aria-hidden="true">
-        <Image src="/images/maintenance/oven-left.jpg" alt="" fill sizes="280px" className={styles.sidePanelImg} />
-      </div>
+      <Image src="/images/maintenance/horno-fondo.jpg" alt="" fill priority sizes="100vw" className={styles.bg} />
+      <div className={styles.scrim} aria-hidden="true" />
 
       <div className={styles.content}>
-        <div className={styles.logoGlow} aria-hidden="true" />
-        <div className={styles.mobileWindow} aria-hidden="true">
-          <Image src="/images/maintenance/oven-window.jpg" alt="" fill sizes="240px" className={styles.mobileWindowImg} />
-        </div>
         <div className={styles.logo}>
           <Brand logoSrc={LOGO_SRC} size="lg" decorative className={styles.logoSize} />
         </div>
@@ -65,10 +61,6 @@ export function MaintenanceScreen({ title, subtitle, className }: MaintenanceScr
           <span aria-hidden="true">🕒</span>
           ¡Volvemos muy pronto!
         </p>
-      </div>
-
-      <div className={`${styles.sidePanel} ${styles.sidePanelRight}`} aria-hidden="true">
-        <Image src="/images/maintenance/oven-right.jpg" alt="" fill sizes="280px" className={styles.sidePanelImg} />
       </div>
     </div>
   );

@@ -1,89 +1,54 @@
 .screen {
   position: relative;
   display: flex;
-  flex-direction: row;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
   min-height: 100dvh;
   overflow: hidden;
-  background: radial-gradient(130% 90% at 50% 18%, #6e4426 0%, #4a2c1a 45%, #231209 100%);
+  background: #1a0f08;
   color: var(--color-cream);
 }
 
-/* ---------- Paneles laterales: fotos reales del horno (recorte del diseño aprobado, sin texto ni logo) ---------- */
-/* En celular no hay ancho para columnas sin apretar el contenido: se ocultan y se muestra .mobileWindow en su lugar. */
-.sidePanel {
-  display: none;
-  position: relative;
-  overflow: hidden;
+/* ---------- Foto real del horno, pantalla completa ---------- */
+.bg {
+  z-index: 0;
+  object-fit: cover;
+  /* Celular (angosto y alto): recorte centrado en la cookie más nítida (abajo a la izquierda). */
+  object-position: 6% 65%;
 }
 
-@media (min-width: 720px) {
-  .sidePanel {
-    display: block;
-    flex: 0 0 clamp(90px, 15vw, 240px);
+@media (min-width: 640px) {
+  .bg {
+    object-position: 22% 60%;
   }
 }
 
-.sidePanelImg {
-  object-fit: cover;
-  filter: blur(1.5px) brightness(0.85) saturate(1.08);
+@media (min-width: 1024px) {
+  .bg {
+    object-position: center center;
+  }
 }
 
-.sidePanelLeft {
-  -webkit-mask-image: linear-gradient(to right, black 50%, transparent 100%);
-  mask-image: linear-gradient(to right, black 50%, transparent 100%);
-}
-
-.sidePanelRight {
-  -webkit-mask-image: linear-gradient(to left, black 50%, transparent 100%);
-  mask-image: linear-gradient(to left, black 50%, transparent 100%);
+/* Capa oscura semitransparente: solo para legibilidad, nunca reemplaza la foto. */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(to bottom, rgba(15, 8, 4, 0.32) 0%, rgba(15, 8, 4, 0.5) 55%, rgba(15, 8, 4, 0.62) 100%);
 }
 
 .content {
   position: relative;
-  z-index: 1;
-  flex: 1;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: clamp(10px, 1.8svh, 18px);
-  padding: max(20px, env(safe-area-inset-top)) clamp(12px, 3vw, 32px) max(20px, env(safe-area-inset-bottom));
+  padding: max(20px, env(safe-area-inset-top)) clamp(16px, 4vw, 32px) max(20px, env(safe-area-inset-bottom));
   max-width: 640px;
   margin-inline: auto;
   text-align: center;
-}
-
-.logoGlow {
-  position: absolute;
-  top: clamp(-40px, -6svh, -10px);
-  width: clamp(160px, 40vw, 320px);
-  height: clamp(160px, 40vw, 320px);
-  border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(232, 184, 110, 0.55), transparent 72%);
-  filter: blur(4px);
-  pointer-events: none;
-}
-
-/* ---------- Ventanita del horno (solo celular): una foto real, nítida y bien enmarcada ---------- */
-.mobileWindow {
-  position: relative;
-  width: clamp(150px, 46vw, 220px);
-  aspect-ratio: 4 / 3;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  border: 3px solid rgba(250, 246, 239, 0.75);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
-}
-
-.mobileWindowImg {
-  object-fit: cover;
-}
-
-@media (min-width: 720px) {
-  .mobileWindow {
-    display: none;
-  }
 }
 
 .logo {
@@ -93,7 +58,7 @@
 /* Logo grande y protagonista, especialmente en celular (Brand.lg es fijo en 72px por defecto). */
 .logoSize.logo {
   --logo-h: clamp(118px, 30vw, 188px) !important;
-  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.4));
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.45));
 }
 
 .title {
@@ -108,6 +73,7 @@
   line-height: 1.14;
   letter-spacing: -0.005em;
   color: var(--color-cream);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.45);
   text-wrap: balance;
 }
 
@@ -128,7 +94,7 @@
 .dividerLine {
   flex: 1;
   height: 1px;
-  background: rgba(250, 246, 239, 0.4);
+  background: rgba(250, 246, 239, 0.45);
 }
 
 .heart {
@@ -141,6 +107,7 @@
   margin: 0;
   font-size: clamp(0.9rem, 1.8vw, 1.1rem);
   color: var(--color-cream-deep);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.4);
   text-wrap: balance;
 }
 
@@ -152,11 +119,11 @@
   padding: 10px 22px;
   border: 1px solid rgba(250, 246, 239, 0.5);
   border-radius: 999px;
-  background: rgba(250, 246, 239, 0.14);
+  background: rgba(35, 20, 12, 0.38);
   color: var(--color-cream);
   font-weight: 600;
   font-size: clamp(0.9rem, 1.6vw, 1rem);
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(3px);
 }
 
 @media (prefers-reduced-motion: reduce) {
