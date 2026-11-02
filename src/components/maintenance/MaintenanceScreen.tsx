@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { Brand } from "@/components/brand/Brand";
+import { maintenanceTitleFont } from "./maintenance-font";
 import { resolveMaintenanceCopy } from "./maintenance-copy";
 import styles from "./MaintenanceScreen.module.css";
 
@@ -17,32 +18,32 @@ type MaintenanceScreenProps = {
 };
 
 /**
- * Pantalla pública de mantenimiento: fondo cálido tipo horno (gradiente CSS +
- * fotos reales de cookies ya existentes), el logo original de Sweet Cookies,
- * la frase y subfrase configurables, y el mensaje fijo "¡Volvemos muy pronto!".
- * Puramente presentacional: la usan tanto el gate público como la vista previa
- * del admin, para que el texto que se guarda sea siempre el que se ve.
+ * Pantalla pública de mantenimiento: fotos reales de cookies horneándose
+ * (recortes del diseño aprobado, sin el texto ni el logo originales) como
+ * paneles laterales, el logo original de Sweet Cookies, la frase y subfrase
+ * configurables, y el mensaje fijo "¡Volvemos muy pronto!". Puramente
+ * presentacional: la usan tanto el gate público como la vista previa del
+ * admin, para que el texto que se guarda sea siempre el que se ve.
  */
 export function MaintenanceScreen({ title, subtitle, className }: MaintenanceScreenProps) {
   const copy = resolveMaintenanceCopy({ title, subtitle });
 
   return (
     <div className={[styles.screen, className].filter(Boolean).join(" ")}>
-      <div className={styles.backdrop} aria-hidden="true">
-        <div className={`${styles.corner} ${styles.cornerTl}`}>
-          <Image src="/images/cookies/chocotorta.jpg" alt="" fill sizes="60vmin" className={styles.cornerImg} />
-        </div>
-        <div className={`${styles.corner} ${styles.cornerBr}`}>
-          <Image src="/images/cookies/red-velvet.jpg" alt="" fill sizes="60vmin" className={styles.cornerImg} />
-        </div>
+      <div className={`${styles.sidePanel} ${styles.sidePanelLeft}`} aria-hidden="true">
+        <Image src="/images/maintenance/oven-left.jpg" alt="" fill sizes="280px" className={styles.sidePanelImg} />
       </div>
 
       <div className={styles.content}>
+        <div className={styles.logoGlow} aria-hidden="true" />
+        <div className={styles.mobileWindow} aria-hidden="true">
+          <Image src="/images/maintenance/oven-window.jpg" alt="" fill sizes="240px" className={styles.mobileWindowImg} />
+        </div>
         <div className={styles.logo}>
-          <Brand logoSrc={LOGO_SRC} size="lg" decorative />
+          <Brand logoSrc={LOGO_SRC} size="lg" decorative className={styles.logoSize} />
         </div>
 
-        <p className={styles.title}>
+        <p className={`${styles.title} ${maintenanceTitleFont.className}`}>
           <span className={styles.spark} aria-hidden="true">
             ✦
           </span>
@@ -64,6 +65,10 @@ export function MaintenanceScreen({ title, subtitle, className }: MaintenanceScr
           <span aria-hidden="true">🕒</span>
           ¡Volvemos muy pronto!
         </p>
+      </div>
+
+      <div className={`${styles.sidePanel} ${styles.sidePanelRight}`} aria-hidden="true">
+        <Image src="/images/maintenance/oven-right.jpg" alt="" fill sizes="280px" className={styles.sidePanelImg} />
       </div>
     </div>
   );

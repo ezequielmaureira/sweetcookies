@@ -1,88 +1,128 @@
 .screen {
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: row;
+  align-items: stretch;
   min-height: 100dvh;
   overflow: hidden;
-  padding: max(24px, env(safe-area-inset-top)) var(--gutter) max(24px, env(safe-area-inset-bottom));
-  background: radial-gradient(120% 90% at 50% 38%, #e8a84f 0%, #b06a2e 32%, #5a3620 62%, #231209 100%);
+  background: radial-gradient(130% 90% at 50% 18%, #6e4426 0%, #4a2c1a 45%, #231209 100%);
   color: var(--color-cream);
 }
 
-.backdrop {
-  position: absolute;
-  inset: 0;
-}
-
-.corner {
-  position: absolute;
-  width: min(60vmin, 520px);
-  height: min(60vmin, 520px);
-  border-radius: 50%;
+/* ---------- Paneles laterales: fotos reales del horno (recorte del diseño aprobado, sin texto ni logo) ---------- */
+/* En celular no hay ancho para columnas sin apretar el contenido: se ocultan y se muestra .mobileWindow en su lugar. */
+.sidePanel {
+  display: none;
+  position: relative;
   overflow: hidden;
-  filter: blur(6px) brightness(0.55) saturate(1.1);
-  opacity: 0.55;
 }
 
-.cornerTl {
-  top: -12%;
-  left: -14%;
+@media (min-width: 720px) {
+  .sidePanel {
+    display: block;
+    flex: 0 0 clamp(90px, 15vw, 240px);
+  }
 }
 
-.cornerBr {
-  bottom: -14%;
-  right: -12%;
-}
-
-.cornerImg {
+.sidePanelImg {
   object-fit: cover;
+  filter: blur(1.5px) brightness(0.85) saturate(1.08);
+}
+
+.sidePanelLeft {
+  -webkit-mask-image: linear-gradient(to right, black 50%, transparent 100%);
+  mask-image: linear-gradient(to right, black 50%, transparent 100%);
+}
+
+.sidePanelRight {
+  -webkit-mask-image: linear-gradient(to left, black 50%, transparent 100%);
+  mask-image: linear-gradient(to left, black 50%, transparent 100%);
 }
 
 .content {
   position: relative;
   z-index: 1;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: clamp(16px, 2.6svh, 26px);
+  justify-content: center;
+  gap: clamp(10px, 1.8svh, 18px);
+  padding: max(20px, env(safe-area-inset-top)) clamp(12px, 3vw, 32px) max(20px, env(safe-area-inset-bottom));
   max-width: 640px;
+  margin-inline: auto;
   text-align: center;
+}
+
+.logoGlow {
+  position: absolute;
+  top: clamp(-40px, -6svh, -10px);
+  width: clamp(160px, 40vw, 320px);
+  height: clamp(160px, 40vw, 320px);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(232, 184, 110, 0.55), transparent 72%);
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+/* ---------- Ventanita del horno (solo celular): una foto real, nítida y bien enmarcada ---------- */
+.mobileWindow {
+  position: relative;
+  width: clamp(150px, 46vw, 220px);
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 3px solid rgba(250, 246, 239, 0.75);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+
+.mobileWindowImg {
+  object-fit: cover;
+}
+
+@media (min-width: 720px) {
+  .mobileWindow {
+    display: none;
+  }
 }
 
 .logo {
   flex: none;
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.35));
+}
+
+/* Logo grande y protagonista, especialmente en celular (Brand.lg es fijo en 72px por defecto). */
+.logoSize.logo {
+  --logo-h: clamp(118px, 30vw, 188px) !important;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.4));
 }
 
 .title {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(10px, 2vw, 20px);
+  gap: clamp(8px, 1.6vw, 16px);
   margin: 0;
-  font-family: var(--font-display);
   font-style: italic;
-  font-weight: 600;
-  font-size: clamp(1.75rem, 5.2vw, 3.1rem);
-  line-height: 1.12;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  font-size: clamp(1.6rem, 4.6vw + 0.4rem, 3rem);
+  line-height: 1.14;
+  letter-spacing: -0.005em;
   color: var(--color-cream);
   text-wrap: balance;
 }
 
 .spark {
   flex: none;
-  font-size: clamp(1rem, 2.4vw, 1.4rem);
-  color: var(--color-cream-deep);
-  opacity: 0.85;
+  font-size: clamp(0.9rem, 2.2vw, 1.3rem);
+  color: #e8b86e;
+  opacity: 0.9;
 }
 
 .divider {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(220px, 60%);
+  width: min(200px, 55%);
 }
 
 .dividerLine {
@@ -93,13 +133,13 @@
 
 .heart {
   flex: none;
-  font-size: 0.95rem;
-  color: var(--color-terracotta);
+  font-size: 0.9rem;
+  color: #e8b86e;
 }
 
 .subtitle {
   margin: 0;
-  font-size: clamp(0.95rem, 2vw, 1.15rem);
+  font-size: clamp(0.9rem, 1.8vw, 1.1rem);
   color: var(--color-cream-deep);
   text-wrap: balance;
 }
@@ -109,13 +149,14 @@
   align-items: center;
   gap: 10px;
   margin: 0;
-  padding: 12px 24px;
+  padding: 10px 22px;
+  border: 1px solid rgba(250, 246, 239, 0.5);
   border-radius: 999px;
-  background: var(--color-cream);
-  color: var(--color-chocolate);
+  background: rgba(250, 246, 239, 0.14);
+  color: var(--color-cream);
   font-weight: 600;
-  font-size: clamp(0.95rem, 1.8vw, 1.05rem);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+  font-size: clamp(0.9rem, 1.6vw, 1rem);
+  backdrop-filter: blur(2px);
 }
 
 @media (prefers-reduced-motion: reduce) {
